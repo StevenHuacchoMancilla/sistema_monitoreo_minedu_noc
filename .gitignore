@@ -1,0 +1,22 @@
+# OS
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# IDE
+.idea/
+.vscode/
+.cursor/
+.codex/
+.zed/
+
+# Env (por si aparecen en la raíz)
+.env
+.env.*
+!.env.example
+
+# Logs / temp
+*.log
+tmp/
+temp/
