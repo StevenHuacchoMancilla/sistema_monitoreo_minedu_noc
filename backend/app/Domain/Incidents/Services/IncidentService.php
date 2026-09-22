@@ -2,9 +2,11 @@
 
 namespace App\Domain\Incidents\Services;
 
+use App\Domain\Tracking\Services\TrackingPrtgHookService;
 use App\Enums\FollowupStatus;
-use App\Enums\ManagementClassification;
 use App\Enums\MonitoringStatus;
+use App\Enums\RecoveryReviewStatus;
+use App\Models\FieldDispatch;
 use App\Models\Incident;
 use App\Models\IncidentUpdate;
 use App\Models\NetworkAssignment;
@@ -12,6 +14,9 @@ use App\Models\PrtgSensor;
 
 class IncidentService
 {
+    public function __construct(
+        private readonly TrackingPrtgHookService $trackingHooks,
+    ) {}
     public function applyPingTransition(
         NetworkAssignment $assignment,
         PrtgSensor $sensor,
@@ -53,7 +58,7 @@ class IncidentService
             'started_at' => now(),
             'current_status' => $sensor->normalized_status?->value ?? MonitoringStatus::Caido->value,
             'followup_status' => FollowupStatus::PendienteContacto,
-            'management_classification' => ManagementClassification::NewOutage,
+            'management_classification' => \App\Enums\ManagementClassification::NewOutage,
             'evidence_observations' => null,
             'school_snapshot' => $school?->only([
                 'id', 'current_sequence', 'legacy_reference', 'codigo_local', 'codigo_modular',
@@ -74,6 +79,9 @@ class IncidentService
             'created_at' => now(),
         ]);
 
+        // Re-caída / nueva caída con Tracking abierto: avisar y vincular, sin cerrar Tracking.
+        $this->trackingHooks->onIncidentTechnicallyDown($incident);
+
         return $incident;
     }
 
@@ -89,21 +97,63 @@ class IncidentService
             return;
         }
 
-        $before = $active->followup_status?->value;
-        $active->update([
+        $this->applyTechnicalRecovery(
+            $active,
+            'PRTG reportó recuperación (Ping OPERATIVO).'
+        );
+    }
+
+    /**
+     * Cierre técnico por recuperación. No cancela gestión ni desplazamientos.
+     */
+    public function applyTechnicalRecovery(Incident $incident, string $observation): Incident
+    {
+        if ($incident->recovered_at !== null) {
+            return $incident;
+        }
+
+        $before = $incident->followup_status?->value;
+        $wasManaging = $before !== null && in_array($before, FollowupStatus::managingValues(), true);
+        $hasActiveDispatch = FieldDispatch::query()
+            ->where('incident_id', $incident->id)
+            ->active()
+            ->exists();
+        $hadFieldTech = $before === FollowupStatus::TecnicoEnCampo->value || $hasActiveDispatch;
+        $needsReview = $wasManaging || $hadFieldTech;
+
+        $observationSuffix = '';
+        if ($hasActiveDispatch) {
+            $observationSuffix = ' Alerta: hay personal movilizado (desplazamiento activo). No se cancela automáticamente.';
+        } elseif ($wasManaging) {
+            $observationSuffix = ' Requiere revisión operativa (estaba en gestión).';
+        }
+
+        $incident->update([
             'recovered_at' => now(),
             'current_status' => MonitoringStatus::Operativo->value,
             'followup_status' => FollowupStatus::Recuperado,
+            'recovered_while_managing' => $needsReview,
+            'recovery_review_status' => $needsReview
+                ? RecoveryReviewStatus::PendingReview->value
+                : null,
+            'recovery_reviewed_at' => null,
         ]);
 
         IncidentUpdate::query()->create([
-            'incident_id' => $active->id,
-            'type' => 'SYSTEM',
+            'incident_id' => $incident->id,
+            'type' => 'SYSTEM_RECOVERY',
             'status_before' => $before,
             'status_after' => FollowupStatus::Recuperado->value,
-            'observation' => 'Incidencia cerrada por recuperación Ping (OPERATIVO).',
+            'observation' => $observation.$observationSuffix,
             'created_at' => now(),
         ]);
+
+        $fresh = $incident->fresh() ?? $incident;
+
+        // Tracking abierto → TECHNICAL_RECOVERY; NUNCA cierra el Tracking.
+        $this->trackingHooks->onIncidentTechnicallyRecovered($fresh);
+
+        return $fresh;
     }
 
     /**

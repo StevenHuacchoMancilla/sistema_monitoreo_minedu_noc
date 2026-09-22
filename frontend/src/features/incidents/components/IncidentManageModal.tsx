@@ -1,10 +1,16 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { ClipboardList } from 'lucide-react'
 import { endpoints } from '../../../api/endpoints'
+import { useAuth } from '../../auth/context/AuthContext'
 import { FollowupBadge, PrtgStatusBadge, ReincidenteBadge } from '../../../components/monitoring/StatusBadges'
 import { ErrorState, LoadingState } from '../../../components/ui/States'
 import { CLASSIFICATION_BADGE_CLASS } from '../../reports/types/operationalReport'
 import type { ManagementPayload } from '../../reports/types/operationalReport'
+import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
+import { openTrackingFromIncident } from '../../tracking/api/trackingApi'
+import { FieldDispatchPanel } from './FieldDispatchPanel'
 
 function Field({ label, children }: { label: string; children: ReactNode }) {
   return (
@@ -67,6 +73,10 @@ export function IncidentManageModal({
   onClose: () => void
 }) {
   const client = useQueryClient()
+  const navigate = useNavigate()
+  const { user } = useAuth()
+  const canWrite = Boolean(user?.can_write)
+
   const detail = useQuery({
     queryKey: ['incidents', incidentId],
     queryFn: () => endpoints.incidentDetail(incidentId),
@@ -78,6 +88,21 @@ export function IncidentManageModal({
   const [detailText, setDetailText] = useState('')
   const [observation, setObservation] = useState('')
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+  const [trackingError, setTrackingError] = useState<string | null>(null)
+
+  const openTracking = useMutation({
+    mutationFn: () => openTrackingFromIncident(incidentId),
+    onSuccess: async (res) => {
+      setTrackingError(null)
+      await client.invalidateQueries({ queryKey: ['incidents', incidentId] })
+      await client.invalidateQueries({ queryKey: ['tracking'] })
+      onClose()
+      navigate(`/tracking/${res.data.id}`)
+    },
+    onError: (e) => {
+      setTrackingError(e instanceof Error ? e.message : 'No se pudo abrir el Tracking')
+    },
+  })
 
   useEffect(() => {
     if (!detail.data) return
@@ -172,6 +197,51 @@ export function IncidentManageModal({
 
           {detail.data ? (
             <>
+              <section className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
+                <div className="flex flex-wrap items-start justify-between gap-3">
+                  <div>
+                    <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold text-violet-900">
+                      <ClipboardList className="h-4 w-4" aria-hidden />
+                      Tracking General
+                    </h3>
+                    <p className="mt-1 text-xs text-violet-800/80">
+                      {detail.data.active_tracking
+                        ? `Tracking #${detail.data.active_tracking.incident_number ?? detail.data.active_tracking.id} · ${
+                            detail.data.active_tracking.status_label ?? detail.data.active_tracking.status ?? 'Abierto'
+                          }${
+                            detail.data.active_tracking.opened_by_name
+                              ? ` · ${detail.data.active_tracking.opened_by_name}`
+                              : ''
+                          }`
+                        : 'Sin Tracking activo. Abrir crea seguimiento operativo (no cierra la incidencia PRTG).'}
+                    </p>
+                    {trackingError ? (
+                      <p className="mt-2 text-xs font-semibold text-red-600">{trackingError}</p>
+                    ) : null}
+                  </div>
+                  {detail.data.active_tracking ? (
+                    <Link
+                      to={`/tracking/${detail.data.active_tracking.id}`}
+                      onClick={onClose}
+                      className="inline-flex items-center gap-1.5 rounded-xl border border-violet-300 bg-white px-3.5 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-50"
+                    >
+                      Ver Tracking
+                    </Link>
+                  ) : canWrite ? (
+                    <button
+                      type="button"
+                      disabled={openTracking.isPending}
+                      onClick={() => openTracking.mutate()}
+                      className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
+                    >
+                      {openTracking.isPending ? 'Abriendo…' : 'Abrir Tracking'}
+                    </button>
+                  ) : (
+                    <span className="text-xs text-slate-500">Solo lectura</span>
+                  )}
+                </div>
+              </section>
+
               <section>
                 <h3 className="mb-2 text-sm font-semibold text-noc-text">Datos del local</h3>
                 <DataGrid
@@ -179,13 +249,36 @@ export function IncidentManageModal({
                     { label: 'CID', value: detail.data.colegio.cid },
                     { label: 'Local educativo', value: detail.data.colegio.local_educativo },
                     { label: 'Código local', value: detail.data.colegio.codigo_local },
-                    { label: 'Provincia', value: detail.data.colegio.provincia },
-                    { label: 'Distrito', value: detail.data.colegio.distrito },
+                    {
+                      label: 'Provincia (PRTG)',
+                      value: detail.data.colegio.prtg_province ?? detail.data.colegio.provincia,
+                    },
+                    {
+                      label: 'Distrito (PRTG)',
+                      value: detail.data.colegio.prtg_district ?? detail.data.colegio.distrito,
+                    },
+                    {
+                      label: 'Provincia admin',
+                      value: detail.data.colegio.admin_provincia ?? '—',
+                    },
+                    {
+                      label: 'Distrito admin',
+                      value: detail.data.colegio.admin_distrito ?? '—',
+                    },
                     { label: 'Tecnología', value: detail.data.colegio.tecnologia },
                     { label: 'Nodo/POP', value: detail.data.colegio.nodo_pop },
                     { label: 'Presentación PRTG', value: detail.data.colegio.nombre_prtg },
                   ]}
                 />
+                {detail.data.colegio.location_mismatch ? (
+                  <div className="mt-3">
+                    <LocationMismatchBadge info={detail.data.colegio} />
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-slate-500">
+                    Provincia/distrito operativo vienen de la jerarquía PRTG. Admin = ficha Excel.
+                  </p>
+                )}
               </section>
 
               <section>
@@ -219,6 +312,13 @@ export function IncidentManageModal({
                   Fecha de caída y tipo son de solo lectura · provienen de PRTG / asignación de red.
                 </p>
               </section>
+
+              <FieldDispatchPanel
+                incidentId={incidentId}
+                active={Boolean(detail.data.estado.recovered_at)}
+                dispatch={detail.data.field_dispatch}
+                history={detail.data.field_dispatches ?? []}
+              />
 
               <section className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4">
                 <h3 className="mb-1 text-sm font-semibold text-noc-text">Resultado de gestión</h3>

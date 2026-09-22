@@ -3,6 +3,9 @@ import { PanelLeftClose, PanelLeftOpen, RefreshCw } from 'lucide-react'
 import { Sidebar } from './Sidebar'
 import { Button } from '../components/ui/Button'
 import { IconButton } from '../components/ui/IconButton'
+import { NotificationBell } from '../features/notifications/components/NotificationBell'
+import { OperationalAlertsBanner } from '../features/notifications/components/OperationalAlertsBanner'
+import { UserMenu } from '../features/auth/components/UserMenu'
 
 const STORAGE_KEY = 'noc.sidebar.collapsed'
 
@@ -142,6 +145,7 @@ export function AppLayout({
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
+                <NotificationBell />
                 {healthSlot}
                 {onRefresh ? (
                   <IconButton label="Actualizar" onClick={onRefresh} disabled={syncing}>
@@ -158,10 +162,13 @@ export function AppLayout({
                     Cloudnet
                   </Button>
                 ) : null}
+                <UserMenu />
               </div>
             </div>
 
-            <main className="min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 lg:p-8">
+            <OperationalAlertsBanner />
+
+            <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 lg:p-8">
               <div className="mx-auto min-w-0 w-full max-w-[100%]">
               {!bare && title ? (
                 <header className="mb-6 border-b border-slate-200 pb-5">

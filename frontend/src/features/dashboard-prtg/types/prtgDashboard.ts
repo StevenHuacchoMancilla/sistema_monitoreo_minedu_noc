@@ -158,6 +158,7 @@ export type PrtgDashboard = {
     en_gestion: number
     concentraciones: number
     recuperados: number
+    pending_reviews?: number
   }
   links: Record<string, string>
 }

@@ -13,6 +13,12 @@ class SchoolCrudTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAsUser();
+    }
+
     public function test_can_create_and_update_school_with_string_phone(): void
     {
         $create = $this->postJson('/api/schools', [

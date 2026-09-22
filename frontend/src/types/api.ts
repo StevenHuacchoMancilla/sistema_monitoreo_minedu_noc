@@ -101,6 +101,12 @@ export type OutageRow = {
   codigo_local: string | null
   provincia: string | null
   distrito: string | null
+  location_source?: 'prtg' | 'admin' | 'none'
+  location_mismatch?: boolean
+  prtg_province?: string | null
+  prtg_district?: string | null
+  admin_provincia?: string | null
+  admin_distrito?: string | null
   tecnologia: string | null
   nodo_pop: string | null
   estado_prtg: string | null
@@ -133,6 +139,7 @@ export type Concentration = {
   nota: string
   provincia?: string | null
   distrito?: string | null
+  location_source?: 'prtg' | 'admin' | 'none'
   afectados?: number
   total?: number
   monitoreados?: number
@@ -154,6 +161,16 @@ export type SchoolDetail = {
     nivel_iiee?: string | null
     contacts?: Array<Record<string, unknown>>
     active_assignment?: Record<string, unknown> | null
+  }
+  location?: {
+    provincia: string | null
+    distrito: string | null
+    prtg_province: string | null
+    prtg_district: string | null
+    admin_provincia: string | null
+    admin_distrito: string | null
+    location_source: 'prtg' | 'admin' | 'none'
+    location_mismatch: boolean
   }
   sensors: Array<Record<string, unknown>>
   prtg_summary: {
@@ -202,7 +219,27 @@ export type IncidentDetail = {
     followup_status: string | null
     followup_label: string | null
     activa: boolean
+    same_day?: boolean
+    recovered_while_managing?: boolean
+    recovery_review_status?: string | null
+    recovery_review_label?: string | null
+    recovery_reviewed_at?: string | null
+    requires_review?: boolean
+    active_field_dispatch?: boolean
+    had_field_tech?: boolean
+    active_tracking_id?: number | null
   }
+  active_tracking?: {
+    id: number
+    incident_number: number | null
+    status: string | null
+    status_label: string | null
+    opened_at: string | null
+    opened_by_name: string | null
+    description: string | null
+  } | null
+  field_dispatch?: FieldDispatch | null
+  field_dispatches?: FieldDispatch[]
   colegio: {
     school_id: number | null
     local_educativo: string | null
@@ -211,6 +248,12 @@ export type IncidentDetail = {
     departamento: string | null
     provincia: string | null
     distrito: string | null
+    prtg_province?: string | null
+    prtg_district?: string | null
+    admin_provincia?: string | null
+    admin_distrito?: string | null
+    location_source?: 'prtg' | 'admin' | 'none'
+    location_mismatch?: boolean
     centro_poblado: string | null
     clasificacion: string | null
     cid: string | null
@@ -243,6 +286,11 @@ export type IncidentDetail = {
     recuperadas: number
     activas: number
     reincidente: boolean
+    reincidencia?: {
+      numero: number
+      total: number
+      label: string
+    }
   }
   historial: Array<{
     id: number
@@ -285,8 +333,38 @@ export type IncidentDetail = {
     contact_role_snapshot: string | null
     contact_attempted_at: string | null
     created_by: number | null
+    created_by_name?: string | null
     created_at: string | null
   }>
+  updates?: Array<{
+    id: number
+    type: string | null
+    status_before: string | null
+    status_after: string | null
+    observation: string | null
+    user_id: number | null
+    user_name?: string | null
+    created_at: string | null
+  }>
+  timeline?: Array<{
+    id: string
+    source: string
+    at: string | null
+    kind: string
+    icon: string
+    actor: string
+    title: string
+    detail: string | null
+    status_before: string | null
+    status_after: string | null
+    contact: { name: string | null; role: string | null; phone: string | null } | null
+    scope: string | null
+    classification: string | null
+  }>
+  snapshots?: {
+    school: Record<string, unknown> | null
+    network: Record<string, unknown> | null
+  }
   opciones: {
     followup_statuses: Array<{ value: string; label: string }>
     management_classifications?: Array<{ value: string; label: string; color_key: string }>
@@ -294,6 +372,28 @@ export type IncidentDetail = {
     contact_statuses: Array<{ value: string; label: string }>
     contact_results?: Array<{ value: string; label: string }>
   }
+}
+
+export type FieldDispatchAction = 'PLAN' | 'DISPATCH' | 'ARRIVE' | 'CANCEL' | 'COMPLETE'
+
+export type FieldDispatch = {
+  id: number
+  incident_id: number
+  status: string | null
+  status_label: string | null
+  is_active: boolean
+  technician_name: string | null
+  notes: string | null
+  cancellation_reason: string | null
+  planned_at: string | null
+  dispatched_at: string | null
+  on_site_at: string | null
+  cancelled_at: string | null
+  completed_at: string | null
+  created_by: number | null
+  updated_by: number | null
+  created_at: string | null
+  updated_at: string | null
 }
 
 export type IncidentGestionPayload = {

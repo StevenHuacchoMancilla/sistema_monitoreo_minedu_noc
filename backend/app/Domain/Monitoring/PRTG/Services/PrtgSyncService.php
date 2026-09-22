@@ -183,6 +183,206 @@ class PrtgSyncService
     }
 
     /**
+     * Auditoría READ-ONLY de geografía operativa PRTG (provincias/distritos/CID).
+     * No escribe SyncRun, sensores, schools ni incidencias.
+     *
+     * @return array<string, mixed>
+     */
+    public function locationAudit(bool $verbose = false): array
+    {
+        $probe = (string) config('prtg.allowed_probe');
+        $rootName = (string) config('prtg.allowed_root_group');
+
+        Log::info('[PRTG] Starting location audit', [
+            'probe' => $probe,
+            'allowed_root' => $rootName,
+            'verbose' => $verbose,
+        ]);
+
+        $root = $this->prtg->findAllowedRootGroup();
+        $tableCount = (int) config('prtg.table_count', 10000);
+
+        $groups = $this->prtg->fetchTable('groups', [
+            'columns' => 'objid,group,probe,parentid,status',
+            'count' => $tableCount,
+        ]);
+        $groupIndex = $this->prtg->indexGroupsById($groups);
+        $geoTree = $this->prtg->mapGeoTree($root['objid'], $groupIndex);
+        $geo = $this->prtg->countGeoGroups($root['objid'], $groupIndex);
+
+        $devices = $this->prtg->fetchTable('devices', [
+            'id' => $root['objid'],
+            'columns' => 'objid,device,host,group,probe,parentid,status',
+            'count' => $tableCount,
+        ]);
+        $sensors = $this->prtg->fetchTable('sensors', [
+            'id' => $root['objid'],
+            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,type,parentid,message',
+            'count' => $tableCount,
+        ]);
+
+        $discovered = $this->discoverScopedDevices($devices, $sensors, $root['objid'], $groupIndex, null);
+
+        $assignments = NetworkAssignment::query()
+            ->with('school:id,codigo_local,local_educativo,provincia,distrito')
+            ->where('is_active', true)
+            ->where('cid_status', CidStatus::Valid)
+            ->where('monitoring_eligible', true)
+            ->get(['id', 'cid', 'school_id', 'prtg_province', 'prtg_district'])
+            ->keyBy('cid');
+
+        $associated = 0;
+        $unassociated = 0;
+        $withoutProvince = 0;
+        $withoutDistrict = 0;
+        $unexpectedHierarchy = 0;
+        $locationMismatches = 0;
+        $persistedOk = 0;
+        $persistedMissing = 0;
+        $verboseRows = [];
+
+        $provinceStats = [];
+        foreach ($geoTree as $province) {
+            $provinceStats[$province['name']] = [
+                'province' => $province['name'],
+                'districts' => count($province['districts']),
+                'devices' => 0,
+                'associated' => 0,
+                'mismatches' => 0,
+            ];
+        }
+
+        foreach ($discovered['devices_by_cid'] as $cid => $candidates) {
+            $device = $candidates[0];
+            $objid = (string) ($device['objid'] ?? '');
+            $deviceName = (string) ($device['device'] ?? '');
+            $location = $discovered['locations_by_device'][$objid] ?? [
+                'province' => null,
+                'district' => null,
+                'under_root' => false,
+                'ancestor_levels' => 0,
+                'warning' => 'missing_location',
+            ];
+
+            $province = $location['province'] ?? null;
+            $district = $location['district'] ?? null;
+            $levels = (int) ($location['ancestor_levels'] ?? 0);
+            $warning = $location['warning'] ?? null;
+
+            if ($province === null || $province === '') {
+                $withoutProvince++;
+            }
+            if ($district === null || $district === '') {
+                $withoutDistrict++;
+            }
+            if ($warning !== null || $levels > 2) {
+                $unexpectedHierarchy++;
+            }
+
+            if ($province !== null && $province !== '' && isset($provinceStats[$province])) {
+                $provinceStats[$province]['devices']++;
+            } elseif ($province !== null && $province !== '') {
+                $provinceStats[$province] = [
+                    'province' => $province,
+                    'districts' => 0,
+                    'devices' => 1,
+                    'associated' => 0,
+                    'mismatches' => 0,
+                ];
+            }
+
+            /** @var NetworkAssignment|null $assignment */
+            $assignment = $assignments->get($cid);
+            $matchLabel = 'NO_DB';
+            if ($assignment !== null) {
+                $associated++;
+                if ($province !== null && $province !== '' && isset($provinceStats[$province])) {
+                    $provinceStats[$province]['associated']++;
+                }
+
+                $hasPersisted = trim((string) ($assignment->prtg_province ?? '')) !== ''
+                    || trim((string) ($assignment->prtg_district ?? '')) !== '';
+                if ($hasPersisted) {
+                    $persistedOk++;
+                } else {
+                    $persistedMissing++;
+                }
+
+                if ($this->locationMismatch($assignment, $location)) {
+                    $locationMismatches++;
+                    $matchLabel = 'MISMATCH';
+                    if ($province !== null && $province !== '' && isset($provinceStats[$province])) {
+                        $provinceStats[$province]['mismatches']++;
+                    }
+                } else {
+                    $matchLabel = 'MATCH';
+                }
+            } else {
+                $unassociated++;
+            }
+
+            if ($verbose) {
+                $school = $assignment?->school;
+                $verboseRows[] = [
+                    'province' => $province ?? '—',
+                    'district' => $district ?? '—',
+                    'cid' => $cid,
+                    'device' => $deviceName,
+                    'match_db' => $matchLabel,
+                    'db_province' => $school?->provincia ?? '—',
+                    'db_district' => $school?->distrito ?? '—',
+                    'stored_prtg_province' => $assignment?->prtg_province ?? '—',
+                    'stored_prtg_district' => $assignment?->prtg_district ?? '—',
+                    'warning' => $warning ?? '',
+                ];
+            }
+        }
+
+        uasort($provinceStats, fn (array $a, array $b): int => strcasecmp($a['province'], $b['province']));
+
+        $summary = [
+            'probe' => $root['probe'],
+            'root_group' => $root['name'],
+            'root_objid' => $root['objid'],
+            'source_scope' => $root['probe'].' > '.$root['name'],
+            'provinces' => $geo['provinces'],
+            'districts' => $geo['districts'],
+            'devices_in_scope' => $discovered['devices_in_scope'],
+            'devices_cid' => $discovered['devices_with_cid'],
+            'unique_cids' => count($discovered['devices_by_cid']),
+            'duplicate_cids' => $discovered['duplicate_cids'],
+            'associated_with_db' => $associated,
+            'unassociated' => $unassociated,
+            'devices_without_province' => $withoutProvince,
+            'devices_without_district' => $withoutDistrict,
+            'unexpected_hierarchy' => $unexpectedHierarchy,
+            'location_mismatches' => $locationMismatches,
+            'assignments_with_prtg_location' => $persistedOk,
+            'assignments_missing_prtg_location' => $persistedMissing,
+            'province_breakdown' => array_values($provinceStats),
+            'read_only' => true,
+        ];
+
+        if ($verbose) {
+            usort($verboseRows, function (array $a, array $b): int {
+                return strcasecmp($a['province'], $b['province'])
+                    ?: strcasecmp($a['district'], $b['district'])
+                    ?: strcasecmp($a['cid'], $b['cid']);
+            });
+            $summary['verbose_rows'] = $verboseRows;
+        }
+
+        Log::info('[PRTG] Location audit finished', [
+            'provinces' => $summary['provinces'],
+            'districts' => $summary['districts'],
+            'devices_cid' => $summary['devices_cid'],
+            'mismatches' => $summary['location_mismatches'],
+        ]);
+
+        return $summary;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function runSync(SyncRun $run): array
@@ -311,27 +511,30 @@ class PrtgSyncService
                     'district' => null,
                 ];
 
+                // Ubicación operativa PRTG → network_assignments (no toca schools Excel/admin).
+                if ($this->persistAssignmentPrtgLocation($assignment, $location)) {
+                    $summary['location_updated']++;
+                }
+
+                // Mismatch informativo: admin Excel (schools) vs jerarquía PRTG.
                 if ($this->locationMismatch($assignment, $location)) {
-                    $updated = $this->alignSchoolLocationFromPrtg($assignment, $location);
-                    if ($updated) {
-                        $summary['location_updated'] = (int) ($summary['location_updated'] ?? 0) + 1;
-                    } else {
-                        $summary['location_mismatches']++;
-                        $this->issue(
-                            $run,
-                            SyncIssueSeverity::Warning,
-                            'PRTG_LOCATION_MISMATCH',
-                            $cid,
-                            $assignment->school?->codigo_local,
-                            'No se pudo alinear provincia/distrito con PRTG (faltan datos).',
-                            [
-                                'school_provincia' => $assignment->school?->provincia,
-                                'school_distrito' => $assignment->school?->distrito,
-                                'prtg_province_group' => $location['province'],
-                                'prtg_district_group' => $location['district'],
-                            ]
-                        );
-                    }
+                    $summary['location_mismatches']++;
+                    $this->issue(
+                        $run,
+                        SyncIssueSeverity::Warning,
+                        'PRTG_LOCATION_MISMATCH',
+                        $cid,
+                        $assignment->school?->codigo_local,
+                        'Provincia/distrito admin (Excel) difiere de la jerarquía PRTG. Operativo usa PRTG.',
+                        [
+                            'school_provincia' => $assignment->school?->provincia,
+                            'school_distrito' => $assignment->school?->distrito,
+                            'prtg_province' => $location['province'],
+                            'prtg_district' => $location['district'],
+                            'assignment_prtg_province' => $assignment->prtg_province,
+                            'assignment_prtg_district' => $assignment->prtg_district,
+                        ]
+                    );
                 }
 
                 $deviceSensors = $sensorsByDevice[$objid] ?? [];
@@ -543,43 +746,39 @@ class PrtgSyncService
     }
 
     /**
-     * Alinea provincia/distrito del colegio (Excel/BD) con la jerarquía PRTG.
-     * Fuente de verdad operativa: carpetas PRTG del scope allowlist.
+     * Persiste provincia/distrito operativos desde la jerarquía PRTG en el assignment.
+     * No modifica schools.provincia/distrito (fuente admin/Excel).
      *
      * @param  array{province: ?string, district: ?string}  $location
      */
-    private function alignSchoolLocationFromPrtg(NetworkAssignment $assignment, array $location): bool
+    private function persistAssignmentPrtgLocation(NetworkAssignment $assignment, array $location): bool
     {
-        $school = $assignment->school;
-        if ($school === null) {
-            return false;
-        }
-
         $province = trim((string) ($location['province'] ?? ''));
         $district = trim((string) ($location['district'] ?? ''));
-        if ($province === '' && $district === '') {
-            return false;
-        }
+
+        $newProvince = $province !== '' ? $province : null;
+        $newDistrict = $district !== '' ? $district : null;
 
         $payload = [];
-        if ($province !== '' && $this->normalizePlaceName($school->provincia) !== $this->normalizePlaceName($province)) {
-            $payload['provincia'] = $province;
+        if (($assignment->prtg_province ?? null) !== $newProvince) {
+            $payload['prtg_province'] = $newProvince;
         }
-        if ($district !== '' && $this->normalizePlaceName($school->distrito) !== $this->normalizePlaceName($district)) {
-            $payload['distrito'] = $district;
+        if (($assignment->prtg_district ?? null) !== $newDistrict) {
+            $payload['prtg_district'] = $newDistrict;
         }
 
         if ($payload === []) {
-            return true;
+            return false;
         }
 
-        $school->update($payload);
-        $assignment->setRelation('school', $school->fresh());
+        $assignment->update($payload);
 
         return true;
     }
 
     /**
+     * Compara ubicación admin (schools Excel) vs jerarquía PRTG viva.
+     *
      * @param  array{province: ?string, district: ?string}  $location
      */
     private function locationMismatch(NetworkAssignment $assignment, array $location): bool

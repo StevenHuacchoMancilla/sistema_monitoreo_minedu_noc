@@ -91,8 +91,8 @@ export function ConcentrationCards({
         </div>
       )}
       <p className="mt-4 text-xs text-noc-muted">
-        Comparación entre colegios caídos, operativos y sin monitoreo dentro de cada zona. No se afirma causa
-        de nodo automáticamente.
+        Zonas según jerarquía operativa PRTG (provincia &gt; distrito). Compara caídos, operativos y sin
+        monitoreo dentro de cada zona. No se afirma causa de nodo automáticamente.
       </p>
     </SectionCard>
   )

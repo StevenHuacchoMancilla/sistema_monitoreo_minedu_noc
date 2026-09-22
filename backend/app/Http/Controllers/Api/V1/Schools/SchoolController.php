@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Schools;
 
+use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Domain\Schools\Services\SchoolCrudService;
 use App\Http\Controllers\Controller;
 use App\Models\Incident;
@@ -190,6 +191,7 @@ class SchoolController extends Controller
 
         return [
             'school' => $school,
+            'location' => PrtgOperationalLocation::apiFields($assignment, $school),
             'sensors' => $sensors,
             'prtg_summary' => $prtgSummary,
             'cloudnet_sites' => $cloudnet,
@@ -206,6 +208,7 @@ class SchoolController extends Controller
     private function listRow(School $school): array
     {
         $a = $school->activeAssignment;
+        $location = PrtgOperationalLocation::apiFields($a, $school);
 
         return [
             'id' => $school->id,
@@ -216,6 +219,10 @@ class SchoolController extends Controller
             'local_educativo' => $school->local_educativo,
             'provincia' => $school->provincia,
             'distrito' => $school->distrito,
+            'prtg_province' => $location['prtg_province'],
+            'prtg_district' => $location['prtg_district'],
+            'location_source' => $location['location_source'],
+            'location_mismatch' => $location['location_mismatch'],
             'tecnologia' => $a?->tecnologia_acceso,
             'capacidad_mbps' => $a?->capacidad_mbps,
             'nodo_pop' => $a?->nodo_pop,

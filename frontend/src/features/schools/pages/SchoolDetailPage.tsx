@@ -1,10 +1,11 @@
-import { Link, useParams } from 'react-router-dom'
+import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import {
   ArrowLeft,
   CircleCheck,
   GraduationCap,
+  History,
   Network,
 } from 'lucide-react'
 import { AppLayout } from '../../../layouts/AppLayout'
@@ -16,6 +17,7 @@ import { Badge } from '../../../components/ui/SoftBadge'
 import { Button } from '../../../components/ui/Button'
 import { endpoints } from '../../../api/endpoints'
 import { useManualSync } from '../../dashboard/hooks/useDashboard'
+import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
 import { SchoolGeneralForm } from '../forms/SchoolGeneralForm'
 import { NetworkAssignmentForm } from '../forms/NetworkAssignmentForm'
 import { ContactForm } from '../forms/ContactForm'
@@ -38,6 +40,7 @@ type Tab = (typeof TABS)[number]
 export function SchoolDetailPage() {
   const { schoolId } = useParams()
   const id = Number(schoolId)
+  const navigate = useNavigate()
   const client = useQueryClient()
   const { prtg, cloudnet } = useManualSync()
   const syncing = prtg.isPending || cloudnet.isPending
@@ -154,14 +157,21 @@ export function SchoolDetailPage() {
                       {assignment.tecnologia_acceso}
                     </span>
                   ) : null}
+                  <LocationMismatchBadge compact info={detail.data?.location} />
                 </>
               ) : null
             }
             actions={
               school ? (
-                <Button type="button" onClick={() => toggleActive.mutate()} loading={toggleActive.isPending}>
-                  {school.active ? 'Desactivar local' : 'Reactivar local'}
-                </Button>
+                <div className="flex flex-wrap gap-2">
+                  <Button type="button" variant="secondary" onClick={() => navigate(`/history/schools/${id}`)}>
+                    <History className="h-3.5 w-3.5" aria-hidden />
+                    Ver historial operativo
+                  </Button>
+                  <Button type="button" onClick={() => toggleActive.mutate()} loading={toggleActive.isPending}>
+                    {school.active ? 'Desactivar local' : 'Reactivar local'}
+                  </Button>
+                </div>
               ) : null
             }
           />
@@ -372,7 +382,18 @@ export function SchoolDetailPage() {
           ) : null}
 
           {tab === 'HISTORIAL' ? (
-            <SectionCard title="Historial de incidencias">
+            <SectionCard
+              title="Historial de incidencias"
+              action={
+                <Link
+                  to={`/history/schools/${id}`}
+                  className="inline-flex items-center gap-1.5 text-sm font-semibold text-blue-700 hover:underline"
+                >
+                  <History className="h-3.5 w-3.5" aria-hidden />
+                  Historial operativo completo
+                </Link>
+              }
+            >
               {history.length === 0 ? (
                 <EmptyState title="Sin historial" description="Aún no hay incidencias." />
               ) : (
@@ -410,6 +431,8 @@ export function SchoolDetailPage() {
                     <li key={log.id} className="rounded-xl border border-noc-border/70 px-3 py-2">
                       <div className="flex flex-wrap gap-2 text-xs text-noc-muted">
                         <span>{log.created_at ? new Date(log.created_at).toLocaleString() : '—'}</span>
+                        {log.user_name ? <span className="font-medium text-slate-700">{log.user_name}</span> : null}
+                        {log.module ? <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600">{log.module}</span> : null}
                         <span className="font-semibold text-noc-text">{log.action}</span>
                         <span>{log.entity_type} #{log.entity_id}</span>
                       </div>
@@ -496,5 +519,8 @@ type AuditRow = {
   entity_type: string
   entity_id: number
   action: string
+  module?: string | null
+  user_id?: number | null
+  user_name?: string | null
   created_at?: string | null
 }

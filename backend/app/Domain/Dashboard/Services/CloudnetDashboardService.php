@@ -266,7 +266,7 @@ class CloudnetDashboardService
             'offline_devices' => $offlineDevices,
             'rows' => array_slice($rows, 0, 80),
             'note' => $withDevices === 0
-                ? 'Sites Cloudnet sincronizados por CID. El API de equipos (/shop/device) aún no responde con esta apikey; cuando se habilite, aparecerán seriales, modelos y APs aquí.'
+                ? 'Sites OK por CID (mismo árbol que el portal). La apikey Open API no tiene permiso de equipos: /device/operation → No permission; /shop/device no entrega seriales. El login web no habilita esos scopes.'
                 : 'Inventario Cloudnet enlazado por CID (equipos, series y APs).',
         ];
     }

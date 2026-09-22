@@ -2,6 +2,8 @@
 
 namespace App\Domain\Schools\Services;
 
+use App\Enums\AuditModule;
+use App\Enums\AuditSource;
 use App\Enums\CidStatus;
 use App\Enums\RecordSource;
 use App\Models\AuditLog;
@@ -162,7 +164,7 @@ class SchoolCrudService
                 'source' => RecordSource::Manual->value,
             ]);
 
-            $this->audit->record($school, 'SCHOOL_CREATED', null, $school->toArray(), 'API');
+            $this->audit->record($school, 'SCHOOL_CREATED', null, $school->toArray(), AuditModule::Schools, AuditSource::Api);
 
             if (! empty($data['cid']) || ! empty($data['prtg_device_name'])) {
                 $this->createAssignment($school, Arr::only($data, [
@@ -209,7 +211,7 @@ class SchoolCrudService
 
         $school->fill(Arr::only($data, array_keys($before)))->save();
 
-        $this->audit->record($school, 'SCHOOL_UPDATED', $before, $school->only(array_keys($before)), 'API');
+        $this->audit->record($school, 'SCHOOL_UPDATED', $before, $school->only(array_keys($before)), AuditModule::Schools, AuditSource::Api);
 
         return $school->fresh(['activeAssignment', 'contacts']);
     }
@@ -218,7 +220,7 @@ class SchoolCrudService
     {
         $before = ['active' => $school->active];
         $school->update(['active' => false]);
-        $this->audit->record($school, 'SCHOOL_DEACTIVATED', $before, ['active' => false], 'API');
+        $this->audit->record($school, 'SCHOOL_DEACTIVATED', $before, ['active' => false], AuditModule::Schools, AuditSource::Api);
 
         return $school->fresh();
     }
@@ -227,7 +229,7 @@ class SchoolCrudService
     {
         $before = ['active' => $school->active];
         $school->update(['active' => true]);
-        $this->audit->record($school, 'SCHOOL_REACTIVATED', $before, ['active' => true], 'API');
+        $this->audit->record($school, 'SCHOOL_REACTIVATED', $before, ['active' => true], AuditModule::Schools, AuditSource::Api);
 
         return $school->fresh();
     }
@@ -260,7 +262,7 @@ class SchoolCrudService
 
         $before = $assignment->only($fields);
         $assignment->fill(Arr::only($data, $fields))->save();
-        $this->audit->record($assignment, 'ASSIGNMENT_CORRECTED', $before, $assignment->only($fields), 'API');
+        $this->audit->record($assignment, 'ASSIGNMENT_CORRECTED', $before, $assignment->only($fields), AuditModule::NetworkAssignments, AuditSource::Api);
 
         return $assignment->fresh();
     }
@@ -284,7 +286,7 @@ class SchoolCrudService
                     'cid' => $current->cid,
                     'is_active' => false,
                     'valid_to' => now()->toIso8601String(),
-                ], 'API');
+                ], AuditModule::NetworkAssignments, AuditSource::Api);
             }
 
             return $this->createAssignment($school, $data, historical: true);
@@ -308,13 +310,13 @@ class SchoolCrudService
         if ($contact) {
             $before = $contact->only(['position', 'name', 'role', 'phone', 'validation_status']);
             $contact->fill($payload)->save();
-            $this->audit->record($contact, 'CONTACT_UPDATED', $before, $contact->only(array_keys($before)), 'API');
+            $this->audit->record($contact, 'CONTACT_UPDATED', $before, $contact->only(array_keys($before)), AuditModule::Contacts, AuditSource::Api);
 
             return $contact->fresh();
         }
 
         $created = $school->contacts()->create($payload);
-        $this->audit->record($created, 'CONTACT_CREATED', null, $created->toArray(), 'API');
+        $this->audit->record($created, 'CONTACT_CREATED', null, $created->toArray(), AuditModule::Contacts, AuditSource::Api);
 
         return $created;
     }
@@ -323,7 +325,7 @@ class SchoolCrudService
     {
         $before = $contact->toArray();
         $contact->delete();
-        $this->audit->record($contact, 'CONTACT_DEACTIVATED', $before, null, 'API');
+        $this->audit->record($contact, 'CONTACT_DEACTIVATED', $before, null, AuditModule::Contacts, AuditSource::Api);
     }
 
     /**
@@ -335,6 +337,7 @@ class SchoolCrudService
         $contactIds = $school->contacts()->withTrashed()->pluck('id')->all();
 
         return AuditLog::query()
+            ->with('user:id,name,email')
             ->where(function ($q) use ($school, $assignmentIds, $contactIds) {
                 $q->where(function ($inner) use ($school) {
                     $inner->where('entity_type', School::class)
@@ -361,9 +364,13 @@ class SchoolCrudService
                 'entity_type' => class_basename((string) $log->entity_type),
                 'entity_id' => $log->entity_id,
                 'action' => $log->action,
+                'module' => $log->module,
                 'before' => $log->before_json,
                 'after' => $log->after_json,
                 'source' => $log->source,
+                'user_id' => $log->user_id,
+                'user_name' => $log->user?->name,
+                'ip_address' => $log->ip_address,
                 'created_at' => $log->created_at?->toIso8601String(),
             ])
             ->all();
@@ -400,7 +407,8 @@ class SchoolCrudService
             $historical ? 'ASSIGNMENT_REASSIGNED' : 'ASSIGNMENT_CREATED',
             null,
             $assignment->toArray(),
-            'API'
+            AuditModule::NetworkAssignments,
+            AuditSource::Api
         );
 
         return $assignment;

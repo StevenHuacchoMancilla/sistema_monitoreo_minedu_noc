@@ -7,6 +7,10 @@ export type SchoolListRow = {
   local_educativo: string | null
   provincia: string | null
   distrito: string | null
+  prtg_province?: string | null
+  prtg_district?: string | null
+  location_source?: 'prtg' | 'admin' | 'none'
+  location_mismatch?: boolean
   tecnologia: string | null
   capacidad_mbps: string | number | null
   nodo_pop: string | null

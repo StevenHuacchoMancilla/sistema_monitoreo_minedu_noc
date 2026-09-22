@@ -15,7 +15,7 @@ export function RecentRecoveriesPanel({
     <SectionCard
       title="Recuperados recientemente"
       action={
-        <Link to="/incidents/recovered" className="text-sm text-noc-info hover:underline">
+        <Link to="/recoveries" className="text-sm text-noc-info hover:underline">
           Ver todos →
         </Link>
       }

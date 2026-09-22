@@ -2,6 +2,8 @@
 
 namespace App\Services;
 
+use App\Enums\AuditModule;
+use App\Enums\AuditSource;
 use App\Enums\CidStatus;
 use App\Enums\ContactMatchStatus;
 use App\Enums\RecordSource;
@@ -232,14 +234,14 @@ class ExcelImportService
                 '_name_n' => $schoolPayload['_name_n'],
                 '_dist_n' => $schoolPayload['_dist_n'],
             ]);
-            $this->auditLogger->record($school, 'created', null, $school->toArray(), RecordSource::Import->value);
+            $this->auditLogger->record($school, 'created', null, $school->toArray(), AuditModule::Schools, AuditSource::Import);
         } else {
             $before = $school->toArray();
             $school->fill(collect($schoolPayload)->except(['_name_n', '_dist_n'])->all());
             if ($school->isDirty()) {
                 $school->save();
                 $summary['schools_updated']++;
-                $this->auditLogger->record($school, 'updated', $before, $school->fresh()->toArray(), RecordSource::Import->value);
+                $this->auditLogger->record($school, 'updated', $before, $school->fresh()->toArray(), AuditModule::Schools, AuditSource::Import);
             } else {
                 $summary['schools_unchanged']++;
             }
@@ -462,7 +464,7 @@ class ExcelImportService
                 'source' => RecordSource::Import,
             ]));
             $result['created']++;
-            $this->auditLogger->record($assignment, 'created', null, $assignment->toArray(), RecordSource::Import->value);
+            $this->auditLogger->record($assignment, 'created', null, $assignment->toArray(), AuditModule::NetworkAssignments, AuditSource::Import);
 
             return $result;
         }
@@ -475,7 +477,7 @@ class ExcelImportService
                 'valid_to' => now(),
             ]);
             $result['closed']++;
-            $this->auditLogger->record($active, 'closed', $before, $active->fresh()->toArray(), RecordSource::Import->value);
+            $this->auditLogger->record($active, 'closed', $before, $active->fresh()->toArray(), AuditModule::NetworkAssignments, AuditSource::Import);
 
             $assignment = NetworkAssignment::query()->create(array_merge($payload, [
                 'school_id' => $school->id,
@@ -489,7 +491,7 @@ class ExcelImportService
                 'previous_cid' => $before['cid'],
                 'school_id' => $school->id,
             ];
-            $this->auditLogger->record($assignment, 'created', null, $assignment->toArray(), RecordSource::Import->value);
+            $this->auditLogger->record($assignment, 'created', null, $assignment->toArray(), AuditModule::NetworkAssignments, AuditSource::Import);
 
             return $result;
         }
@@ -499,7 +501,7 @@ class ExcelImportService
         if ($active->isDirty()) {
             $active->save();
             $result['updated']++;
-            $this->auditLogger->record($active, 'updated', $before, $active->fresh()->toArray(), RecordSource::Import->value);
+            $this->auditLogger->record($active, 'updated', $before, $active->fresh()->toArray(), AuditModule::NetworkAssignments, AuditSource::Import);
         } elseif ($schoolCreated) {
             $result['created']++;
         }

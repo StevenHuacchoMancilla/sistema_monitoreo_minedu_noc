@@ -2,6 +2,8 @@ import { NavLink } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
+  CircleCheck,
+  ClipboardList,
   Cloud,
   FileSpreadsheet,
   GraduationCap,
@@ -13,7 +15,6 @@ import {
   Phone,
   Settings,
   TriangleAlert,
-  CircleCheck,
 } from 'lucide-react'
 import { usePrtgDashboard } from '../features/dashboard-prtg/hooks/usePrtgDashboard'
 import { useSidebar } from './AppLayout'
@@ -34,9 +35,10 @@ const NAV: NavItem[] = [
   { to: '/incidents/active', label: 'Caídas activas', badgeKey: 'caidas_activas', tone: 'danger', icon: TriangleAlert },
   { to: '/incidents/pending', label: 'Pendientes de contacto', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone },
   { to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity },
-  { to: '/concentrations', label: 'Concentraciones zonales', badgeKey: 'concentraciones', tone: 'muted', icon: Map },
-  { to: '/incidents/recovered', label: 'Historial por colegio', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck },
-  { to: '/history', label: 'Historial', icon: History },
+  { to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck },
+  { to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map },
+  { to: '/history/schools', label: 'Historial por colegio', icon: History },
+  { to: '/tracking', label: 'Tracking General', icon: ClipboardList },
   { to: '/schools', label: 'Locales educativos', icon: GraduationCap },
   { to: '/reports/operational', label: 'Vista de reporte', icon: FileSpreadsheet },
   { to: '/admin', label: 'Administración', icon: Settings },
@@ -86,6 +88,8 @@ export function Sidebar({
           {NAV.map((item) => {
             const Icon = item.icon
             const count = item.badgeKey ? nav?.[item.badgeKey] : undefined
+            const pendingReviews =
+              item.badgeKey === 'recuperados' ? (nav?.pending_reviews ?? 0) : 0
             return (
               <NavLink
                 key={item.to}
@@ -103,15 +107,45 @@ export function Sidebar({
                   ].join(' ')
                 }
               >
-                <Icon className="h-[18px] w-[18px] shrink-0 opacity-90" aria-hidden />
+                <span className="relative inline-flex shrink-0">
+                  <Icon className="h-[18px] w-[18px] opacity-90" aria-hidden />
+                  {isCollapsed && pendingReviews > 0 ? (
+                    <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-amber-400" />
+                  ) : null}
+                </span>
                 {!isCollapsed ? (
                   <>
                     <span className="min-w-0 flex-1 truncate">{item.label}</span>
+                    <span className="inline-flex items-center gap-1">
+                      {pendingReviews > 0 ? (
+                        <span
+                          title="Pendientes de revisión operativa"
+                          className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-300 ring-1 ring-amber-400/30"
+                        >
+                          {pendingReviews.toLocaleString('es-PE')}
+                        </span>
+                      ) : null}
                     {typeof count === 'number' ? (
-                      <span className={`rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${toneClass[item.tone ?? 'muted']}`}>
-                        {count.toLocaleString('es-PE')}
-                      </span>
-                    ) : null}
+                        <span
+                          title={
+                            item.badgeKey === 'recuperados'
+                              ? 'Recuperados hoy'
+                              : item.badgeKey === 'caidas_activas'
+                                ? 'Caídas activas'
+                                : item.badgeKey === 'pendientes_contacto'
+                                  ? 'Pendientes de contacto'
+                                  : item.badgeKey === 'en_gestion'
+                                    ? 'En gestión'
+                                    : item.badgeKey === 'concentraciones'
+                                      ? 'Concentraciones zonales'
+                                      : undefined
+                          }
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${toneClass[item.tone ?? 'muted']}`}
+                        >
+                          {count.toLocaleString('es-PE')}
+                        </span>
+                      ) : null}
+                    </span>
                   </>
                 ) : null}
               </NavLink>

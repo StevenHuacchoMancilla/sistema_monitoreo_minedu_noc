@@ -18,6 +18,12 @@ class OperationalReportColumnsTest extends TestCase
 {
     use RefreshDatabase;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAsUser();
+    }
+
     private function seedActive(string $tech = 'GPON', ?ManagementClassification $classification = null): Incident
     {
         $school = School::query()->create([

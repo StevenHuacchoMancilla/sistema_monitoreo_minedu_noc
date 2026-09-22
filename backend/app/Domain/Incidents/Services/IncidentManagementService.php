@@ -2,6 +2,8 @@
 
 namespace App\Domain\Incidents\Services;
 
+use App\Enums\AuditModule;
+use App\Enums\AuditSource;
 use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
@@ -123,7 +125,8 @@ class IncidentManagementService
                     'followup_status' => $followup->value,
                     'management_id' => $management->id,
                 ],
-                'API'
+                AuditModule::Incidents,
+                AuditSource::Api
             );
 
             return $management->fresh();

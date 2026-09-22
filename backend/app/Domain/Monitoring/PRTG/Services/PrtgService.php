@@ -182,6 +182,7 @@ class PrtgService
                 'province' => null,
                 'district' => null,
                 'under_root' => false,
+                'ancestor_levels' => 0,
                 'warning' => 'missing_parent',
             ];
         }
@@ -191,6 +192,7 @@ class PrtgService
                 'province' => null,
                 'district' => null,
                 'under_root' => true,
+                'ancestor_levels' => 0,
                 'warning' => 'device_directly_under_root',
             ];
         }
@@ -201,6 +203,7 @@ class PrtgService
                 'province' => null,
                 'district' => null,
                 'under_root' => false,
+                'ancestor_levels' => 0,
                 'warning' => 'hierarchy_cycle',
             ];
         }
@@ -209,27 +212,35 @@ class PrtgService
                 'province' => null,
                 'district' => null,
                 'under_root' => false,
+                'ancestor_levels' => count($walk['ancestors'] ?? []),
                 'warning' => 'hierarchy_incomplete',
             ];
         }
 
         $chain = $walk['ancestors'];
+        $levels = count($chain);
         $district = null;
         $province = null;
+        $warning = null;
 
-        if (count($chain) >= 2) {
+        if ($levels >= 2) {
             $district = (string) ($chain[0]['group'] ?? '');
             $province = (string) ($chain[1]['group'] ?? '');
-        } elseif (count($chain) === 1) {
+            if ($levels > 2) {
+                $warning = 'extra_hierarchy_levels';
+            }
+        } elseif ($levels === 1) {
             // Solo un nivel bajo root: tratarlo como provincia (sin distrito).
             $province = (string) ($chain[0]['group'] ?? '');
+            $warning = 'missing_district';
         }
 
         return [
             'province' => $province !== '' ? $province : null,
             'district' => $district !== '' ? $district : null,
             'under_root' => true,
-            'warning' => null,
+            'ancestor_levels' => $levels,
+            'warning' => $warning,
         ];
     }
 
@@ -255,30 +266,66 @@ class PrtgService
      */
     public function countGeoGroups(int $allowedRootObjId, array $groupIndex): array
     {
-        $provinces = [];
-        $districts = [];
+        $tree = $this->mapGeoTree($allowedRootObjId, $groupIndex);
 
-        foreach ($groupIndex as $id => $group) {
-            $parent = (int) ($group['parentid'] ?? 0);
-            $name = (string) ($group['group'] ?? '');
-            if ($parent === $allowedRootObjId && $name !== '') {
-                $provinces[$id] = $name;
-            }
-        }
-
-        foreach ($groupIndex as $id => $group) {
-            $parent = (int) ($group['parentid'] ?? 0);
-            $name = (string) ($group['group'] ?? '');
-            if (isset($provinces[$parent]) && $name !== '') {
-                $districts[$id] = $name;
+        $provinceNames = [];
+        $districtNames = [];
+        foreach ($tree as $province) {
+            $provinceNames[] = $province['name'];
+            foreach ($province['districts'] as $district) {
+                $districtNames[] = $district['name'];
             }
         }
 
         return [
-            'provinces' => count($provinces),
-            'districts' => count($districts),
-            'province_names' => array_values($provinces),
-            'district_names' => array_values($districts),
+            'provinces' => count($provinceNames),
+            'districts' => count($districtNames),
+            'province_names' => $provinceNames,
+            'district_names' => $districtNames,
         ];
+    }
+
+    /**
+     * Árbol geográfico PRTG: provincias (hijos del root) → distritos (nietos).
+     *
+     * @param  array<int, array<string, mixed>>  $groupIndex
+     * @return array<int, array{objid: int, name: string, districts: array<int, array{objid: int, name: string}>}>
+     */
+    public function mapGeoTree(int $allowedRootObjId, array $groupIndex): array
+    {
+        $provinces = [];
+
+        foreach ($groupIndex as $id => $group) {
+            $parent = (int) ($group['parentid'] ?? 0);
+            $name = trim((string) ($group['group'] ?? ''));
+            if ($parent === $allowedRootObjId && $name !== '') {
+                $provinces[(int) $id] = [
+                    'objid' => (int) $id,
+                    'name' => $name,
+                    'districts' => [],
+                ];
+            }
+        }
+
+        foreach ($groupIndex as $id => $group) {
+            $parent = (int) ($group['parentid'] ?? 0);
+            $name = trim((string) ($group['group'] ?? ''));
+            if (isset($provinces[$parent]) && $name !== '') {
+                $provinces[$parent]['districts'][(int) $id] = [
+                    'objid' => (int) $id,
+                    'name' => $name,
+                ];
+            }
+        }
+
+        uasort($provinces, fn (array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+
+        foreach ($provinces as &$province) {
+            uasort($province['districts'], fn (array $a, array $b): int => strcasecmp($a['name'], $b['name']));
+            $province['districts'] = array_values($province['districts']);
+        }
+        unset($province);
+
+        return array_values($provinces);
     }
 }

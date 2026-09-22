@@ -7,8 +7,16 @@ use App\Enums\ContactResult;
 use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
+use App\Domain\Incidents\Services\FieldDispatchService;
 use App\Domain\Incidents\Services\IncidentManagementService;
+use App\Domain\Incidents\Services\IncidentService;
+use App\Domain\Incidents\Services\RecoveryReviewService;
+use App\Domain\Incidents\Support\IncidentTimelineBuilder;
+use App\Domain\Incidents\Support\OutageDuration;
+use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
+use App\Enums\FieldDispatchStatus;
 use App\Http\Controllers\Controller;
+use App\Models\FieldDispatch;
 use App\Models\Incident;
 use App\Models\IncidentUpdate;
 use Illuminate\Http\JsonResponse;
@@ -18,7 +26,12 @@ use InvalidArgumentException;
 
 class IncidentController extends Controller
 {
-    public function __construct(private readonly IncidentManagementService $managements) {}
+    public function __construct(
+        private readonly IncidentManagementService $managements,
+        private readonly IncidentService $incidents,
+        private readonly RecoveryReviewService $recoveryReviews,
+        private readonly FieldDispatchService $fieldDispatches,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -46,7 +59,15 @@ class IncidentController extends Controller
 
     public function show(Incident $incident): JsonResponse
     {
-        $incident->load(['school.contacts', 'networkAssignment', 'sensor', 'updates', 'managements']);
+        $incident->load([
+            'school.contacts',
+            'networkAssignment',
+            'sensor',
+            'updates.user',
+            'managements.author',
+            'fieldDispatches',
+            'activeTracking.openedBy:id,name',
+        ]);
 
         $historyQuery = Incident::query()
             ->where('network_assignment_id', $incident->network_assignment_id)
@@ -77,13 +98,20 @@ class IncidentController extends Controller
             $ipLoopback = self::loopbackFromRow((int) ($assignment?->source_row ?? 0)) ?? '';
         }
 
-        $durationHuman = $incident->started_at
-            ? $incident->started_at->diffForHumans($incident->recovered_at ?? now(), true)
-            : null;
+        $elapsedSeconds = OutageDuration::seconds($incident->started_at, $incident->recovered_at);
+        $durationHuman = OutageDuration::human($elapsedSeconds);
 
-        $elapsedSeconds = $incident->started_at
-            ? $incident->started_at->diffInSeconds($incident->recovered_at ?? now())
-            : null;
+        $totalForSchool = Incident::query()->where('school_id', $incident->school_id)->count();
+        $ordinal = Incident::query()
+            ->where('school_id', $incident->school_id)
+            ->where(function ($q) use ($incident) {
+                $q->where('started_at', '<', $incident->started_at)
+                    ->orWhere(function ($q2) use ($incident) {
+                        $q2->where('started_at', $incident->started_at)
+                            ->where('id', '<=', $incident->id);
+                    });
+            })
+            ->count();
 
         return response()->json([
             'incident' => $incident,
@@ -101,15 +129,58 @@ class IncidentController extends Controller
                 'followup_status' => $incident->followup_status?->value,
                 'followup_label' => $incident->followup_status?->label(),
                 'activa' => $incident->recovered_at === null,
+                'same_day' => $incident->started_at && $incident->recovered_at
+                    ? $incident->started_at->toDateString() === $incident->recovered_at->toDateString()
+                    : false,
+                'recovered_while_managing' => (bool) $incident->recovered_while_managing,
+                'recovery_review_status' => $incident->recovery_review_status?->value
+                    ?? $incident->recovery_review_status,
+                'recovery_review_label' => $incident->recovery_review_status instanceof \App\Enums\RecoveryReviewStatus
+                    ? $incident->recovery_review_status->label()
+                    : null,
+                'recovery_reviewed_at' => $incident->recovery_reviewed_at?->toIso8601String(),
+                'requires_review' => ($incident->recovery_review_status?->value
+                    ?? $incident->recovery_review_status) === \App\Enums\RecoveryReviewStatus::PendingReview->value
+                    || ((bool) $incident->recovered_while_managing
+                        && ($incident->recovery_review_status === null)),
+                'active_field_dispatch' => $incident->fieldDispatches
+                    ->contains(fn (FieldDispatch $d) => ($d->status instanceof FieldDispatchStatus
+                        ? $d->status->isActive()
+                        : in_array((string) $d->status, FieldDispatchStatus::activeValues(), true))),
+                'had_field_tech' => $incident->fieldDispatches->isNotEmpty()
+                    || $incident->followup_status === FollowupStatus::TecnicoEnCampo
+                    || $incident->updates->contains(fn ($u) => $u->status_after === FollowupStatus::TecnicoEnCampo->value
+                        || $u->status_before === FollowupStatus::TecnicoEnCampo->value
+                        || strtoupper((string) $u->type) === 'FIELD_DISPATCH'),
+                'active_tracking_id' => $incident->activeTracking->first()?->id,
             ],
-            'colegio' => [
+            'active_tracking' => ($active = $incident->activeTracking->first())
+                ? [
+                    'id' => $active->id,
+                    'incident_number' => $active->incident_number,
+                    'status' => $active->status instanceof \App\Enums\TrackingStatus
+                        ? $active->status->value
+                        : (string) $active->status,
+                    'status_label' => $active->status instanceof \App\Enums\TrackingStatus
+                        ? $active->status->label()
+                        : null,
+                    'opened_at' => $active->opened_at?->toIso8601String(),
+                    'opened_by_name' => $active->openedByDisplayName(),
+                    'description' => $active->description,
+                ]
+                : null,
+            'field_dispatch' => ($incident->fieldDispatches
+                ->first(fn (FieldDispatch $d) => ($d->status instanceof FieldDispatchStatus
+                    ? $d->status->isActive()
+                    : in_array((string) $d->status, FieldDispatchStatus::activeValues(), true)))
+                ?? $incident->fieldDispatches->first())?->toApiArray(),
+            'field_dispatches' => $incident->fieldDispatches->map(fn (FieldDispatch $d) => $d->toApiArray())->values()->all(),
+            'colegio' => array_merge([
                 'school_id' => $school?->id,
                 'local_educativo' => $school?->local_educativo,
                 'codigo_local' => $school?->codigo_local,
                 'codigo_modular' => $school?->codigo_modular,
                 'departamento' => $school?->departamento,
-                'provincia' => $school?->provincia,
-                'distrito' => $school?->distrito,
                 'centro_poblado' => $school?->centro_poblado,
                 'clasificacion' => $school?->clasificacion,
                 'cid' => $assignment?->cid,
@@ -121,7 +192,7 @@ class IncidentController extends Controller
                 'nombre_prtg' => $nombrePrtg,
                 'legacy_reference' => $school?->legacy_reference,
                 'current_sequence' => $school?->current_sequence,
-            ],
+            ], PrtgOperationalLocation::apiFields($assignment, $school)),
             'cloudnet' => $cloudnetSite ? [
                 'shop_id' => $cloudnetSite->shop_id,
                 'site_name' => $cloudnetSite->site_name,
@@ -142,14 +213,17 @@ class IncidentController extends Controller
                 'recuperadas' => $recoveredForCid,
                 'activas' => $activeForCid,
                 'reincidente' => $reincidente,
+                'reincidencia' => [
+                    'numero' => $ordinal,
+                    'total' => $totalForSchool,
+                    'label' => "Incidencia {$ordinal} de {$totalForSchool}",
+                ],
             ],
             'historial' => $history->map(fn (Incident $row) => [
                 'id' => $row->id,
                 'started_at' => $row->started_at?->toIso8601String(),
                 'recovered_at' => $row->recovered_at?->toIso8601String(),
-                'duracion' => $row->started_at
-                    ? $row->started_at->diffForHumans($row->recovered_at ?? now(), true)
-                    : null,
+                'duracion' => OutageDuration::human(OutageDuration::seconds($row->started_at, $row->recovered_at)),
                 'followup_status' => $row->followup_status?->value,
                 'status' => $row->recovered_at ? 'RECUPERADA' : 'ACTIVA',
                 'es_actual' => $row->id === $incident->id,
@@ -186,9 +260,24 @@ class IncidentController extends Controller
                 'contact_role_snapshot' => $m->contact_role_snapshot,
                 'contact_attempted_at' => $m->contact_attempted_at?->toIso8601String(),
                 'created_by' => $m->created_by,
+                'created_by_name' => $m->author?->name,
                 'created_at' => $m->created_at?->toIso8601String(),
             ])->values()->all(),
-            'updates' => $incident->updates,
+            'updates' => $incident->updates->map(fn ($u) => [
+                'id' => $u->id,
+                'type' => $u->type,
+                'status_before' => $u->status_before,
+                'status_after' => $u->status_after,
+                'observation' => $u->observation,
+                'user_id' => $u->user_id,
+                'user_name' => $u->user?->name,
+                'created_at' => $u->created_at?->toIso8601String(),
+            ])->values()->all(),
+            'timeline' => IncidentTimelineBuilder::build($incident),
+            'snapshots' => [
+                'school' => $incident->school_snapshot,
+                'network' => $incident->network_snapshot,
+            ],
             'opciones' => [
                 'followup_statuses' => collect([
                     FollowupStatus::PendienteContacto,
@@ -223,6 +312,22 @@ class IncidentController extends Controller
                 'contact_results' => collect(ContactResult::cases())->map(fn (ContactResult $s) => [
                     'value' => $s->value,
                     'label' => $s->label(),
+                ])->values()->all(),
+                'field_dispatch_actions' => collect(FieldDispatchService::actions())->map(fn (string $a) => [
+                    'value' => $a,
+                    'label' => match ($a) {
+                        FieldDispatchService::ACTION_PLAN => 'Planificar desplazamiento',
+                        FieldDispatchService::ACTION_DISPATCH => 'Despachar',
+                        FieldDispatchService::ACTION_ARRIVE => 'Reportar en sitio',
+                        FieldDispatchService::ACTION_CANCEL => 'Cancelar desplazamiento',
+                        FieldDispatchService::ACTION_COMPLETE => 'Completar',
+                        default => $a,
+                    },
+                ])->values()->all(),
+                'field_dispatch_statuses' => collect(FieldDispatchStatus::cases())->map(fn (FieldDispatchStatus $s) => [
+                    'value' => $s->value,
+                    'label' => $s->label(),
+                    'active' => $s->isActive(),
                 ])->values()->all(),
             ],
         ]);
@@ -280,6 +385,13 @@ class IncidentController extends Controller
         }
 
         $before = $incident->followup_status?->value;
+        $wantsTechnicalRecovery = ($data['followup_status'] ?? null) === FollowupStatus::Recuperado->value
+            && $incident->recovered_at === null;
+
+        if ($wantsTechnicalRecovery) {
+            unset($data['followup_status']);
+        }
+
         $incident->fill($data);
 
         $touchedGestion = array_intersect(array_keys($data), [
@@ -292,18 +404,34 @@ class IncidentController extends Controller
             'evidence_observations',
             'cause',
         ]);
-        if ($touchedGestion !== []) {
+        if ($touchedGestion !== [] || $wantsTechnicalRecovery) {
             $incident->last_contact_at = now();
         }
 
-        if (($data['followup_status'] ?? null) === FollowupStatus::Recuperado->value
-            || ($data['followup_status'] ?? null) === FollowupStatus::Cerrado->value) {
-            if ($incident->recovered_at === null) {
-                $incident->recovered_at = now();
+        if ($wantsTechnicalRecovery) {
+            $incident->save();
+            $this->incidents->applyTechnicalRecovery(
+                $incident->fresh() ?? $incident,
+                'Recuperación registrada manualmente por el operador.'
+            );
+            $incident->refresh();
+        } else {
+            if (($data['followup_status'] ?? null) === FollowupStatus::Cerrado->value) {
+                if ($incident->recovered_at === null) {
+                    $incident->recovered_at = now();
+                }
             }
+            $incident->save();
         }
 
-        $incident->save();
+        if (($data['followup_status'] ?? null) === FollowupStatus::TecnicoEnCampo->value
+            && $before !== FollowupStatus::TecnicoEnCampo->value) {
+            $this->fieldDispatches->ensurePlanned(
+                $incident->fresh() ?? $incident,
+                $request->user()?->id,
+                'Desplazamiento planificado al marcar Técnico en campo.',
+            );
+        }
 
         $observationParts = array_filter([
             $data['diagnosis'] ?? null,
@@ -312,30 +440,89 @@ class IncidentController extends Controller
             isset($data['responsible_area']) ? 'Responsable: '.$data['responsible_area'] : null,
         ]);
 
-        if (($data['followup_status'] ?? null) && $data['followup_status'] !== $before) {
-            IncidentUpdate::query()->create([
-                'incident_id' => $incident->id,
-                'type' => 'MANUAL',
-                'status_before' => $before,
-                'status_after' => $data['followup_status'],
-                'observation' => $observationParts !== []
-                    ? implode(' | ', $observationParts)
-                    : 'Actualización de seguimiento',
-                'created_at' => now(),
-            ]);
-        } elseif ($observationParts !== []) {
-            IncidentUpdate::query()->create([
-                'incident_id' => $incident->id,
-                'type' => 'NOTE',
-                'status_before' => $before,
-                'status_after' => $incident->followup_status?->value,
-                'observation' => implode(' | ', $observationParts),
-                'created_at' => now(),
-            ]);
+        if (! $wantsTechnicalRecovery) {
+            if (($data['followup_status'] ?? null) && $data['followup_status'] !== $before) {
+                // Avoid duplicate MANUAL update when ensurePlanned already wrote FIELD_DISPATCH + followup sync
+                $alreadyLogged = ($data['followup_status'] === FollowupStatus::TecnicoEnCampo->value)
+                    && $before !== FollowupStatus::TecnicoEnCampo->value;
+                if (! $alreadyLogged) {
+                    IncidentUpdate::query()->create([
+                        'incident_id' => $incident->id,
+                        'type' => 'MANUAL',
+                        'status_before' => $before,
+                        'status_after' => $data['followup_status'],
+                        'observation' => $observationParts !== []
+                            ? implode(' | ', $observationParts)
+                            : 'Actualización de seguimiento',
+                        'created_at' => now(),
+                    ]);
+                } elseif ($observationParts !== []) {
+                    IncidentUpdate::query()->create([
+                        'incident_id' => $incident->id,
+                        'type' => 'NOTE',
+                        'status_before' => $before,
+                        'status_after' => $data['followup_status'],
+                        'observation' => implode(' | ', $observationParts),
+                        'created_at' => now(),
+                    ]);
+                }
+            } elseif ($observationParts !== []) {
+                IncidentUpdate::query()->create([
+                    'incident_id' => $incident->id,
+                    'type' => 'NOTE',
+                    'status_before' => $before,
+                    'status_after' => $incident->followup_status?->value,
+                    'observation' => implode(' | ', $observationParts),
+                    'created_at' => now(),
+                ]);
+            }
         }
 
         return response()->json(
             $this->show($incident->fresh())->getData(true)
+        );
+    }
+
+    public function fieldDispatch(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'action' => ['required', 'string', Rule::in(FieldDispatchService::actions())],
+            'technician_name' => ['nullable', 'string', 'max:255'],
+            'observation' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        try {
+            $this->fieldDispatches->apply($incident, [
+                ...$data,
+                'created_by' => $request->user()?->id,
+            ]);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(
+            $this->show($incident->fresh())->getData(true)
+        );
+    }
+
+    public function recoveryReview(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'action' => ['required', 'string', Rule::in(RecoveryReviewService::actions())],
+            'observation' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        try {
+            $updated = $this->recoveryReviews->apply($incident, [
+                ...$data,
+                'created_by' => $request->user()?->id,
+            ]);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(
+            $this->show($updated)->getData(true)
         );
     }
 
@@ -352,6 +539,14 @@ class IncidentController extends Controller
                 'followup_status' => FollowupStatus::from($data['followup_status']),
                 'last_contact_at' => now(),
             ]);
+
+            if ($data['followup_status'] === FollowupStatus::TecnicoEnCampo->value) {
+                $this->fieldDispatches->ensurePlanned(
+                    $incident->fresh() ?? $incident,
+                    $request->user()?->id,
+                    $data['observation'],
+                );
+            }
         }
 
         $update = IncidentUpdate::query()->create([

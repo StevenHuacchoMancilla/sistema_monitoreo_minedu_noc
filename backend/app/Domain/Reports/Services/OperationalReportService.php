@@ -2,6 +2,7 @@
 
 namespace App\Domain\Reports\Services;
 
+use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Models\Incident;
@@ -95,14 +96,12 @@ class OperationalReportService
             }
         }
 
-        if (! empty($filters['province'])) {
-            $province = mb_strtoupper(trim((string) $filters['province']));
-            $query->whereHas('school', fn (Builder $q) => $q->whereRaw('UPPER(TRIM(COALESCE(provincia, \'\'))) = ?', [$province]));
-        }
-
-        if (! empty($filters['district'])) {
-            $district = mb_strtoupper(trim((string) $filters['district']));
-            $query->whereHas('school', fn (Builder $q) => $q->whereRaw('UPPER(TRIM(COALESCE(distrito, \'\'))) = ?', [$district]));
+        if (! empty($filters['province']) || ! empty($filters['district'])) {
+            PrtgOperationalLocation::constrainByAssignment(
+                $query,
+                isset($filters['province']) ? (string) $filters['province'] : null,
+                isset($filters['district']) ? (string) $filters['district'] : null,
+            );
         }
 
         if (! empty($filters['search'])) {
@@ -113,7 +112,9 @@ class OperationalReportService
                         ->orWhereRaw('LOWER(codigo_local) like ?', [$term]);
                 })->orWhereHas('networkAssignment', function (Builder $a) use ($term) {
                     $a->whereRaw('LOWER(cid) like ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(prtg_device_name, \'\')) like ?', [$term]);
+                        ->orWhereRaw('LOWER(COALESCE(prtg_device_name, \'\')) like ?', [$term])
+                        ->orWhereRaw('LOWER(COALESCE(prtg_province, \'\')) like ?', [$term])
+                        ->orWhereRaw('LOWER(COALESCE(prtg_district, \'\')) like ?', [$term]);
                 });
             });
         }
@@ -148,6 +149,14 @@ class OperationalReportService
             ? $outageAt->timezone(config('app.timezone', 'America/Lima'))->format('d/m/Y H:i')
             : (filled($incident->outage_text) ? (string) $incident->outage_text : null);
 
+        $snapshotProvince = is_string($snapshotSchool['provincia'] ?? null)
+            ? PrtgOperationalLocation::clean($snapshotSchool['provincia'])
+            : null;
+        $snapshotDistrict = is_string($snapshotSchool['distrito'] ?? null)
+            ? PrtgOperationalLocation::clean($snapshotSchool['distrito'])
+            : null;
+        $apiLocation = PrtgOperationalLocation::apiFields($assignment, $school);
+
         return [
             'n' => $school?->current_sequence,
             'ordinal' => $ordinal,
@@ -162,8 +171,14 @@ class OperationalReportService
             'technology_type' => $tipo,
             'detalle' => $incident->detail_text,
             'pext_pint' => $incident->management_scope?->value,
-            'provincia' => $school?->provincia ?? ($snapshotSchool['provincia'] ?? null),
-            'distrito' => $school?->distrito ?? ($snapshotSchool['distrito'] ?? null),
+            'provincia' => $apiLocation['provincia'] ?? $snapshotProvince,
+            'distrito' => $apiLocation['distrito'] ?? $snapshotDistrict,
+            'prtg_province' => $apiLocation['prtg_province'],
+            'prtg_district' => $apiLocation['prtg_district'],
+            'admin_provincia' => $apiLocation['admin_provincia'] ?? $snapshotProvince,
+            'admin_distrito' => $apiLocation['admin_distrito'] ?? $snapshotDistrict,
+            'location_source' => $apiLocation['location_source'],
+            'location_mismatch' => $apiLocation['location_mismatch'],
             'codigo_local' => $school?->codigo_local ?? ($snapshotSchool['codigo_local'] ?? null),
             'management_classification' => $classification?->value,
             'management_classification_label' => $classification?->label(),

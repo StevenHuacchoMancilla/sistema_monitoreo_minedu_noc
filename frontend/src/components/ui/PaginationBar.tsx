@@ -9,6 +9,7 @@ export function PaginationBar({
   perPage,
   onPageChange,
   onPerPageChange,
+  pageSizeOptions = [25, 50, 100],
 }: {
   page: number
   lastPage: number
@@ -16,6 +17,7 @@ export function PaginationBar({
   perPage: number
   onPageChange: (page: number) => void
   onPerPageChange?: (perPage: number) => void
+  pageSizeOptions?: number[]
 }) {
   const from = total === 0 ? 0 : (page - 1) * perPage + 1
   const to = Math.min(page * perPage, total)
@@ -35,9 +37,11 @@ export function PaginationBar({
               value={String(perPage)}
               onChange={(e) => onPerPageChange(Number(e.target.value))}
             >
-              <option value="25">25</option>
-              <option value="50">50</option>
-              <option value="100">100</option>
+              {pageSizeOptions.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
             </Select>
           </label>
         ) : null}

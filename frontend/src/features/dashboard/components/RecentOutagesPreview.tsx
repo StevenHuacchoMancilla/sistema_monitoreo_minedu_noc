@@ -27,7 +27,7 @@ export function RecentOutagesPreview({
       ) : (
         <>
           <p className="mb-3 text-xs text-noc-muted">
-            Haz clic en una fila para ver distrito, contactos y el resto del detalle del local.
+            Haz clic en una fila para abrir el historial operativo del colegio.
           </p>
           <div className="overflow-x-auto">
             <table className="min-w-full text-left text-sm">
@@ -44,7 +44,7 @@ export function RecentOutagesPreview({
               </thead>
               <tbody>
                 {rows.map((row) => {
-                  const href = row.school_id ? `/schools/${row.school_id}` : null
+                  const href = row.school_id ? `/history/schools/${row.school_id}` : null
                   return (
                     <tr
                       key={row.incident_id}
@@ -74,7 +74,7 @@ export function RecentOutagesPreview({
                             className="text-sm text-noc-info hover:underline"
                             onClick={(e) => e.stopPropagation()}
                           >
-                            Ver →
+                            Historial →
                           </Link>
                         ) : (
                           <span className="text-noc-muted">—</span>

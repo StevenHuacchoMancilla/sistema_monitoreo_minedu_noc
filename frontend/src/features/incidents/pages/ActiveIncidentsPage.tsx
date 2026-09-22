@@ -14,6 +14,8 @@ import {
 } from '../../../components/monitoring/StatusBadges'
 import { FOLLOWUP_LABELS } from '../../../components/ui/Badge'
 import { useDashboardSummary, useManualSync, useOutages } from '../../dashboard/hooks/useDashboard'
+import { usePrtgLocationCatalog } from '../../locations/hooks/usePrtgLocationCatalog'
+import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
 import { IncidentManageModal } from '../components/IncidentManageModal'
 import { DataTableFrame } from '../../../components/ui/DataTableFrame'
 import type { OutageRow } from '../../../types/api'
@@ -68,22 +70,7 @@ export function ActiveIncidentsPage({
   const summary = useDashboardSummary()
   const { prtg, cloudnet } = useManualSync()
   const syncing = prtg.isPending || cloudnet.isPending
-
-  const provincias = useMemo(() => {
-    const set = new Set<string>()
-    for (const row of outages.data?.data ?? []) {
-      if (row.provincia) set.add(row.provincia)
-    }
-    return Array.from(set).sort()
-  }, [outages.data])
-
-  const distritos = useMemo(() => {
-    const set = new Set<string>()
-    for (const row of outages.data?.data ?? []) {
-      if (row.distrito && (!provincia || row.provincia === provincia)) set.add(row.distrito)
-    }
-    return Array.from(set).sort()
-  }, [outages.data, provincia])
+  const { provinces: provincias, districts: distritos } = usePrtgLocationCatalog(provincia)
 
   const rows = useMemo(() => {
     let data = outages.data?.data ?? []
@@ -162,6 +149,8 @@ export function ActiveIncidentsPage({
               setDistrito('')
               setPage(1)
             }}
+            aria-label="Provincia (PRTG)"
+            title="Provincia operativa PRTG"
           >
             <option value="">Todas las provincias</option>
             {provincias.map((p) => (
@@ -177,6 +166,8 @@ export function ActiveIncidentsPage({
               setDistrito(e.target.value)
               setPage(1)
             }}
+            aria-label="Distrito (PRTG)"
+            title="Distrito operativo PRTG"
           >
             <option value="">Todos los distritos</option>
             {distritos.map((d) => (
@@ -272,7 +263,12 @@ export function ActiveIncidentsPage({
                         {row.codigo_local ? `${row.codigo_local} · ` : ''}
                         {row.local_educativo}
                       </td>
-                      <td className="max-w-[140px] truncate px-2 py-2">{row.provincia}</td>
+                      <td className="max-w-[160px] px-2 py-2">
+                        <div className="flex flex-col gap-1">
+                          <span className="truncate">{row.provincia}</span>
+                          <LocationMismatchBadge info={row} compact />
+                        </div>
+                      </td>
                       <td className="whitespace-nowrap px-2 py-2 text-noc-muted">
                         {row.started_at ? new Date(row.started_at).toLocaleString() : '—'}
                       </td>

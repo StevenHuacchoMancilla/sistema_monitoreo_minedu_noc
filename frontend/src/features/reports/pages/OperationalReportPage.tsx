@@ -10,6 +10,7 @@ import { FormField, SearchField, Select } from '../../../components/ui/FormContr
 import { Badge } from '../../../components/ui/SoftBadge'
 import { endpoints } from '../../../api/endpoints'
 import { IncidentManageModal } from '../../incidents/components/IncidentManageModal'
+import { PrtgLocationFilterFields } from '../../locations/components/PrtgLocationFilterFields'
 import { ReportDataTable } from '../components/ReportDataTable'
 
 function ReportLegend() {
@@ -117,20 +118,6 @@ export function OperationalReportPage() {
     refetchInterval: 30_000,
   })
 
-  const provinces = useMemo(() => {
-    const set = new Set<string>()
-    for (const row of report.data?.rows ?? []) if (row.provincia) set.add(row.provincia)
-    return Array.from(set).sort()
-  }, [report.data])
-
-  const districts = useMemo(() => {
-    const set = new Set<string>()
-    for (const row of report.data?.rows ?? []) {
-      if (row.distrito && (!province || row.provincia === province)) set.add(row.distrito)
-    }
-    return Array.from(set).sort()
-  }, [report.data, province])
-
   const pageRows = useMemo(() => {
     const rows = report.data?.rows ?? []
     const start = (page - 1) * perPage
@@ -182,35 +169,18 @@ export function OperationalReportPage() {
               <option value="COMPLAINT">Quejas</option>
             </Select>
           </FormField>
-          <FormField label="Provincia">
-            <Select
-              value={province}
-              onChange={(e) => {
-                setProvince(e.target.value)
-                setDistrict('')
-                setPage(1)
-              }}
-            >
-              <option value="">Todas</option>
-              {provinces.map((p) => (
-                <option key={p} value={p}>{p}</option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Distrito">
-            <Select
-              value={district}
-              onChange={(e) => {
-                setDistrict(e.target.value)
-                setPage(1)
-              }}
-            >
-              <option value="">Todos</option>
-              {districts.map((d) => (
-                <option key={d} value={d}>{d}</option>
-              ))}
-            </Select>
-          </FormField>
+          <PrtgLocationFilterFields
+            province={province}
+            district={district}
+            onProvinceChange={(value) => {
+              setProvince(value)
+              setPage(1)
+            }}
+            onDistrictChange={(value) => {
+              setDistrict(value)
+              setPage(1)
+            }}
+          />
           <FormField label="PEXT/PINT">
             <Select
               value={scope}

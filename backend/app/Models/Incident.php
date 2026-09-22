@@ -5,6 +5,7 @@ namespace App\Models;
 use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
+use App\Enums\RecoveryReviewStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
@@ -22,6 +23,9 @@ class Incident extends Model
             'followup_status' => FollowupStatus::class,
             'management_classification' => ManagementClassification::class,
             'management_scope' => ManagementScope::class,
+            'recovery_review_status' => RecoveryReviewStatus::class,
+            'recovered_while_managing' => 'boolean',
+            'recovery_reviewed_at' => 'datetime',
             'school_snapshot' => 'array',
             'network_snapshot' => 'array',
         ];
@@ -50,6 +54,26 @@ class Incident extends Model
     public function managements(): HasMany
     {
         return $this->hasMany(IncidentManagement::class)->orderByDesc('id');
+    }
+
+    public function fieldDispatches(): HasMany
+    {
+        return $this->hasMany(FieldDispatch::class)->orderByDesc('id');
+    }
+
+    public function activeFieldDispatch(): HasMany
+    {
+        return $this->hasMany(FieldDispatch::class)->active()->orderByDesc('id');
+    }
+
+    public function trackingRecords(): HasMany
+    {
+        return $this->hasMany(TrackingRecord::class)->orderByDesc('id');
+    }
+
+    public function activeTracking(): HasMany
+    {
+        return $this->hasMany(TrackingRecord::class)->notClosed()->orderByDesc('id');
     }
 
     public function lastManagedContact(): BelongsTo

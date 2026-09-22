@@ -5,6 +5,7 @@ namespace App\Domain\Dashboard\Services;
 use App\Enums\CidStatus;
 use App\Enums\FollowupStatus;
 use App\Enums\MonitoringStatus;
+use App\Enums\RecoveryReviewStatus;
 use App\Models\Incident;
 use App\Models\NetworkAssignment;
 use App\Models\PrtgSensor;
@@ -60,6 +61,16 @@ class PrtgDashboardService
         $recoveredToday = Incident::query()
             ->whereNotNull('recovered_at')
             ->whereDate('recovered_at', today())
+            ->count();
+        $pendingReviews = Incident::query()
+            ->whereNotNull('recovered_at')
+            ->where(function ($q) {
+                $q->where('recovery_review_status', RecoveryReviewStatus::PendingReview->value)
+                    ->orWhere(function ($q2) {
+                        $q2->where('recovered_while_managing', true)
+                            ->whereNull('recovery_review_status');
+                    });
+            })
             ->count();
         $recoveredTotal = Incident::query()->whereNotNull('recovered_at')->count();
         $concentrationCount = count($this->dashboard->concentrations());
@@ -128,6 +139,7 @@ class PrtgDashboardService
                 'pending_contact' => $pendingContact,
                 'in_management' => $enGestion,
                 'recovered_today' => $recoveredToday,
+                'pending_reviews' => $pendingReviews,
                 'concentrations' => $concentrationCount,
                 'prtg_devices' => $sensorInventory['devices'],
                 'prtg_sensors_total' => $sensorInventory['sensors_total'],
@@ -174,13 +186,17 @@ class PrtgDashboardService
                 'pendientes_contacto' => $pendingContact,
                 'en_gestion' => $enGestion,
                 'concentraciones' => $concentrationCount,
-                'recuperados' => $recoveredTotal,
+                'recuperados' => $recoveredToday,
+                'pending_reviews' => $pendingReviews,
             ],
             'links' => [
                 'downs' => '/incidents/active',
                 'pending_contact' => '/incidents/pending',
                 'in_management' => '/incidents/managing',
+                'recoveries' => '/recoveries',
+                'pending_reviews' => '/recoveries?review_status=PENDING_REVIEW',
                 'concentrations' => '/concentrations',
+                'school_history' => '/history/schools',
                 'without_prtg' => '/admin',
                 'diagnostics' => '/admin',
             ],
@@ -297,12 +313,11 @@ class PrtgDashboardService
         $byProvinceRows = DB::select(
             <<<SQL
             SELECT
-                COALESCE(NULLIF(TRIM(s.provincia), ''), 'SIN PROVINCIA') AS province,
+                COALESCE(NULLIF(TRIM(na.prtg_province), ''), 'SIN PROVINCIA') AS province,
                 c.normalized_status,
                 COUNT(*)::int AS total
             FROM ({$pingSub}) c
             INNER JOIN network_assignments na ON na.id = c.network_assignment_id
-            LEFT JOIN schools s ON s.id = na.school_id
             GROUP BY 1, 2
             ORDER BY 1
             SQL

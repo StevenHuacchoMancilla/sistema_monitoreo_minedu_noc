@@ -6,6 +6,7 @@ import {
   CircleX,
   Eye,
   GraduationCap,
+  History,
   Network,
   Pencil,
   Plus,
@@ -28,6 +29,7 @@ import { TableSkeleton } from '../../../components/ui/TableSkeleton'
 import { DataTableFrame } from '../../../components/ui/DataTableFrame'
 import { endpoints } from '../../../api/endpoints'
 import { techBadgeClass } from '../../../lib/uiTokens'
+import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
 import type { SchoolGeneralPayload } from '../types/school'
 
 function formatCapacity(value: string | number | null | undefined): string {
@@ -303,7 +305,7 @@ export function SchoolsListPage() {
             </div>
 
             <DataTableFrame>
-              <table className="w-full min-w-[1080px] border-collapse text-left text-[13px] leading-snug">
+              <table className="w-full min-w-[1160px] border-collapse text-left text-[13px] leading-snug">
                 <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                   <tr>
                     <th className="whitespace-nowrap px-3 py-2.5">N°</th>
@@ -316,7 +318,7 @@ export function SchoolsListPage() {
                     <th className="whitespace-nowrap px-3 py-2.5">Tecnología</th>
                     <th className="whitespace-nowrap px-3 py-2.5">Capacidad</th>
                     <th className="whitespace-nowrap px-3 py-2.5">Nodo/POP</th>
-                    <th className="sticky right-[4.75rem] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
+                    <th className="sticky right-[7.25rem] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
                       Estado
                     </th>
                     <th className="sticky right-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.18)]">
@@ -348,7 +350,24 @@ export function SchoolsListPage() {
                       >
                         {row.local_educativo}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{row.provincia ?? '—'}</td>
+                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
+                        <div className="flex flex-col gap-1">
+                          <span>{row.provincia ?? '—'}</span>
+                          <LocationMismatchBadge
+                            compact
+                            info={{
+                              location_mismatch: row.location_mismatch,
+                              provincia: row.prtg_province,
+                              distrito: row.prtg_district,
+                              prtg_province: row.prtg_province,
+                              prtg_district: row.prtg_district,
+                              admin_provincia: row.provincia,
+                              admin_distrito: row.distrito,
+                              location_source: row.location_source,
+                            }}
+                          />
+                        </div>
+                      </td>
                       <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{row.distrito ?? '—'}</td>
                       <td className="whitespace-nowrap px-3 py-2.5">
                         {row.tecnologia ? (
@@ -371,7 +390,7 @@ export function SchoolsListPage() {
                           <span className="truncate">{row.nodo_pop ?? '—'}</span>
                         </span>
                       </td>
-                      <td className="sticky right-[4.75rem] z-10 whitespace-nowrap bg-white px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.08)] group-hover:bg-slate-50">
+                      <td className="sticky right-[7.25rem] z-10 whitespace-nowrap bg-white px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.08)] group-hover:bg-slate-50">
                         <Badge tone={row.active ? 'success' : 'neutral'}>
                           {row.active ? <CircleCheck className="h-3 w-3" /> : <CircleX className="h-3 w-3" />}
                           {row.active ? 'Activo' : 'Inactivo'}
@@ -379,7 +398,13 @@ export function SchoolsListPage() {
                       </td>
                       <td className="sticky right-0 z-10 whitespace-nowrap bg-white px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.14)] group-hover:bg-slate-50">
                         <div className="flex items-center justify-end gap-1">
-                          <IconButton label="Ver detalle" onClick={() => navigate(`/schools/${row.id}`)}>
+                          <IconButton
+                            label="Ver historial operativo"
+                            onClick={() => navigate(`/history/schools/${row.id}`)}
+                          >
+                            <History className="h-4 w-4" />
+                          </IconButton>
+                          <IconButton label="Ver ficha maestra" onClick={() => navigate(`/schools/${row.id}`)}>
                             <Eye className="h-4 w-4" />
                           </IconButton>
                           <Link to={`/schools/${row.id}`} aria-label="Editar">

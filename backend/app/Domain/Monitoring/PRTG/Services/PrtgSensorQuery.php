@@ -5,7 +5,6 @@ namespace App\Domain\Monitoring\PRTG\Services;
 use App\Enums\FollowupStatus;
 use App\Enums\MonitoringStatus;
 use App\Models\Incident;
-use App\Models\IncidentUpdate;
 use App\Models\PrtgSensor;
 use Illuminate\Support\Facades\DB;
 
@@ -93,20 +92,10 @@ class PrtgSensorQuery
             ->get();
 
         foreach ($open as $incident) {
-            $before = $incident->followup_status?->value;
-            $incident->update([
-                'recovered_at' => now(),
-                'current_status' => MonitoringStatus::Operativo->value,
-                'followup_status' => FollowupStatus::Recuperado,
-            ]);
-            IncidentUpdate::query()->create([
-                'incident_id' => $incident->id,
-                'type' => 'SYSTEM',
-                'status_before' => $before,
-                'status_after' => FollowupStatus::Recuperado->value,
-                'observation' => 'Incidencia cerrada: sensor PRTG obsoleto tras cambio de scope (rama anterior).',
-                'created_at' => now(),
-            ]);
+            app(\App\Domain\Incidents\Services\IncidentService::class)->applyTechnicalRecovery(
+                $incident,
+                'Incidencia cerrada: sensor PRTG obsoleto tras cambio de scope (rama anterior).'
+            );
             $closed++;
         }
 

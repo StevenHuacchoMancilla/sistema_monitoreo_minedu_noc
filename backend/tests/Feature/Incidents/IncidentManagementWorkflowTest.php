@@ -20,6 +20,12 @@ class IncidentManagementWorkflowTest extends TestCase
 
     private int $seedSeq = 0;
 
+    protected function setUp(): void
+    {
+        parent::setUp();
+        $this->actingAsUser();
+    }
+
     private function seedIncident(): Incident
     {
         $this->seedSeq++;

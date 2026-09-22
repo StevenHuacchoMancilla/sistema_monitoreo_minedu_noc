@@ -2,10 +2,12 @@
 
 namespace App\Domain\Dashboard\Services;
 
+use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Enums\CidStatus;
 use App\Enums\ContactMatchStatus;
 use App\Enums\FollowupStatus;
 use App\Enums\MonitoringStatus;
+use App\Enums\RecoveryReviewStatus;
 use App\Models\CloudnetDevice;
 use App\Models\CloudnetSite;
 use App\Models\Incident;
@@ -54,6 +56,16 @@ class DashboardService
         $recoveredToday = Incident::query()
             ->whereNotNull('recovered_at')
             ->whereDate('recovered_at', today())
+            ->count();
+        $pendingReviews = Incident::query()
+            ->whereNotNull('recovered_at')
+            ->where(function ($q) {
+                $q->where('recovery_review_status', RecoveryReviewStatus::PendingReview->value)
+                    ->orWhere(function ($q2) {
+                        $q2->where('recovered_while_managing', true)
+                            ->whereNull('recovery_review_status');
+                    });
+            })
             ->count();
         $recoveredTotal = Incident::query()->whereNotNull('recovered_at')->count();
         $eligible = NetworkAssignment::query()->where('is_active', true)->where('monitoring_eligible', true)->count();
@@ -118,6 +130,7 @@ class DashboardService
                 'pendientes_contacto' => $allActive->where('followup_status', FollowupStatus::PendienteContacto->value)->count(),
                 'en_gestion' => $enGestion,
                 'recuperados_hoy' => $recoveredToday,
+                'pending_reviews' => $pendingReviews,
                 'recuperados_total' => $recoveredTotal,
                 'concentraciones' => $concentrationCount,
                 'cloudnet_sites' => $cloudnetSites,
@@ -131,7 +144,8 @@ class DashboardService
                 'pendientes_contacto' => $allActive->where('followup_status', FollowupStatus::PendienteContacto->value)->count(),
                 'en_gestion' => $enGestion,
                 'concentraciones' => $concentrationCount,
-                'recuperados' => $recoveredTotal,
+                'recuperados' => $recoveredToday,
+                'pending_reviews' => $pendingReviews,
             ],
             'active_incidents_preview' => $activePreview,
             'oldest_incidents_preview' => [],
@@ -173,9 +187,12 @@ class DashboardService
                 $q->whereHas('school', function ($school) use ($term) {
                     $school->whereRaw('LOWER(local_educativo) like ?', [$term])
                         ->orWhereRaw('LOWER(codigo_local) like ?', [$term])
-                        ->orWhereRaw('LOWER(distrito) like ?', [$term]);
+                        ->orWhereRaw('LOWER(distrito) like ?', [$term])
+                        ->orWhereRaw('LOWER(provincia) like ?', [$term]);
                 })->orWhereHas('networkAssignment', function ($na) use ($term) {
-                    $na->whereRaw('LOWER(cid) like ?', [$term]);
+                    $na->whereRaw('LOWER(cid) like ?', [$term])
+                        ->orWhereRaw('LOWER(COALESCE(prtg_province, \'\')) like ?', [$term])
+                        ->orWhereRaw('LOWER(COALESCE(prtg_district, \'\')) like ?', [$term]);
                 });
             });
         }
@@ -219,6 +236,7 @@ class DashboardService
             }
 
             $reincidenteCount = (int) ($reincidenteCounts[$incident->network_assignment_id] ?? 1);
+            $location = PrtgOperationalLocation::apiFields($assignment, $school);
 
             return [
                 'incident_id' => $incident->id,
@@ -227,8 +245,7 @@ class DashboardService
                 'cid' => $assignment?->cid,
                 'local_educativo' => $school?->local_educativo,
                 'codigo_local' => $school?->codigo_local,
-                'provincia' => $school?->provincia,
-                'distrito' => $school?->distrito,
+                ...$location,
                 'tecnologia' => $assignment?->tecnologia_acceso,
                 'nodo_pop' => $assignment?->nodo_pop,
                 'estado_prtg' => $sensor?->normalized_status?->value ?? $incident->current_status,
@@ -257,7 +274,7 @@ class DashboardService
     }
 
     /**
-     * Concentraciones por provincia > distrito (estilo NOC operativo).
+     * Concentraciones por provincia > distrito PRTG (estilo NOC operativo).
      *
      * @return array<int, array<string, mixed>>
      */
@@ -271,8 +288,12 @@ class DashboardService
         /** @var array<string, array<string, mixed>> $zones */
         $zones = [];
         foreach ($activeIncidents as $incident) {
-            $provincia = trim((string) ($incident->school?->provincia ?? '')) ?: 'SIN PROVINCIA';
-            $distrito = trim((string) ($incident->school?->distrito ?? '')) ?: 'SIN DISTRITO';
+            $location = PrtgOperationalLocation::resolve(
+                $incident->networkAssignment,
+                $incident->school,
+            );
+            $provincia = $location['province'] ?? 'SIN PROVINCIA';
+            $distrito = $location['district'] ?? 'SIN DISTRITO';
             $key = mb_strtoupper($provincia).'|'.mb_strtoupper($distrito);
 
             if (! isset($zones[$key])) {
@@ -283,6 +304,7 @@ class DashboardService
                     'label' => $provincia.' > '.$distrito,
                     'caidos' => 0,
                     'school_ids' => [],
+                    'assignment_ids' => [],
                     'nodos' => [],
                     'oldest_started_at' => null,
                 ];
@@ -291,6 +313,9 @@ class DashboardService
             $zones[$key]['caidos']++;
             if ($incident->school_id) {
                 $zones[$key]['school_ids'][$incident->school_id] = true;
+            }
+            if ($incident->network_assignment_id) {
+                $zones[$key]['assignment_ids'][$incident->network_assignment_id] = true;
             }
             $nodo = trim((string) ($incident->networkAssignment?->nodo_pop ?? ''));
             if ($nodo !== '') {
@@ -309,21 +334,18 @@ class DashboardService
 
         $out = [];
         foreach ($zones as $zone) {
-            $provincia = $zone['provincia'];
-            $distrito = $zone['distrito'];
+            $provincia = (string) $zone['provincia'];
+            $distrito = (string) $zone['distrito'];
 
-            $schoolQuery = School::query()
-                ->where('active', true)
-                ->whereRaw('UPPER(TRIM(COALESCE(provincia, \'\'))) = ?', [mb_strtoupper($provincia)])
-                ->whereRaw('UPPER(TRIM(COALESCE(distrito, \'\'))) = ?', [mb_strtoupper($distrito)]);
-
-            $total = (clone $schoolQuery)->count();
-            $schoolIds = (clone $schoolQuery)->pluck('id');
-
-            $assignmentIds = NetworkAssignment::query()
+            $assignmentQuery = NetworkAssignment::query()
                 ->where('is_active', true)
-                ->whereIn('school_id', $schoolIds)
-                ->pluck('id');
+                ->where('monitoring_eligible', true)
+                ->where('cid_status', CidStatus::Valid);
+            $this->constrainAssignmentsByPrtgZone($assignmentQuery, $provincia, $distrito);
+
+            $assignmentIds = (clone $assignmentQuery)->pluck('id');
+            $schoolIds = (clone $assignmentQuery)->whereNotNull('school_id')->distinct()->pluck('school_id');
+            $total = $schoolIds->count();
 
             $monitored = PrtgSensor::query()
                 ->where('name', 'Ping')
@@ -345,6 +367,7 @@ class DashboardService
                 'label' => $zone['label'],
                 'provincia' => $provincia,
                 'distrito' => $distrito,
+                'location_source' => 'prtg',
                 'caidos' => $caidos,
                 'afectados' => $afectados,
                 'total' => $total,
@@ -354,13 +377,35 @@ class DashboardService
                 'porcentaje_caidos' => $pct,
                 'nodo_pop' => $nodos !== [] ? implode(', ', $nodos) : '—',
                 'oldest_started_at' => $zone['oldest_started_at']?->toIso8601String(),
-                'nota' => 'Posible concentración operativa (no implica causa confirmada).',
+                'nota' => 'Posible concentración operativa PRTG (no implica causa confirmada).',
             ];
         }
 
         usort($out, fn ($a, $b) => $b['caidos'] <=> $a['caidos']);
 
         return array_values($out);
+    }
+
+    /**
+     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\NetworkAssignment>  $query
+     */
+    private function constrainAssignmentsByPrtgZone($query, string $provincia, string $distrito): void
+    {
+        if (mb_strtoupper($provincia) === 'SIN PROVINCIA') {
+            $query->where(function ($q) {
+                $q->whereNull('prtg_province')->orWhereRaw("TRIM(prtg_province) = ''");
+            });
+        } else {
+            $query->whereRaw('UPPER(TRIM(COALESCE(prtg_province, \'\'))) = ?', [mb_strtoupper($provincia)]);
+        }
+
+        if (mb_strtoupper($distrito) === 'SIN DISTRITO') {
+            $query->where(function ($q) {
+                $q->whereNull('prtg_district')->orWhereRaw("TRIM(prtg_district) = ''");
+            });
+        } else {
+            $query->whereRaw('UPPER(TRIM(COALESCE(prtg_district, \'\'))) = ?', [mb_strtoupper($distrito)]);
+        }
     }
 
     /**
@@ -412,8 +457,8 @@ class DashboardService
                 'cid' => $assignment?->cid,
                 'local_educativo' => $school->local_educativo,
                 'codigo_local' => $school->codigo_local,
-                'provincia' => $school->provincia,
-                'distrito' => $school->distrito,
+                'provincia' => PrtgOperationalLocation::province($assignment, $school),
+                'distrito' => PrtgOperationalLocation::district($assignment, $school),
                 'caidas' => (int) ($stat->caidas ?? 0),
                 'recuperaciones' => (int) ($stat->recuperaciones ?? 0),
                 'estado_actual' => $ping?->normalized_status?->value ?? 'SIN_DATOS',

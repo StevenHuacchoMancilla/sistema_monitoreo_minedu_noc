@@ -1,4 +1,4 @@
-import { apiGet, apiPost, apiPut } from './client'
+import { apiGet, apiPost, apiPut, API_URL } from './client'
 import type {
   Concentration,
   DashboardSummary,
@@ -19,8 +19,6 @@ import type {
   SchoolGeneralPayload,
   SchoolListResponse,
 } from '../features/schools/types/school'
-
-const API_URL = import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api'
 
 function toQuery(params: Record<string, string | undefined | null>): string {
   const q = new URLSearchParams()
@@ -63,10 +61,49 @@ export const endpoints = {
     apiPut<IncidentDetail>(`/incidents/${id}`, body),
   applyIncidentManagement: (id: number, body: ManagementPayload) =>
     apiPost<IncidentDetail>(`/incidents/${id}/managements`, body),
+  fieldDispatch: (
+    id: number,
+    body: {
+      action: 'PLAN' | 'DISPATCH' | 'ARRIVE' | 'CANCEL' | 'COMPLETE'
+      technician_name?: string
+      observation?: string
+    },
+  ) => apiPost<IncidentDetail>(`/incidents/${id}/field-dispatches`, body),
+  recoveryReview: (
+    id: number,
+    body: {
+      action:
+        | 'ACKNOWLEDGE'
+        | 'CONTINUE_MONITORING'
+        | 'CONTINUE_ONSITE'
+        | 'CANCEL_DISPATCH'
+        | 'ADD_NOTE'
+      observation?: string
+    },
+  ) => apiPost<IncidentDetail>(`/incidents/${id}/recovery-review`, body),
   operationalReport: (params: Record<string, string | undefined | null> = {}) =>
     apiGet<OperationalReportResponse>(`/reports/operational${toQuery(params)}`),
   closingPreview: () => apiGet<ClosingPreviewResponse>('/reports/closing-preview'),
   closingXlsxUrl: () => `${API_URL}/reports/closing.xlsx`,
   syncPrtg: () => apiPost<Record<string, unknown>>('/sync/prtg', undefined, { timeoutMs: 120_000 }),
   syncCloudnet: () => apiPost<Record<string, unknown>>('/sync/cloudnet', undefined, { timeoutMs: 120_000 }),
+  prtgProvinces: () =>
+    apiGet<{
+      data: Array<{ name: string; district_count: number; assignment_count: number }>
+      meta: { source: string; count: number }
+    }>('/prtg/locations/provinces'),
+  prtgDistricts: (province?: string) =>
+    apiGet<{
+      data: Array<{ name: string; province: string; assignment_count: number }>
+      meta: { source: string; province: string | null; count: number }
+    }>(`/prtg/locations/districts${toQuery({ province })}`),
+  prtgLocationTree: () =>
+    apiGet<{
+      data: Array<{
+        province: string
+        districts: Array<{ name: string; assignment_count: number }>
+        assignment_count: number
+      }>
+      meta: { source: string; provinces: number; districts: number }
+    }>('/prtg/locations/tree'),
 }
