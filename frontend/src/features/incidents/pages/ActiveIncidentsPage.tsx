@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { SearchInput } from '../../../components/ui/SearchInput'
@@ -6,6 +7,7 @@ import { Pagination } from '../../../components/ui/Pagination'
 import { SectionCard } from '../../../components/ui/Card'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
 import {
+  ClassificationBadge,
   FollowupBadge,
   PrtgStatusBadge,
   ReincidenteBadge,
@@ -13,6 +15,7 @@ import {
 import { FOLLOWUP_LABELS } from '../../../components/ui/Badge'
 import { useDashboardSummary, useManualSync, useOutages } from '../../dashboard/hooks/useDashboard'
 import { IncidentManageModal } from '../components/IncidentManageModal'
+import { DataTableFrame } from '../../../components/ui/DataTableFrame'
 import type { OutageRow } from '../../../types/api'
 
 const PAGE_SIZE = 20
@@ -53,6 +56,7 @@ export function ActiveIncidentsPage({
   const [fromDate, setFromDate] = useState('')
   const [toDate, setToDate] = useState('')
   const [manageId, setManageId] = useState<number | null>(null)
+  const client = useQueryClient()
 
   useEffect(() => {
     setProvincia(searchParams.get('provincia') ?? '')
@@ -238,20 +242,23 @@ export function ActiveIncidentsPage({
 
         {rows.length > 0 ? (
           <>
-            <div className="-mx-1 overflow-x-auto">
-              <table className="min-w-full text-left text-sm">
+            <div className="min-w-0">
+              <DataTableFrame>
+              <table className="w-full min-w-[960px] text-left text-sm">
                 <thead className="sticky top-0 bg-noc-surface text-xs uppercase tracking-wide text-noc-muted">
                   <tr>
-                    <th className="px-2 py-2">Estado</th>
-                    <th className="px-2 py-2">CID</th>
-                    <th className="px-2 py-2">Local educativo</th>
-                    <th className="px-2 py-2">Provincia</th>
-                    <th className="px-2 py-2">Fecha caída</th>
-                    <th className="px-2 py-2">Tiempo caído</th>
-                    <th className="px-2 py-2">Seguimiento</th>
-                    <th className="px-2 py-2">Responsable</th>
-                    <th className="px-2 py-2">Ticket</th>
-                    <th className="px-2 py-2 text-right">Acción</th>
+                    <th className="whitespace-nowrap px-2 py-2">Estado</th>
+                    <th className="whitespace-nowrap px-2 py-2">CID</th>
+                    <th className="min-w-[180px] px-2 py-2">Local educativo</th>
+                    <th className="whitespace-nowrap px-2 py-2">Provincia</th>
+                    <th className="whitespace-nowrap px-2 py-2">Fecha caída</th>
+                    <th className="whitespace-nowrap px-2 py-2">Tiempo caído</th>
+                    <th className="whitespace-nowrap px-2 py-2">Seguimiento</th>
+                    <th className="whitespace-nowrap px-2 py-2">Responsable</th>
+                    <th className="whitespace-nowrap px-2 py-2">Ticket</th>
+                    <th className="sticky right-0 z-10 whitespace-nowrap bg-noc-surface px-2 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
+                      Acción
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
@@ -272,6 +279,11 @@ export function ActiveIncidentsPage({
                       <td className="whitespace-nowrap px-2 py-2 text-noc-muted">{row.duracion}</td>
                       <td className="px-2 py-2">
                         <div className="flex flex-wrap items-center gap-1">
+                          <ClassificationBadge
+                            classification={row.management_classification}
+                            label={row.management_classification_label}
+                            colorKey={row.color_key}
+                          />
                           <FollowupBadge status={row.followup_status} />
                           <ReincidenteBadge count={row.reincidente_count} />
                         </div>
@@ -282,7 +294,7 @@ export function ActiveIncidentsPage({
                       <td className="max-w-[100px] truncate px-2 py-2 text-noc-muted">
                         {row.glpi_ticket ?? '—'}
                       </td>
-                      <td className="px-2 py-2 text-right">
+                      <td className="sticky right-0 z-10 whitespace-nowrap bg-noc-surface px-2 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
                         <button
                           type="button"
                           onClick={() => setManageId(row.incident_id)}
@@ -295,6 +307,7 @@ export function ActiveIncidentsPage({
                   ))}
                 </tbody>
               </table>
+              </DataTableFrame>
             </div>
             <Pagination page={page} pageSize={PAGE_SIZE} total={rows.length} onPageChange={setPage} />
           </>
@@ -308,6 +321,7 @@ export function ActiveIncidentsPage({
             setManageId(null)
             void outages.refetch()
             void summary.refetch()
+            void client.invalidateQueries({ queryKey: ['reports'] })
           }}
         />
       ) : null}

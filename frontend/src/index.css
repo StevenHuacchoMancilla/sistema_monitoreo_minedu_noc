@@ -1,17 +1,22 @@
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
 @import "tailwindcss";
 
 @theme {
-  --color-noc-bg: #f5f5f7;
+  --color-noc-bg: #f8fafc;
   --color-noc-surface: #ffffff;
-  --color-noc-surface-2: #fbfbfd;
-  --color-noc-border: #d2d2d7;
-  --color-noc-text: #1d1d1f;
-  --color-noc-muted: #6e6e73;
-  --color-noc-success: #248a3d;
-  --color-noc-danger: #d70015;
-  --color-noc-warning: #b25000;
-  --color-noc-info: #0071e3;
-  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+  --color-noc-surface-2: #f1f5f9;
+  --color-noc-border: #e2e8f0;
+  --color-noc-text: #0f172a;
+  --color-noc-muted: #64748b;
+  --color-noc-success: #059669;
+  --color-noc-danger: #dc2626;
+  --color-noc-warning: #f59e0b;
+  --color-noc-info: #2563eb;
+  --color-noc-cyan: #0891b2;
+  --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
 html,
@@ -25,15 +30,18 @@ body {
   background: var(--color-noc-bg);
   color: var(--color-noc-text);
   font-family: var(--font-sans);
+  font-weight: 400;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  overflow-x: hidden;
 }
 
 * {
   box-sizing: border-box;
+  scrollbar-width: thin;
+  scrollbar-color: #cbd5e1 transparent;
 }
 
-/* Soft Apple-like focus */
 :focus-visible {
   outline: 2px solid color-mix(in srgb, var(--color-noc-info) 70%, white);
   outline-offset: 2px;

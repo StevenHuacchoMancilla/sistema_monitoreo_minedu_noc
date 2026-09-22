@@ -54,7 +54,10 @@ class PrtgSyncService
                 'error_count' => $run->error_count + 1,
                 'metadata' => ['error' => $exception->getMessage()],
             ]);
-            $this->issue($run, SyncIssueSeverity::Error, 'PRTG_SYNC_FAILED', null, null, $exception->getMessage(), []);
+            $code = str_contains($exception->getMessage(), 'PRTG_ALLOWED_ROOT_NOT_FOUND')
+                ? 'PRTG_ALLOWED_ROOT_NOT_FOUND'
+                : 'PRTG_SYNC_FAILED';
+            $this->issue($run, SyncIssueSeverity::Error, $code, null, null, $exception->getMessage(), []);
 
             throw $exception;
         }
@@ -82,77 +85,188 @@ class PrtgSyncService
     }
 
     /**
+     * Auditoría READ-ONLY del scope allowlist (no modifica incidencias ni sensores).
+     *
+     * @return array<string, mixed>
+     */
+    public function scopeAudit(): array
+    {
+        $probe = (string) config('prtg.allowed_probe');
+        $rootName = (string) config('prtg.allowed_root_group');
+
+        Log::info('[PRTG] Starting scope audit', [
+            'probe' => $probe,
+            'allowed_root' => $rootName,
+        ]);
+
+        $root = $this->prtg->findAllowedRootGroup();
+        $tableCount = (int) config('prtg.table_count', 10000);
+
+        $groups = $this->prtg->fetchTable('groups', [
+            'columns' => 'objid,group,probe,parentid,status',
+            'count' => $tableCount,
+        ]);
+        $groupIndex = $this->prtg->indexGroupsById($groups);
+        $geo = $this->prtg->countGeoGroups($root['objid'], $groupIndex);
+
+        $devices = $this->prtg->fetchTable('devices', [
+            'id' => $root['objid'],
+            'columns' => 'objid,device,host,group,probe,parentid,status',
+            'count' => $tableCount,
+        ]);
+        $sensors = $this->prtg->fetchTable('sensors', [
+            'id' => $root['objid'],
+            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,type,parentid,message',
+            'count' => $tableCount,
+        ]);
+
+        $discovered = $this->discoverScopedDevices($devices, $sensors, $root['objid'], $groupIndex, null);
+
+        $assignments = NetworkAssignment::query()
+            ->where('is_active', true)
+            ->where('cid_status', CidStatus::Valid)
+            ->where('monitoring_eligible', true)
+            ->pluck('cid')
+            ->flip();
+
+        $associated = 0;
+        $unassociated = 0;
+        foreach (array_keys($discovered['devices_by_cid']) as $cid) {
+            if ($assignments->has($cid)) {
+                $associated++;
+            } else {
+                $unassociated++;
+            }
+        }
+
+        $summary = [
+            'probe' => $root['probe'],
+            'root_group' => $root['name'],
+            'root_objid' => $root['objid'],
+            'source_scope' => $root['probe'].' > '.$root['name'],
+            'provinces' => $geo['provinces'],
+            'districts' => $geo['districts'],
+            'devices' => $discovered['devices_in_scope'],
+            'devices_cid' => $discovered['devices_with_cid'],
+            'unique_cids' => count($discovered['devices_by_cid']),
+            'duplicate_cids' => $discovered['duplicate_cids'],
+            'associated_with_db' => $associated,
+            'unassociated' => $unassociated,
+            'ping_sensors' => $discovered['ping_sensors'],
+            'devices_without_ping' => $discovered['devices_without_ping'],
+            'excluded_objects' => $discovered['excluded_outside_scope'] + $discovered['ignored_no_cid'],
+            'excluded_outside_scope' => $discovered['excluded_outside_scope'],
+            'ignored_no_cid' => $discovered['ignored_no_cid'],
+            'warnings' => $discovered['hierarchy_warnings'],
+            'read_only' => true,
+        ];
+
+        $run = SyncRun::query()->create([
+            'source' => 'PRTG_SCOPE_AUDIT',
+            'started_at' => now(),
+            'finished_at' => now(),
+            'status' => SyncRunStatus::Success,
+            'received_count' => $summary['devices'],
+            'processed_count' => $summary['devices_cid'],
+            'metadata' => $summary,
+        ]);
+
+        $summary['sync_run_id'] = $run->id;
+
+        Log::info('[PRTG] Scope audit finished', [
+            'devices' => $summary['devices'],
+            'cid_devices' => $summary['devices_cid'],
+            'associated' => $summary['associated_with_db'],
+        ]);
+
+        return $summary;
+    }
+
+    /**
      * @return array<string, mixed>
      */
     private function runSync(SyncRun $run): array
     {
-        $summary = [
-            'received_count' => 0,
-            'processed_count' => 0,
-            'created_count' => 0,
-            'updated_count' => 0,
-            'ignored_count' => 0,
-            'matched' => 0,
-            'unmatched' => 0,
-            'downs' => 0,
-            'operativos' => 0,
-            'excluded_local_probe' => 0,
-        ];
+        $probe = (string) config('prtg.allowed_probe');
+        $rootName = (string) config('prtg.allowed_root_group');
+        Log::info('[PRTG] Starting sync', [
+            'probe' => $probe,
+            'allowed_root' => $rootName,
+        ]);
 
         try {
-            $loretoId = $this->prtg->findLoretoGroupId();
+            $root = $this->prtg->findAllowedRootGroup();
         } catch (Throwable $exception) {
             $this->issue(
                 $run,
                 SyncIssueSeverity::Error,
-                'PRTG_ROOT_GROUP_NOT_FOUND',
+                'PRTG_ALLOWED_ROOT_NOT_FOUND',
                 null,
                 null,
                 $exception->getMessage(),
-                []
+                [
+                    'probe' => $probe,
+                    'allowed_root' => $rootName,
+                ]
             );
 
             throw $exception;
         }
 
+        $tableCount = (int) config('prtg.table_count', 10000);
+        $groups = $this->prtg->fetchTable('groups', [
+            'columns' => 'objid,group,probe,parentid,status',
+            'count' => $tableCount,
+        ]);
+        $groupIndex = $this->prtg->indexGroupsById($groups);
+        $geo = $this->prtg->countGeoGroups($root['objid'], $groupIndex);
+
         $devices = $this->prtg->fetchTable('devices', [
-            'id' => $loretoId,
+            'id' => $root['objid'],
             'columns' => 'objid,device,host,group,probe,parentid,status',
-            'count' => 5000,
+            'count' => $tableCount,
         ]);
         $sensors = $this->prtg->fetchTable('sensors', [
-            'id' => $loretoId,
-            'columns' => 'objid,sensor,device,status,lastvalue,lastcheck,downtimesince,type,parentid',
-            'count' => 5000,
+            'id' => $root['objid'],
+            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,type,parentid,message',
+            'count' => $tableCount,
         ]);
 
-        $summary['received_count'] = count($devices);
-        $summary['excluded_local_probe'] = 0;
+        $discovered = $this->discoverScopedDevices(
+            $devices,
+            $sensors,
+            $root['objid'],
+            $groupIndex,
+            $run
+        );
 
-        $devicesById = [];
-        $devicesByCid = [];
-        foreach ($devices as $device) {
-            $probe = (string) ($device['probe'] ?? '');
-            if ($probe === (string) config('prtg.allowed_probe') || $probe === '') {
-                // keep
-            }
-            if (stripos($probe, 'Sonda local') !== false) {
-                $summary['excluded_local_probe']++;
+        $summary = [
+            'source_scope' => $root['probe'].' > '.$root['name'],
+            'probe' => $root['probe'],
+            'root_group' => $root['name'],
+            'root_objid' => $root['objid'],
+            'provinces' => $geo['provinces'],
+            'districts' => $geo['districts'],
+            'received_count' => $discovered['devices_in_scope'],
+            'processed_count' => 0,
+            'created_count' => 0,
+            'updated_count' => 0,
+            'ignored_count' => $discovered['ignored_no_cid'],
+            'matched' => 0,
+            'unmatched' => 0,
+            'downs' => 0,
+            'operativos' => 0,
+            'excluded_outside_scope' => $discovered['excluded_outside_scope'],
+            'duplicate_cids' => $discovered['duplicate_cids'],
+            'location_mismatches' => 0,
+            'location_updated' => 0,
+        ];
 
-                continue;
-            }
-
-            $objid = (string) ($device['objid'] ?? '');
-            $name = (string) ($device['device'] ?? '');
-            $cid = $this->prtg->extractCid($name);
-            if ($objid === '' || $cid === null) {
-                $summary['ignored_count']++;
-
-                continue;
-            }
-            $devicesById[$objid] = $device;
-            $devicesByCid[$cid][] = $device;
-        }
+        Log::info('[PRTG] Devices discovered', [
+            'devices' => $discovered['devices_in_scope'],
+            'cid_devices' => $discovered['devices_with_cid'],
+            'excluded_outside_scope' => $discovered['excluded_outside_scope'],
+        ]);
 
         $assignments = NetworkAssignment::query()
             ->with('school')
@@ -162,16 +276,10 @@ class PrtgSyncService
             ->get()
             ->keyBy('cid');
 
-        $sensorsByDevice = [];
-        foreach ($sensors as $sensor) {
-            $parent = (string) ($sensor['parentid'] ?? '');
-            if ($parent === '') {
-                continue;
-            }
-            $sensorsByDevice[$parent][] = $sensor;
-        }
+        $sensorsByDevice = $discovered['sensors_by_device'];
+        $locationsByDevice = $discovered['locations_by_device'];
 
-        foreach ($devicesByCid as $cid => $candidates) {
+        foreach ($discovered['devices_by_cid'] as $cid => $candidates) {
             try {
                 $device = $this->resolveDevice($cid, $candidates, $assignments->get($cid), $run);
                 if ($device === null) {
@@ -197,7 +305,36 @@ class PrtgSyncService
                 }
 
                 $summary['matched']++;
-                $deviceSensors = $sensorsByDevice[(string) $device['objid']] ?? [];
+                $objid = (string) ($device['objid'] ?? '');
+                $location = $locationsByDevice[$objid] ?? [
+                    'province' => null,
+                    'district' => null,
+                ];
+
+                if ($this->locationMismatch($assignment, $location)) {
+                    $updated = $this->alignSchoolLocationFromPrtg($assignment, $location);
+                    if ($updated) {
+                        $summary['location_updated'] = (int) ($summary['location_updated'] ?? 0) + 1;
+                    } else {
+                        $summary['location_mismatches']++;
+                        $this->issue(
+                            $run,
+                            SyncIssueSeverity::Warning,
+                            'PRTG_LOCATION_MISMATCH',
+                            $cid,
+                            $assignment->school?->codigo_local,
+                            'No se pudo alinear provincia/distrito con PRTG (faltan datos).',
+                            [
+                                'school_provincia' => $assignment->school?->provincia,
+                                'school_distrito' => $assignment->school?->distrito,
+                                'prtg_province_group' => $location['province'],
+                                'prtg_district_group' => $location['district'],
+                            ]
+                        );
+                    }
+                }
+
+                $deviceSensors = $sensorsByDevice[$objid] ?? [];
                 $ping = $this->resolvePingSensor($deviceSensors, $run, $cid);
 
                 $previousBySensor = [];
@@ -207,7 +344,7 @@ class PrtgSyncService
                         $existing = PrtgSensor::query()->where('prtg_sensor_id', $sensorId)->first();
                         $previousBySensor[$sensorId] = $existing?->normalized_status;
                     }
-                    $result = $this->upsertSensor($assignment->id, $device, $sensorRow);
+                    $result = $this->upsertSensor($assignment->id, $device, $sensorRow, $root, $location);
                     $summary['created_count'] += $result['created'];
                     $summary['updated_count'] += $result['updated'];
                 }
@@ -226,6 +363,16 @@ class PrtgSyncService
                             $summary['operativos']++;
                         }
                     }
+                } else {
+                    $this->issue(
+                        $run,
+                        SyncIssueSeverity::Warning,
+                        'PRTG_DEVICE_WITHOUT_PING',
+                        $cid,
+                        $assignment->school?->codigo_local,
+                        'Dispositivo CID sin sensor Ping.',
+                        ['device' => $device['device'] ?? null]
+                    );
                 }
 
                 $summary['processed_count']++;
@@ -242,7 +389,273 @@ class PrtgSyncService
             }
         }
 
+        Log::info('[PRTG] Finished', [
+            'processed' => $summary['processed_count'],
+            'matched' => $summary['matched'],
+            'warnings' => $run->fresh()?->warning_count,
+        ]);
+
+        $prune = PrtgSensorQuery::pruneObsoleteScopeSensors(
+            $root['probe'].' > '.$root['name']
+        );
+        $summary['pruned_obsolete_sensors'] = $prune['deleted_sensors'];
+        $summary['closed_obsolete_incidents'] = $prune['closed_incidents'];
+        if ($prune['deleted_sensors'] > 0) {
+            Log::info('[PRTG] Pruned obsolete sensors from previous scope', $prune);
+        }
+
         return $summary;
+    }
+
+    /**
+     * Filtra dispositivos por ALLOWLIST (descendants del root) + CID.
+     *
+     * @param  array<int, array<string, mixed>>  $devices
+     * @param  array<int, array<string, mixed>>  $sensors
+     * @param  array<int, array<string, mixed>>  $groupIndex
+     * @return array<string, mixed>
+     */
+    public function discoverScopedDevices(
+        array $devices,
+        array $sensors,
+        int $allowedRootObjId,
+        array $groupIndex,
+        ?SyncRun $run
+    ): array {
+        $devicesById = [];
+        $devicesByCid = [];
+        $locationsByDevice = [];
+        $excludedOutsideScope = 0;
+        $ignoredNoCid = 0;
+        $hierarchyWarnings = 0;
+        $devicesInScope = 0;
+
+        foreach ($devices as $device) {
+            $objid = (string) ($device['objid'] ?? '');
+            $name = (string) ($device['device'] ?? '');
+            $parentId = (int) ($device['parentid'] ?? 0);
+
+            if ($objid === '') {
+                $ignoredNoCid++;
+
+                continue;
+            }
+
+            $location = $this->prtg->resolveLocationFromHierarchy($parentId, $allowedRootObjId, $groupIndex);
+            if (! $location['under_root']) {
+                $excludedOutsideScope++;
+                if ($run && $location['warning']) {
+                    $hierarchyWarnings++;
+                    $this->issue(
+                        $run,
+                        SyncIssueSeverity::Warning,
+                        'PRTG_HIERARCHY_WARNING',
+                        null,
+                        null,
+                        'Dispositivo fuera del root allowlist o jerarquía incompleta.',
+                        [
+                            'device' => $name,
+                            'objid' => $objid,
+                            'warning' => $location['warning'],
+                        ]
+                    );
+                }
+
+                continue;
+            }
+
+            $devicesInScope++;
+            $cid = $this->prtg->extractCid($name);
+            if ($cid === null) {
+                $ignoredNoCid++;
+                if ($run) {
+                    $this->issue(
+                        $run,
+                        SyncIssueSeverity::Warning,
+                        'PRTG_DEVICE_WITHOUT_CID',
+                        null,
+                        null,
+                        'Objeto en scope sin CID válido; ignorado como colegio.',
+                        ['device' => $name, 'objid' => $objid]
+                    );
+                }
+
+                continue;
+            }
+
+            $devicesById[$objid] = $device;
+            $devicesByCid[$cid][] = $device;
+            $locationsByDevice[$objid] = $location;
+        }
+
+        $sensorsByDevice = [];
+        $pingSensors = 0;
+        foreach ($sensors as $sensor) {
+            $parent = (string) ($sensor['parentid'] ?? '');
+            if ($parent === '' || ! isset($devicesById[$parent])) {
+                continue;
+            }
+            $sensorsByDevice[$parent][] = $sensor;
+            $sensorName = (string) ($sensor['sensor'] ?? '');
+            $sensorType = (string) ($sensor['type'] ?? '');
+            if (strcasecmp($sensorName, 'Ping') === 0 || strcasecmp($sensorType, 'Ping') === 0) {
+                $pingSensors++;
+            }
+        }
+
+        $devicesWithoutPing = 0;
+        foreach ($devicesById as $objid => $device) {
+            $deviceSensors = $sensorsByDevice[$objid] ?? [];
+            $hasPing = false;
+            foreach ($deviceSensors as $sensor) {
+                if (strcasecmp((string) ($sensor['sensor'] ?? ''), 'Ping') === 0
+                    || strcasecmp((string) ($sensor['type'] ?? ''), 'Ping') === 0) {
+                    $hasPing = true;
+                    break;
+                }
+            }
+            if (! $hasPing) {
+                $devicesWithoutPing++;
+            }
+        }
+
+        $duplicateCids = 0;
+        foreach ($devicesByCid as $candidates) {
+            if (count($candidates) > 1) {
+                $duplicateCids++;
+            }
+        }
+
+        return [
+            'devices_by_id' => $devicesById,
+            'devices_by_cid' => $devicesByCid,
+            'locations_by_device' => $locationsByDevice,
+            'sensors_by_device' => $sensorsByDevice,
+            'devices_in_scope' => $devicesInScope,
+            'devices_with_cid' => count($devicesById),
+            'duplicate_cids' => $duplicateCids,
+            'excluded_outside_scope' => $excludedOutsideScope,
+            'ignored_no_cid' => $ignoredNoCid,
+            'ping_sensors' => $pingSensors,
+            'devices_without_ping' => $devicesWithoutPing,
+            'hierarchy_warnings' => $hierarchyWarnings,
+        ];
+    }
+
+    /**
+     * Alinea provincia/distrito del colegio (Excel/BD) con la jerarquía PRTG.
+     * Fuente de verdad operativa: carpetas PRTG del scope allowlist.
+     *
+     * @param  array{province: ?string, district: ?string}  $location
+     */
+    private function alignSchoolLocationFromPrtg(NetworkAssignment $assignment, array $location): bool
+    {
+        $school = $assignment->school;
+        if ($school === null) {
+            return false;
+        }
+
+        $province = trim((string) ($location['province'] ?? ''));
+        $district = trim((string) ($location['district'] ?? ''));
+        if ($province === '' && $district === '') {
+            return false;
+        }
+
+        $payload = [];
+        if ($province !== '' && $this->normalizePlaceName($school->provincia) !== $this->normalizePlaceName($province)) {
+            $payload['provincia'] = $province;
+        }
+        if ($district !== '' && $this->normalizePlaceName($school->distrito) !== $this->normalizePlaceName($district)) {
+            $payload['distrito'] = $district;
+        }
+
+        if ($payload === []) {
+            return true;
+        }
+
+        $school->update($payload);
+        $assignment->setRelation('school', $school->fresh());
+
+        return true;
+    }
+
+    /**
+     * @param  array{province: ?string, district: ?string}  $location
+     */
+    private function locationMismatch(NetworkAssignment $assignment, array $location): bool
+    {
+        $school = $assignment->school;
+        if ($school === null) {
+            return false;
+        }
+
+        $schoolProv = $this->normalizePlaceName($school->provincia);
+        $schoolDist = $this->normalizePlaceName($school->distrito);
+        $prtgProv = $this->normalizePlaceName($location['province'] ?? null);
+        $prtgDist = $this->normalizePlaceName($location['district'] ?? null);
+
+        if ($prtgProv === '' && $prtgDist === '') {
+            return false;
+        }
+
+        if ($prtgProv !== '' && $schoolProv !== '' && ! $this->placesMatch($schoolProv, $prtgProv)) {
+            return true;
+        }
+
+        if ($prtgDist !== '' && $schoolDist !== '' && ! $this->placesMatch($schoolDist, $prtgDist)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private function normalizePlaceName(?string $value): string
+    {
+        $value = mb_strtoupper(trim((string) $value));
+        if ($value === '') {
+            return '';
+        }
+
+        $value = str_replace(['_', '-'], ' ', $value);
+        $value = preg_replace('/\s+/u', ' ', $value) ?? $value;
+
+        if (class_exists(\Normalizer::class)) {
+            $decomposed = \Normalizer::normalize($value, \Normalizer::FORM_D);
+            if (is_string($decomposed)) {
+                $value = preg_replace('/\p{Mn}/u', '', $decomposed) ?? $value;
+            }
+        } else {
+            $value = strtr($value, [
+                'Á' => 'A', 'É' => 'E', 'Í' => 'I', 'Ó' => 'O', 'Ú' => 'U', 'Ñ' => 'N',
+                'Ü' => 'U',
+            ]);
+        }
+
+        $aliases = [
+            'GENARO HERRERA' => 'JENARO HERRERA',
+            'JENARO HERRERA' => 'JENARO HERRERA',
+            'MARISCAL RAMON CASTILLA' => 'MARISCAL RAMON CASTILLA',
+            'RAMON CASTILLA' => 'RAMON CASTILLA',
+        ];
+
+        return $aliases[$value] ?? $value;
+    }
+
+    private function placesMatch(string $a, string $b): bool
+    {
+        if ($a === $b) {
+            return true;
+        }
+
+        // Contención controlada (p.ej. "RAMON CASTILLA" ⊆ "MARISCAL RAMON CASTILLA")
+        if (str_contains($a, $b) || str_contains($b, $a)) {
+            $shorter = mb_strlen($a) <= mb_strlen($b) ? $a : $b;
+            if (mb_strlen($shorter) >= 8) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -252,6 +665,16 @@ class PrtgSyncService
     {
         if (count($candidates) === 1) {
             return $candidates[0];
+        }
+
+        $uniqueNames = array_values(array_unique(array_map(
+            static fn (array $c): string => (string) ($c['device'] ?? ''),
+            $candidates
+        )));
+        if (count($uniqueNames) === 1) {
+            usort($candidates, fn ($a, $b) => ((int) ($a['objid'] ?? 0)) <=> ((int) ($b['objid'] ?? 0)));
+
+            return $candidates[0] ?? null;
         }
 
         if ($assignment?->prtg_device_name) {
@@ -305,19 +728,20 @@ class PrtgSyncService
      */
     private function resolvePingSensor(array $sensors, SyncRun $run, string $cid): ?array
     {
-        $pings = array_values(array_filter($sensors, fn ($s) => ($s['sensor'] ?? '') === 'Ping'));
-        if ($pings === []) {
-            $pings = array_values(array_filter($sensors, fn ($s) => strcasecmp((string) ($s['type'] ?? ''), 'Ping') === 0));
-        }
+        $pings = array_values(array_filter(
+            $sensors,
+            fn ($s) => strcasecmp((string) ($s['sensor'] ?? ''), 'Ping') === 0
+                || strcasecmp((string) ($s['type'] ?? ''), 'Ping') === 0
+        ));
         if ($pings === []) {
             return null;
         }
         if (count($pings) > 1) {
             usort($pings, function ($a, $b) {
-                $aDown = in_array((int) ($a['status_raw'] ?? 0), [7, 8, 9, 11, 12], true) ? 1 : 0;
-                $bDown = in_array((int) ($b['status_raw'] ?? 0), [7, 8, 9, 11, 12], true) ? 1 : 0;
-                if ($aDown !== $bDown) {
-                    return $aDown <=> $bDown;
+                $aPaused = in_array((int) ($a['status_raw'] ?? 0), [7, 8, 9, 11, 12], true) ? 1 : 0;
+                $bPaused = in_array((int) ($b['status_raw'] ?? 0), [7, 8, 9, 11, 12], true) ? 1 : 0;
+                if ($aPaused !== $bPaused) {
+                    return $aPaused <=> $bPaused;
                 }
 
                 return ((float) ($b['lastcheck_raw'] ?? 0)) <=> ((float) ($a['lastcheck_raw'] ?? 0));
@@ -333,10 +757,17 @@ class PrtgSyncService
     /**
      * @param  array<string, mixed>  $device
      * @param  array<string, mixed>  $sensorRow
+     * @param  array{objid: int, name: string, probe: string}  $root
+     * @param  array{province: ?string, district: ?string}  $location
      * @return array{created: int, updated: int}
      */
-    private function upsertSensor(int $assignmentId, array $device, array $sensorRow): array
-    {
+    private function upsertSensor(
+        int $assignmentId,
+        array $device,
+        array $sensorRow,
+        array $root,
+        array $location
+    ): array {
         $statusRaw = isset($sensorRow['status_raw']) ? (int) $sensorRow['status_raw'] : null;
         $normalized = MonitoringStatus::fromPrtgRaw($statusRaw);
         $payload = [
@@ -355,6 +786,13 @@ class PrtgSyncService
             'last_synced_at' => now(),
             'metadata' => [
                 'message' => strip_tags((string) ($sensorRow['message'] ?? '')),
+                'source_scope' => $root['probe'].' > '.$root['name'],
+                'prtg_probe_name' => $root['probe'],
+                'prtg_root_group' => $root['name'],
+                'prtg_province_group' => $location['province'] ?? null,
+                'prtg_district_group' => $location['district'] ?? null,
+                'prtg_device_id' => (string) ($device['objid'] ?? ''),
+                'prtg_device_name' => $device['device'] ?? null,
             ],
         ];
 
@@ -404,11 +842,12 @@ class PrtgSyncService
             'payload' => [
                 'status_raw' => $sensor->status_raw,
                 'device' => $sensor->device_name,
+                'source_scope' => $sensor->metadata['source_scope'] ?? null,
             ],
             'created_at' => now(),
         ]);
 
-        if ($sensor->name === 'Ping') {
+        if ($sensor->name === 'Ping' || strcasecmp((string) $sensor->name, 'Ping') === 0) {
             $this->incidentService->applyPingTransition($assignment, $sensor, $previous, $current);
         }
     }

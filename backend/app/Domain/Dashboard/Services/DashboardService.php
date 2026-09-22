@@ -46,11 +46,7 @@ class DashboardService
             CidStatus::BajaImpe->value,
         ])->count();
 
-        $pingStatuses = PrtgSensor::query()
-            ->where('name', 'Ping')
-            ->select('normalized_status', DB::raw('count(*) as total'))
-            ->groupBy('normalized_status')
-            ->pluck('total', 'normalized_status');
+        $pingStatuses = \App\Domain\Monitoring\PRTG\Services\PrtgSensorQuery::statusCounts();
 
         $activeIncidents = Incident::query()->active()->count();
         $pendingContact = Incident::query()->active()->where('followup_status', FollowupStatus::PendienteContacto)->count();
@@ -61,7 +57,7 @@ class DashboardService
             ->count();
         $recoveredTotal = Incident::query()->whereNotNull('recovered_at')->count();
         $eligible = NetworkAssignment::query()->where('is_active', true)->where('monitoring_eligible', true)->count();
-        $withPing = PrtgSensor::query()->where('name', 'Ping')->whereNotNull('network_assignment_id')->distinct('network_assignment_id')->count('network_assignment_id');
+        $withPing = \App\Domain\Monitoring\PRTG\Services\PrtgSensorQuery::monitoredAssignmentCount();
 
         $cloudnetSites = CloudnetSite::query()->count();
         $deviceCount = CloudnetDevice::query()->count();
@@ -184,7 +180,10 @@ class DashboardService
             });
         }
 
-        $incidents = $query->get();
+        $incidents = $query->get()
+            // Una caída visible por asignación (evita dobles por sensores de ramas antiguas).
+            ->unique('network_assignment_id')
+            ->values();
 
         $assignmentIds = $incidents->pluck('network_assignment_id')->filter()->unique()->values();
         $schoolIds = $incidents->pluck('school_id')->filter()->unique()->values();
@@ -237,6 +236,12 @@ class DashboardService
                 'duracion' => $incident->started_at?->diffForHumans(now(), true),
                 'started_at' => $incident->started_at?->toIso8601String(),
                 'followup_status' => $incident->followup_status?->value,
+                'management_classification' => $incident->management_classification?->value,
+                'management_classification_label' => $incident->management_classification?->label(),
+                'color_key' => $incident->management_classification?->colorKey(),
+                'outage_text' => $incident->outage_text,
+                'detail_text' => $incident->detail_text,
+                'management_scope' => $incident->management_scope?->value,
                 'last_check' => $sensor?->last_check?->toIso8601String(),
                 'contacto' => $contact?->name,
                 'telefono' => $contact?->phone,

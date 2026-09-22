@@ -3,6 +3,7 @@
 namespace App\Domain\Incidents\Services;
 
 use App\Enums\FollowupStatus;
+use App\Enums\ManagementClassification;
 use App\Enums\MonitoringStatus;
 use App\Models\Incident;
 use App\Models\IncidentUpdate;
@@ -52,6 +53,7 @@ class IncidentService
             'started_at' => now(),
             'current_status' => $sensor->normalized_status?->value ?? MonitoringStatus::Caido->value,
             'followup_status' => FollowupStatus::PendienteContacto,
+            'management_classification' => ManagementClassification::NewOutage,
             'evidence_observations' => null,
             'school_snapshot' => $school?->only([
                 'id', 'current_sequence', 'legacy_reference', 'codigo_local', 'codigo_modular',
@@ -68,7 +70,7 @@ class IncidentService
             'type' => 'SYSTEM',
             'status_before' => null,
             'status_after' => FollowupStatus::PendienteContacto->value,
-            'observation' => 'Incidencia creada por transición a CAÍDO (Ping).',
+            'observation' => 'Incidencia creada por transición a CAÍDO (Ping). Clasificación: NUEVA CAÍDA.',
             'created_at' => now(),
         ]);
 

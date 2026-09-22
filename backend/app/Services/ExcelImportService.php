@@ -264,7 +264,13 @@ class ExcelImportService
             );
         }
 
-        $contactMatch = $this->matcher->match($schoolPayload, $contactRows);
+        // Recurso de Red es la fuente de verdad: contactos se vinculan primero por CID.
+        $contactMatch = $this->matchContactsByCidThenIdentity(
+            $schoolPayload,
+            $contactRows,
+            $contactsByCid,
+            $cidNumeric
+        );
         $school->contact_match_status = $contactMatch['status'];
         $school->contact_match_priority = $contactMatch['priority'];
         $school->contact_source_row = $contactMatch['matches'][0]['__row'] ?? null;
@@ -275,6 +281,34 @@ class ExcelImportService
             $importedContacts = $this->syncContacts($school, $contactMatch['matches'][0]);
             $summary['contacts_associated']++;
             $summary['contact_rows_imported'] += $importedContacts;
+
+            if (($contactMatch['identity_drift'] ?? false) === true) {
+                $summary['reassignments'][] = [
+                    'cid' => $cidNumeric,
+                    'match_by' => 'cid',
+                    'current_school' => $school->local_educativo,
+                    'current_codigo_local' => $school->codigo_local,
+                    'legacy_school' => $contactMatch['matches'][0]['local_educativo'] ?? null,
+                    'legacy_codigo_local' => $contactMatch['matches'][0]['codigo_local'] ?? null,
+                    'legacy_row' => $contactMatch['matches'][0]['__row'] ?? null,
+                ];
+                $this->issue(
+                    $run,
+                    SyncIssueSeverity::Warning,
+                    'CONTACT_CID_IDENTITY_DRIFT',
+                    $row['__row'],
+                    $cidRaw,
+                    $school->codigo_local,
+                    'Contacto vinculado por CID; el código/local del Excel de contactos difiere del Recurso (revisar en CRUD).',
+                    [
+                        'recurso_local' => $school->local_educativo,
+                        'recurso_codigo_local' => $school->codigo_local,
+                        'contacto_local' => $contactMatch['matches'][0]['local_educativo'] ?? null,
+                        'contacto_codigo_local' => $contactMatch['matches'][0]['codigo_local'] ?? null,
+                        'llee_row' => $contactMatch['matches'][0]['__row'] ?? null,
+                    ]
+                );
+            }
         } elseif ($contactMatch['status'] === ContactMatchStatus::Ambiguous) {
             $summary['contacts_ambiguous']++;
             $this->issue(
@@ -286,8 +320,10 @@ class ExcelImportService
                 $school->codigo_local,
                 'Múltiples candidatos LLEE; no se importaron contactos.',
                 [
+                    'match_by' => $contactMatch['match_by'] ?? null,
                     'candidates' => array_map(fn (array $candidate) => [
                         'row' => $candidate['__row'] ?? null,
+                        'cid' => $candidate['cid'] ?? null,
                         'codigo_local' => $candidate['codigo_local'] ?? null,
                         'codigo_modular' => $candidate['codigo_modular'] ?? null,
                         'local_educativo' => $candidate['local_educativo'] ?? null,
@@ -309,26 +345,6 @@ class ExcelImportService
             );
         }
 
-        if ($cidNumeric !== null) {
-            foreach ($contactsByCid[$cidNumeric] ?? [] as $legacy) {
-                $legacyCid = CidClassifier::numericCid(isset($legacy['cid']) ? (string) $legacy['cid'] : null);
-                if ($legacyCid !== $cidNumeric) {
-                    continue;
-                }
-                $sameIdentity = $this->matcher->match($schoolPayload, [$legacy])['status'] === ContactMatchStatus::Matched;
-                if (! $sameIdentity) {
-                    $summary['reassignments'][] = [
-                        'cid' => $cidNumeric,
-                        'current_school' => $school->local_educativo,
-                        'current_codigo_local' => $school->codigo_local,
-                        'legacy_school' => $legacy['local_educativo'] ?? null,
-                        'legacy_codigo_local' => $legacy['codigo_local'] ?? null,
-                        'legacy_row' => $legacy['__row'] ?? null,
-                    ];
-                }
-            }
-        }
-
         $this->maybePreserveLegacyAssignment($school, $contactMatch);
 
         $summary['matching_report'][] = [
@@ -340,8 +356,63 @@ class ExcelImportService
             'legacy_reference' => $school->legacy_reference,
             'contact_match' => $contactMatch['status']->value,
             'contact_priority' => $contactMatch['priority'],
+            'contact_match_by' => $contactMatch['match_by'] ?? null,
+            'identity_drift' => $contactMatch['identity_drift'] ?? false,
             'llee_source_row' => $school->contact_source_row,
             'contacts_imported' => $importedContacts,
+        ];
+    }
+
+    /**
+     * Vincula contactos priorizando CID del Recurso; si no hay CID usable, cae a identidad.
+     *
+     * @param  array<string, mixed>  $schoolPayload
+     * @param  array<int, array<string, mixed>>  $contactRows
+     * @param  array<string, array<int, array<string, mixed>>>  $contactsByCid
+     * @return array{status: ContactMatchStatus, priority: int|null, matches: array<int, array<string, mixed>>, match_by: string|null, identity_drift: bool}
+     */
+    private function matchContactsByCidThenIdentity(
+        array $schoolPayload,
+        array $contactRows,
+        array $contactsByCid,
+        ?string $cidNumeric
+    ): array {
+        if ($cidNumeric !== null) {
+            $byCid = array_values($contactsByCid[$cidNumeric] ?? []);
+
+            if (count($byCid) === 1) {
+                $candidate = $byCid[0];
+                $sameCodigo = (string) ($candidate['codigo_local'] ?? '') === (string) ($schoolPayload['codigo_local'] ?? '')
+                    && (string) ($schoolPayload['codigo_local'] ?? '') !== '';
+
+                return [
+                    'status' => ContactMatchStatus::Matched,
+                    'priority' => 0,
+                    'matches' => [$candidate],
+                    'match_by' => 'cid',
+                    'identity_drift' => ! $sameCodigo,
+                ];
+            }
+
+            if (count($byCid) > 1) {
+                return [
+                    'status' => ContactMatchStatus::Ambiguous,
+                    'priority' => 0,
+                    'matches' => $byCid,
+                    'match_by' => 'cid',
+                    'identity_drift' => false,
+                ];
+            }
+        }
+
+        $identity = $this->matcher->match($schoolPayload, $contactRows);
+
+        return [
+            'status' => $identity['status'],
+            'priority' => $identity['priority'],
+            'matches' => $identity['matches'],
+            'match_by' => $identity['status'] === ContactMatchStatus::Matched ? 'identity' : null,
+            'identity_drift' => false,
         ];
     }
 

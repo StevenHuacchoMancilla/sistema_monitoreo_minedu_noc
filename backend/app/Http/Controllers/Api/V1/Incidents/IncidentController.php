@@ -5,15 +5,21 @@ namespace App\Http\Controllers\Api\V1\Incidents;
 use App\Enums\ContactConfirmedStatus;
 use App\Enums\ContactResult;
 use App\Enums\FollowupStatus;
+use App\Enums\ManagementClassification;
+use App\Enums\ManagementScope;
+use App\Domain\Incidents\Services\IncidentManagementService;
 use App\Http\Controllers\Controller;
 use App\Models\Incident;
 use App\Models\IncidentUpdate;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use InvalidArgumentException;
 
 class IncidentController extends Controller
 {
+    public function __construct(private readonly IncidentManagementService $managements) {}
+
     public function index(Request $request): JsonResponse
     {
         $query = Incident::query()->with(['school', 'networkAssignment', 'sensor'])->orderByDesc('started_at');
@@ -31,12 +37,16 @@ class IncidentController extends Controller
             }
         }
 
+        if ($request->filled('management_classification')) {
+            $query->where('management_classification', (string) $request->query('management_classification'));
+        }
+
         return response()->json(['data' => $query->limit(200)->get()]);
     }
 
     public function show(Incident $incident): JsonResponse
     {
-        $incident->load(['school.contacts', 'networkAssignment', 'sensor', 'updates']);
+        $incident->load(['school.contacts', 'networkAssignment', 'sensor', 'updates', 'managements']);
 
         $historyQuery = Incident::query()
             ->where('network_assignment_id', $incident->network_assignment_id)
@@ -146,6 +156,12 @@ class IncidentController extends Controller
             ])->values()->all(),
             'gestion' => [
                 'followup_status' => $incident->followup_status?->value,
+                'management_classification' => $incident->management_classification?->value,
+                'management_classification_label' => $incident->management_classification?->label(),
+                'management_scope' => $incident->management_scope?->value,
+                'outage_text' => $incident->outage_text,
+                'detail_text' => $incident->detail_text,
+                'last_managed_contact_id' => $incident->last_managed_contact_id,
                 'contact_status' => $incident->contact_status,
                 'contact_result' => $incident->contact_result,
                 'responsible_area' => $incident->responsible_area,
@@ -155,6 +171,23 @@ class IncidentController extends Controller
                 'cause' => $incident->cause,
                 'last_contact_at' => $incident->last_contact_at?->toIso8601String(),
             ],
+            'managements' => $incident->managements->map(fn ($m) => [
+                'id' => $m->id,
+                'classification' => $m->classification?->value,
+                'classification_label' => $m->classification?->label(),
+                'color_key' => $m->classification?->colorKey(),
+                'scope' => $m->scope?->value,
+                'outage_text' => $m->outage_text,
+                'detail' => $m->detail,
+                'observation' => $m->observation,
+                'contact_id' => $m->contact_id,
+                'contact_name_snapshot' => $m->contact_name_snapshot,
+                'contact_phone_snapshot' => $m->contact_phone_snapshot,
+                'contact_role_snapshot' => $m->contact_role_snapshot,
+                'contact_attempted_at' => $m->contact_attempted_at?->toIso8601String(),
+                'created_by' => $m->created_by,
+                'created_at' => $m->created_at?->toIso8601String(),
+            ])->values()->all(),
             'updates' => $incident->updates,
             'opciones' => [
                 'followup_statuses' => collect([
@@ -170,6 +203,19 @@ class IncidentController extends Controller
                     'value' => $s->value,
                     'label' => $s->label(),
                 ])->values()->all(),
+                'management_classifications' => collect([
+                    ManagementClassification::ContactConfirmed,
+                    ManagementClassification::NoResponse,
+                    ManagementClassification::Complaint,
+                ])->map(fn (ManagementClassification $s) => [
+                    'value' => $s->value,
+                    'label' => $s->label(),
+                    'color_key' => $s->colorKey(),
+                ])->values()->all(),
+                'management_scopes' => collect(ManagementScope::cases())->map(fn (ManagementScope $s) => [
+                    'value' => $s->value,
+                    'label' => $s->label(),
+                ])->values()->all(),
                 'contact_statuses' => collect(ContactConfirmedStatus::cases())->map(fn (ContactConfirmedStatus $s) => [
                     'value' => $s->value,
                     'label' => $s->label(),
@@ -180,6 +226,37 @@ class IncidentController extends Controller
                 ])->values()->all(),
             ],
         ]);
+    }
+
+    public function storeManagement(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'classification' => ['required', Rule::in([
+                ManagementClassification::ContactConfirmed->value,
+                ManagementClassification::NoResponse->value,
+                ManagementClassification::Complaint->value,
+            ])],
+            'scope' => ['nullable', Rule::in(array_merge([''], ManagementScope::values()))],
+            'outage_text' => ['nullable', 'string', 'max:2000'],
+            'detail' => ['nullable', 'string', 'max:5000'],
+            'observation' => ['nullable', 'string', 'max:5000'],
+            'contact_id' => ['nullable', 'integer'],
+            'contact_attempted_at' => ['nullable', 'date'],
+        ]);
+
+        if (($data['scope'] ?? null) === '') {
+            $data['scope'] = null;
+        }
+
+        try {
+            $this->managements->apply($incident, $data);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(
+            $this->show($incident->fresh())->getData(true)
+        );
     }
 
     public function update(Request $request, Incident $incident): JsonResponse

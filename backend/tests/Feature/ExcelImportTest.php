@@ -65,8 +65,11 @@ class ExcelImportTest extends TestCase
         $nuevo = School::query()->where('local_educativo', '62015')->first();
         $this->assertNotNull($nuevo);
         $this->assertSame('258444', $nuevo->activeAssignment?->cid);
-        $this->assertSame(ContactMatchStatus::Pending, $nuevo->contact_match_status);
-        $this->assertFalse($nuevo->contacts()->where('name', 'OLMEDO CUBAS ALTAMICANO')->exists());
+        // Recurso manda: el contacto se vincula por CID aunque el Excel LLEE tenga otro código/local.
+        $this->assertSame(ContactMatchStatus::Matched, $nuevo->contact_match_status);
+        $this->assertSame(0, $nuevo->contact_match_priority);
+        $this->assertSame('OLMEDO CUBAS ALTAMICANO', $nuevo->contacts()->first()?->name);
+        $this->assertSame('955076232', $nuevo->contacts()->first()?->phone);
 
         $this->assertSame('148.222.200.1', $ardillitas->activeAssignment?->ip_publica);
         $this->assertSame('-3748021', $ardillitas->latitud);

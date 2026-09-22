@@ -5,6 +5,7 @@ namespace App\Domain\Monitoring\Cloudnet\Services;
 use App\Enums\CidStatus;
 use App\Enums\SyncIssueSeverity;
 use App\Enums\SyncRunStatus;
+use App\Models\CloudnetAp;
 use App\Models\CloudnetDevice;
 use App\Models\CloudnetSite;
 use App\Models\NetworkAssignment;
@@ -140,6 +141,10 @@ class CloudnetSyncService
                     'metadata' => [
                         'userName' => $site['userName'] ?? null,
                         'scenarioName' => $site['scenarioName'] ?? null,
+                        'province' => $site['province'] ?? null,
+                        'city' => $site['city'] ?? null,
+                        'area' => $site['area'] ?? null,
+                        'phone' => $site['phone'] ?? null,
                     ],
                 ];
 
@@ -173,51 +178,138 @@ class CloudnetSyncService
             }
         }
 
-        $summary['devices_synced'] = $this->syncDevicesForDownSites();
+        $inventory = $this->syncInventoryForSites($run);
+        $summary['devices_synced'] = $inventory['devices'];
+        $summary['aps_synced'] = $inventory['aps'];
+        $summary['inventory_sites'] = $inventory['sites'];
+        $summary['inventory_error'] = $inventory['error'];
 
         return $summary;
     }
 
-    private function syncDevicesForDownSites(): int
+    /**
+     * Sincroniza devices + APs por site (prioriza linked + menos recientes).
+     *
+     * @return array{devices: int, aps: int, sites: int, error: ?string}
+     */
+    private function syncInventoryForSites(SyncRun $run): array
     {
+        $limit = (int) config('cloudnet.inventory_sync_limit', 120);
         $sites = CloudnetSite::query()
-            ->whereNotNull('school_id')
-            ->whereIn('school_id', \App\Models\Incident::query()->active()->select('school_id'))
-            ->limit(40)
+            ->whereNotNull('shop_id')
+            ->orderByRaw('CASE WHEN network_assignment_id IS NULL THEN 1 ELSE 0 END')
+            ->orderBy('last_synced_at')
+            ->limit(max(20, $limit))
             ->get();
 
-        $saved = 0;
-        $available = null;
+        $savedDevices = 0;
+        $savedAps = 0;
+        $sitesTouched = 0;
+        $apiError = null;
+        $apiOk = false;
+
         foreach ($sites as $site) {
-            $devices = $this->cloudnet->fetchShopDevices((string) $site->shop_id);
-            if ($devices === null) {
-                if ($available === null) {
-                    return 0;
-                }
+            $inventory = $this->cloudnet->fetchShopInventory((string) $site->shop_id);
+            if ($inventory === null) {
                 continue;
             }
-            $available = true;
+
+            if (($inventory['error'] ?? null) && $inventory['devices'] === [] && $inventory['aps'] === []) {
+                $apiError = $inventory['error'];
+                break;
+            }
+
+            $apiOk = true;
+            $sitesTouched++;
+
             CloudnetDevice::query()->where('cloudnet_site_id', $site->id)->delete();
-            foreach ($devices as $device) {
+            CloudnetAp::query()->where('cloudnet_site_id', $site->id)->delete();
+
+            $deviceIdBySerial = [];
+            foreach ($inventory['devices'] as $device) {
                 if (! is_array($device)) {
                     continue;
                 }
-                $status = (string) ($device['status'] ?? $device['onlineStatus'] ?? $device['devStatus'] ?? '');
-                CloudnetDevice::query()->create([
+                $serial = $this->pickString($device, ['serialNumber', 'sn', 'devSN', 'serial']);
+                $model = $this->pickString($device, ['model', 'devModel', 'deviceModel']);
+                $status = $this->pickString($device, ['status', 'onlineStatus', 'devStatus', 'deviceStatus']);
+                $row = CloudnetDevice::query()->create([
                     'cloudnet_site_id' => $site->id,
-                    'serial' => $device['serialNumber'] ?? $device['sn'] ?? $device['devSN'] ?? null,
-                    'model' => $device['model'] ?? $device['devModel'] ?? null,
+                    'serial' => $serial,
+                    'model' => $model,
                     'status' => $status !== '' ? $status : null,
-                    'ip' => $device['ip'] ?? $device['manageIp'] ?? null,
-                    'mac' => $device['mac'] ?? $device['macAddr'] ?? null,
+                    'ip' => $this->pickString($device, ['ip', 'manageIp', 'mgmtIp', 'devIp']),
+                    'mac' => $this->pickString($device, ['mac', 'macAddr', 'devMac']),
+                    'online_time' => null,
                     'last_synced_at' => now(),
                     'metadata' => $device,
                 ]);
-                $saved++;
+                if ($serial) {
+                    $deviceIdBySerial[$serial] = $row->id;
+                }
+                $savedDevices++;
             }
+
+            foreach ($inventory['aps'] as $ap) {
+                if (! is_array($ap)) {
+                    continue;
+                }
+                $serial = $this->pickString($ap, ['serialNumber', 'sn', 'devSN', 'serial', 'apSN']);
+                CloudnetAp::query()->create([
+                    'cloudnet_site_id' => $site->id,
+                    'cloudnet_device_id' => $serial && isset($deviceIdBySerial[$serial]) ? $deviceIdBySerial[$serial] : null,
+                    'serial' => $serial,
+                    'model' => $this->pickString($ap, ['model', 'devModel', 'apModel']),
+                    'status' => $this->pickString($ap, ['status', 'onlineStatus', 'devStatus', 'apStatus']) ?: null,
+                    'mac' => $this->pickString($ap, ['mac', 'macAddr', 'apMac']),
+                    'ip' => $this->pickString($ap, ['ip', 'manageIp', 'apIp']),
+                    'clients' => (int) ($ap['clients'] ?? $ap['clientCount'] ?? $ap['staCount'] ?? 0),
+                    'last_synced_at' => now(),
+                    'metadata' => $ap,
+                ]);
+                $savedAps++;
+            }
+
+            $site->forceFill(['last_synced_at' => now()])->save();
         }
 
-        return $saved;
+        if ($apiError && ! $apiOk) {
+            $run->increment('warning_count');
+            SyncIssue::query()->create([
+                'sync_run_id' => $run->id,
+                'severity' => SyncIssueSeverity::Warning,
+                'code' => 'CLOUDNET_DEVICE_API_UNAVAILABLE',
+                'cid' => null,
+                'codigo_local' => null,
+                'message' => 'API Cloudnet de equipos no disponible o sin permiso para esta apikey. Sites sí sincronizan; devices/APs quedan pendientes.',
+                'payload' => ['error' => $apiError],
+                'created_at' => now(),
+            ]);
+        }
+
+        return [
+            'devices' => $savedDevices,
+            'aps' => $savedAps,
+            'sites' => $sitesTouched,
+            'error' => $apiOk ? null : $apiError,
+        ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $row
+     * @param  array<int, string>  $keys
+     */
+    private function pickString(array $row, array $keys): ?string
+    {
+        foreach ($keys as $key) {
+            if (! array_key_exists($key, $row) || $row[$key] === null || $row[$key] === '') {
+                continue;
+            }
+
+            return (string) $row[$key];
+        }
+
+        return null;
     }
 
     /**

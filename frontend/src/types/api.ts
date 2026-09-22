@@ -108,6 +108,12 @@ export type OutageRow = {
   duracion: string | null
   started_at: string | null
   followup_status: string | null
+  management_classification?: string | null
+  management_classification_label?: string | null
+  color_key?: string | null
+  outage_text?: string | null
+  detail_text?: string | null
+  management_scope?: string | null
   last_check: string | null
   contacto: string | null
   telefono: string | null
@@ -249,6 +255,12 @@ export type IncidentDetail = {
   }>
   gestion: {
     followup_status: string | null
+    management_classification?: string | null
+    management_classification_label?: string | null
+    management_scope?: string | null
+    outage_text?: string | null
+    detail_text?: string | null
+    last_managed_contact_id?: number | null
     contact_status: string | null
     contact_result: string | null
     responsible_area: string | null
@@ -258,8 +270,27 @@ export type IncidentDetail = {
     cause: string | null
     last_contact_at: string | null
   }
+  managements?: Array<{
+    id: number
+    classification: string | null
+    classification_label: string | null
+    color_key: string | null
+    scope: string | null
+    outage_text: string | null
+    detail: string | null
+    observation: string | null
+    contact_id: number | null
+    contact_name_snapshot: string | null
+    contact_phone_snapshot: string | null
+    contact_role_snapshot: string | null
+    contact_attempted_at: string | null
+    created_by: number | null
+    created_at: string | null
+  }>
   opciones: {
     followup_statuses: Array<{ value: string; label: string }>
+    management_classifications?: Array<{ value: string; label: string; color_key: string }>
+    management_scopes?: Array<{ value: string; label: string }>
     contact_statuses: Array<{ value: string; label: string }>
     contact_results?: Array<{ value: string; label: string }>
   }
