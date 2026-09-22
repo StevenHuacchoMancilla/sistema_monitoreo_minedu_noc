@@ -12,6 +12,7 @@ import { SchoolsListPage } from '../features/schools/pages/SchoolsListPage'
 import { OperationalReportPage } from '../features/reports/pages/OperationalReportPage'
 import { TrackingListPage } from '../features/tracking/pages/TrackingListPage'
 import { TrackingDetailPage } from '../features/tracking/pages/TrackingDetailPage'
+import { TrackingReportPage } from '../features/tracking/pages/TrackingReportPage'
 import { LoginPage } from '../features/auth/pages/LoginPage'
 import { RequireAuth } from '../features/auth/components/RequireAuth'
 
@@ -63,6 +64,7 @@ export function AppRouter() {
           <Route path="/history/schools" element={<SchoolHistoryIndexPage />} />
           <Route path="/history/schools/:schoolId" element={<SchoolHistoryDetailPage />} />
           <Route path="/tracking" element={<TrackingListPage />} />
+          <Route path="/tracking/report" element={<TrackingReportPage />} />
           <Route path="/tracking/:id" element={<TrackingDetailPage />} />
           <Route path="/concentrations" element={<ConcentrationsPage />} />
           <Route path="/schools" element={<SchoolsListPage />} />

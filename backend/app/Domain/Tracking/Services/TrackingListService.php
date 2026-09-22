@@ -90,6 +90,16 @@ class TrackingListService
     }
 
     /**
+     * Query filtrada reutilizable (lista + reporte).
+     *
+     * @param  array<string, mixed>  $filters
+     */
+    public function filteredQuery(array $filters): Builder
+    {
+        return $this->baseQuery($filters);
+    }
+
+    /**
      * @param  array<string, mixed>  $filters
      */
     private function baseQuery(array $filters): Builder

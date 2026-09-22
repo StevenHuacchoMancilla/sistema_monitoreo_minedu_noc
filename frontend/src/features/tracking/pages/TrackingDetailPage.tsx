@@ -17,9 +17,10 @@ import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/Sta
 import { techBadgeClass } from '../../../lib/uiTokens'
 import { useAuth } from '../../auth/context/AuthContext'
 import { ApiError } from '../../../api/client'
-import { fetchTrackingDetail, postTrackingUpdate } from '../api/trackingApi'
+import { fetchTrackingDetail, postTrackingUpdate, closeTracking, reopenTracking, acknowledgeTrackingRecovery } from '../api/trackingApi'
 import { TrackingTimeline } from '../components/TrackingTimeline'
 import { TrackingUpdateComposer } from '../components/TrackingUpdateComposer'
+import { TrackingLifecyclePanel } from '../components/TrackingLifecyclePanel'
 import { formatDuration } from '../lib/format'
 import { trackingStatusTone } from '../lib/trackingStatus'
 
@@ -47,6 +48,44 @@ export function TrackingDetailPage() {
       void queryClient.invalidateQueries({ queryKey: ['tracking', 'list'] })
     },
   })
+
+  const lifecycle = useMutation({
+    mutationFn: async (
+      action:
+        | { type: 'close'; payload: { lock_version: number; closing_note?: string } }
+        | { type: 'reopen'; payload: { lock_version: number; note?: string } }
+        | { type: 'ack'; payload: { lock_version: number; note?: string } },
+    ) => {
+      if (action.type === 'close') return closeTracking(trackingId, action.payload)
+      if (action.type === 'reopen') return reopenTracking(trackingId, action.payload)
+      return acknowledgeTrackingRecovery(trackingId, action.payload)
+    },
+    onSuccess: (res) => {
+      queryClient.setQueryData(['tracking', 'detail', trackingId], res)
+      void queryClient.invalidateQueries({ queryKey: ['tracking', 'list'] })
+    },
+  })
+
+  const applyLifecycle = async (
+    action:
+      | { type: 'close'; payload: { lock_version: number; closing_note?: string } }
+      | { type: 'reopen'; payload: { lock_version: number; note?: string } }
+      | { type: 'ack'; payload: { lock_version: number; note?: string } },
+  ) => {
+    try {
+      await lifecycle.mutateAsync(action)
+    } catch (e) {
+      if (e instanceof ApiError) {
+        if (e.status === 409 && typeof e.body === 'object' && e.body && 'data' in e.body) {
+          queryClient.setQueryData(['tracking', 'detail', trackingId], {
+            data: (e.body as { data: typeof data }).data,
+          })
+        }
+        throw new Error(e.message)
+      }
+      throw e
+    }
+  }
 
   const data = detail.data?.data
   const canWrite = Boolean(user?.can_write)
@@ -176,6 +215,14 @@ export function TrackingDetailPage() {
 
           {tab === 'seguimiento' ? (
             <div className="grid gap-4 lg:grid-cols-[1fr]">
+              <TrackingLifecyclePanel
+                tracking={data}
+                canWrite={canWrite}
+                busy={lifecycle.isPending}
+                onClose={(payload) => applyLifecycle({ type: 'close', payload })}
+                onReopen={(payload) => applyLifecycle({ type: 'reopen', payload })}
+                onAcknowledge={(payload) => applyLifecycle({ type: 'ack', payload })}
+              />
               <SectionCard title="Timeline de seguimiento" accent="prtg">
                 <TrackingTimeline updates={data.updates} />
               </SectionCard>

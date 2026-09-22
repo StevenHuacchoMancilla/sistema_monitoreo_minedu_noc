@@ -66,6 +66,10 @@ class TrackingDetailService
                 'opened_at_display' => $this->formatDisplay($tracking->opened_at, $tracking->opened_at_precision),
                 'closed_at_display' => $this->formatDisplay($tracking->closed_at, $tracking->closed_at_precision),
                 'can_add_update' => $tracking->isOpen(),
+                'can_close' => $tracking->isOpen(),
+                'can_reopen' => $tracking->isClosed(),
+                'can_acknowledge_recovery' => $tracking->isOpen()
+                    && $tracking->status === TrackingStatus::TechnicallyRecovered,
                 'updates' => $tracking->updates->map(fn (TrackingUpdate $u) => $u->toApiArray())->values()->all(),
                 'activity' => $this->buildActivity($tracking),
             ]),

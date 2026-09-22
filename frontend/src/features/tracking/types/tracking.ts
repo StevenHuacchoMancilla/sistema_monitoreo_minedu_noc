@@ -49,6 +49,9 @@ export type TrackingDetail = {
   lock_version: number
   duration_seconds: number | null
   can_add_update: boolean
+  can_close: boolean
+  can_reopen: boolean
+  can_acknowledge_recovery: boolean
   school: {
     id: number
     local_educativo: string | null

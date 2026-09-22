@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\Schools\SchoolController;
 use App\Http\Controllers\Api\V1\System\HealthController;
 use App\Http\Controllers\Api\V1\System\SyncRunController;
 use App\Http\Controllers\Api\V1\Tracking\TrackingController;
+use App\Http\Controllers\Api\V1\Users\UserController;
 use Illuminate\Support\Facades\Route;
 
 Route::get('/health', HealthController::class);
@@ -54,6 +55,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/reports/closing.xlsx', [ReportController::class, 'closingXlsx']);
 
     Route::get('/tracking/summary', [TrackingController::class, 'summary']);
+    Route::get('/tracking/report.xlsx', [TrackingController::class, 'reportXlsx']);
+    Route::get('/tracking/report', [TrackingController::class, 'report']);
     Route::get('/tracking', [TrackingController::class, 'index']);
     Route::get('/tracking/{tracking}', [TrackingController::class, 'show']);
 
@@ -64,6 +67,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::middleware('role:ADMIN,NOC_OPERATOR')->group(function () {
         Route::post('/tracking', [TrackingController::class, 'store']);
         Route::post('/tracking/{tracking}/updates', [TrackingController::class, 'storeUpdate']);
+        Route::post('/tracking/{tracking}/close', [TrackingController::class, 'close']);
+        Route::post('/tracking/{tracking}/reopen', [TrackingController::class, 'reopen']);
+        Route::post('/tracking/{tracking}/acknowledge-recovery', [TrackingController::class, 'acknowledgeRecovery']);
         Route::post('/schools', [SchoolController::class, 'store']);
         Route::put('/schools/{school}', [SchoolController::class, 'update']);
         Route::post('/schools/{school}/deactivate', [SchoolController::class, 'deactivate']);
@@ -82,5 +88,15 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
         Route::post('/sync/prtg', [SyncController::class, 'prtg']);
         Route::post('/sync/cloudnet', [SyncController::class, 'cloudnet']);
+    });
+
+    // Solo ADMIN
+    Route::middleware('role:ADMIN')->group(function () {
+        Route::get('/users', [UserController::class, 'index']);
+        Route::post('/users', [UserController::class, 'store']);
+        Route::put('/users/{user}', [UserController::class, 'update']);
+        Route::post('/users/{user}/deactivate', [UserController::class, 'deactivate']);
+        Route::post('/users/{user}/reactivate', [UserController::class, 'reactivate']);
+        Route::post('/users/{user}/reset-password', [UserController::class, 'resetPassword']);
     });
 });

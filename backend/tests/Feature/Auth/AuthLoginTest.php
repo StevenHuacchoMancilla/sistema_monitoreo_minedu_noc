@@ -86,6 +86,15 @@ class AuthLoginTest extends TestCase
         ])->assertForbidden();
     }
 
+    public function test_viewer_cannot_open_or_close_tracking(): void
+    {
+        $this->actingAsUser(role: UserRole::Viewer);
+
+        $this->postJson('/api/tracking', [
+            'incident_id' => 1,
+        ])->assertForbidden();
+    }
+
     public function test_logout_requires_auth_and_succeeds(): void
     {
         $this->asSpa()->postJson('/api/logout')->assertUnauthorized();

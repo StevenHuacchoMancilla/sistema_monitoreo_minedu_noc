@@ -5,6 +5,7 @@ import {
   Activity,
   CircleCheck,
   ClipboardList,
+  FileSpreadsheet,
   MessageSquareText,
   PlayCircle,
   RotateCcw,
@@ -109,6 +110,15 @@ export function TrackingListPage() {
         title="Tracking General"
         description="Seguimiento operativo de incidencias que requieren gestión hasta su cierre formal."
         badges={<Badge tone="info">Independiente del reporte operativo</Badge>}
+        actions={
+          <Link
+            to="/tracking/report"
+            className="inline-flex h-9 items-center gap-1.5 rounded-lg border border-violet-200 bg-violet-50 px-3 text-sm font-semibold text-violet-800 hover:bg-violet-100"
+          >
+            <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden />
+            Vista tipo Excel
+          </Link>
+        }
       />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
