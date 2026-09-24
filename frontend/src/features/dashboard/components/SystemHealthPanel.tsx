@@ -1,5 +1,6 @@
 import { SectionCard } from '../../../components/ui/Card'
 import type { DashboardSummary } from '../../../types/api'
+import { formatTime } from '../../../lib/datetime'
 
 function Dot({ ok, warn }: { ok: boolean; warn?: boolean }) {
   const color = !ok ? 'bg-noc-danger' : warn ? 'bg-noc-warning' : 'bg-noc-success'
@@ -9,7 +10,7 @@ function Dot({ ok, warn }: { ok: boolean; warn?: boolean }) {
 function fmt(iso?: string | null) {
   if (!iso) return '—'
   try {
-    return new Date(iso).toLocaleTimeString()
+    return formatTime(iso)
   } catch {
     return iso
   }

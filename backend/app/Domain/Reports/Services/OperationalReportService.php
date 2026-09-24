@@ -146,7 +146,7 @@ class OperationalReportService
 
         $outageAt = $incident->started_at;
         $caida = $outageAt instanceof CarbonInterface
-            ? $outageAt->timezone(config('app.timezone', 'America/Lima'))->format('d/m/Y H:i')
+            ? \App\Support\OperationalTime::format($outageAt, 'd/m/Y H:i')
             : (filled($incident->outage_text) ? (string) $incident->outage_text : null);
 
         $snapshotProvince = is_string($snapshotSchool['provincia'] ?? null)

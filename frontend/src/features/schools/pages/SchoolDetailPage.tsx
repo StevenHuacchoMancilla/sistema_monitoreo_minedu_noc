@@ -23,6 +23,7 @@ import { NetworkAssignmentForm } from '../forms/NetworkAssignmentForm'
 import { ContactForm } from '../forms/ContactForm'
 import type { NetworkAssignmentPayload, SchoolGeneralPayload } from '../types/school'
 import { techBadgeClass } from '../../../lib/uiTokens'
+import { formatDateTime } from '../../../lib/datetime'
 
 const TABS = [
   'GENERAL',
@@ -274,7 +275,7 @@ export function SchoolDetailPage() {
                     {school.network_assignments?.map((a) => (
                       <li key={a.id}>
                         CID {a.cid ?? '—'} · {a.is_active ? 'ACTIVA' : 'cerrada'}
-                        {a.valid_to ? ` · hasta ${new Date(a.valid_to).toLocaleString()}` : ''}
+                        {a.valid_to ? ` · hasta ${formatDateTime(a.valid_to)}` : ''}
                       </li>
                     ))}
                   </ul>
@@ -324,7 +325,7 @@ export function SchoolDetailPage() {
                 </div>
                 <div>
                   <dt className="text-xs uppercase text-noc-muted">Último check</dt>
-                  <dd>{prtgSummary?.last_check ? new Date(prtgSummary.last_check).toLocaleString() : '—'}</dd>
+                  <dd>{prtgSummary?.last_check ? formatDateTime(prtgSummary.last_check) : '—'}</dd>
                 </div>
                 <div>
                   <dt className="text-xs uppercase text-noc-muted">Sensores</dt>
@@ -372,7 +373,7 @@ export function SchoolDetailPage() {
                   </div>
                   <div>
                     <dt className="text-xs uppercase text-noc-muted">Desde</dt>
-                    <dd>{incident.started_at ? new Date(incident.started_at).toLocaleString() : '—'}</dd>
+                    <dd>{incident.started_at ? formatDateTime(incident.started_at) : '—'}</dd>
                   </div>
                 </dl>
               ) : (
@@ -409,8 +410,8 @@ export function SchoolDetailPage() {
                     <tbody>
                       {history.map((row) => (
                         <tr key={row.id} className="border-t border-noc-border/70">
-                          <td className="px-2 py-2">{row.started_at ? new Date(row.started_at).toLocaleString() : '—'}</td>
-                          <td className="px-2 py-2">{row.recovered_at ? new Date(row.recovered_at).toLocaleString() : 'Activa'}</td>
+                          <td className="px-2 py-2">{row.started_at ? formatDateTime(row.started_at) : '—'}</td>
+                          <td className="px-2 py-2">{row.recovered_at ? formatDateTime(row.recovered_at) : 'Activa'}</td>
                           <td className="px-2 py-2"><FollowupBadge status={row.followup_status} /></td>
                         </tr>
                       ))}
@@ -430,7 +431,7 @@ export function SchoolDetailPage() {
                   {auditLogs.map((log) => (
                     <li key={log.id} className="rounded-xl border border-noc-border/70 px-3 py-2">
                       <div className="flex flex-wrap gap-2 text-xs text-noc-muted">
-                        <span>{log.created_at ? new Date(log.created_at).toLocaleString() : '—'}</span>
+                        <span>{log.created_at ? formatDateTime(log.created_at) : '—'}</span>
                         {log.user_name ? <span className="font-medium text-slate-700">{log.user_name}</span> : null}
                         {log.module ? <span className="rounded bg-slate-100 px-1.5 py-0.5 font-semibold text-slate-600">{log.module}</span> : null}
                         <span className="font-semibold text-noc-text">{log.action}</span>

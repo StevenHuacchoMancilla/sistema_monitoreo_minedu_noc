@@ -4,6 +4,9 @@
 @import "@fontsource/inter/700.css";
 @import "tailwindcss";
 
+/* Class-based dark mode (html.dark) — not media-only */
+@custom-variant dark (&:where(.dark, .dark *));
+
 @theme {
   --color-noc-bg: #f8fafc;
   --color-noc-surface: #ffffff;
@@ -17,6 +20,20 @@
   --color-noc-info: #2563eb;
   --color-noc-cyan: #0891b2;
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+html.dark {
+  --color-noc-bg: #020617;
+  --color-noc-surface: #0f172a;
+  --color-noc-surface-2: #1e293b;
+  --color-noc-border: #1e293b;
+  --color-noc-text: #f1f5f9;
+  --color-noc-muted: #94a3b8;
+  --color-noc-success: #34d399;
+  --color-noc-danger: #f87171;
+  --color-noc-warning: #fbbf24;
+  --color-noc-info: #60a5fa;
+  --color-noc-cyan: #22d3ee;
 }
 
 html,
@@ -40,6 +57,10 @@ body {
   box-sizing: border-box;
   scrollbar-width: thin;
   scrollbar-color: #cbd5e1 transparent;
+}
+
+html.dark * {
+  scrollbar-color: #475569 transparent;
 }
 
 :focus-visible {

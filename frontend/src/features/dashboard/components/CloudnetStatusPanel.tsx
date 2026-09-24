@@ -1,5 +1,6 @@
 import { SectionCard } from '../../../components/ui/Card'
 import type { DashboardSummary } from '../../../types/api'
+import { formatDateTime } from '../../../lib/datetime'
 
 export function CloudnetStatusPanel({
   cloudnet,
@@ -35,7 +36,7 @@ export function CloudnetStatusPanel({
           <dt className="text-noc-muted">Última sincronización</dt>
           <dd className="text-sm">
             {cloudnet.last_synced_at
-              ? new Date(cloudnet.last_synced_at).toLocaleString()
+              ? formatDateTime(cloudnet.last_synced_at)
               : '—'}
           </dd>
         </div>

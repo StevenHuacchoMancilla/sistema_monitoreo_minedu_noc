@@ -1,3 +1,5 @@
+import type { CaseStatus } from '../../../components/monitoring/StatusBadges'
+
 export type RecoveredRow = {
   id: number
   school_id: number
@@ -28,6 +30,15 @@ export type RecoveredRow = {
   active_field_dispatch?: boolean
   recovery_review_status: string | null
   requires_review: boolean
+  managements_count: number
+  case_status: CaseStatus
+  tracking: {
+    id: number
+    status: string | null
+    status_label: string | null
+    ticket: string | null
+    closed_by_name: string | null
+  } | null
   badges: string[]
 }
 

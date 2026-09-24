@@ -90,12 +90,30 @@ export function Sidebar({
             const count = item.badgeKey ? nav?.[item.badgeKey] : undefined
             const pendingReviews =
               item.badgeKey === 'recuperados' ? (nav?.pending_reviews ?? 0) : 0
+            const badgeTitle =
+              item.badgeKey === 'recuperados'
+                ? 'Recuperados hoy'
+                : item.badgeKey === 'caidas_activas'
+                  ? 'Caídas activas'
+                  : item.badgeKey === 'pendientes_contacto'
+                    ? 'Pendientes de contacto'
+                    : item.badgeKey === 'en_gestion'
+                      ? 'En gestión'
+                      : item.badgeKey === 'concentraciones'
+                        ? 'Concentraciones zonales'
+                        : undefined
+            const collapsedTitle =
+              item.badgeKey === 'recuperados' && typeof count === 'number'
+                ? `${item.label} · ${count.toLocaleString('es-PE')} hoy`
+                : typeof count === 'number'
+                  ? `${item.label} · ${count.toLocaleString('es-PE')}`
+                  : item.label
             return (
               <NavLink
                 key={item.to}
                 to={item.to}
                 end={item.end}
-                title={isCollapsed ? item.label : undefined}
+                title={isCollapsed ? collapsedTitle : undefined}
                 onClick={onNavigate}
                 className={({ isActive }) =>
                   [
@@ -120,26 +138,16 @@ export function Sidebar({
                       {pendingReviews > 0 ? (
                         <span
                           title="Pendientes de revisión operativa"
+                          aria-label="Pendientes de revisión operativa"
                           className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-amber-300 ring-1 ring-amber-400/30"
                         >
                           {pendingReviews.toLocaleString('es-PE')}
                         </span>
                       ) : null}
-                    {typeof count === 'number' ? (
+                      {typeof count === 'number' ? (
                         <span
-                          title={
-                            item.badgeKey === 'recuperados'
-                              ? 'Recuperados hoy'
-                              : item.badgeKey === 'caidas_activas'
-                                ? 'Caídas activas'
-                                : item.badgeKey === 'pendientes_contacto'
-                                  ? 'Pendientes de contacto'
-                                  : item.badgeKey === 'en_gestion'
-                                    ? 'En gestión'
-                                    : item.badgeKey === 'concentraciones'
-                                      ? 'Concentraciones zonales'
-                                      : undefined
-                          }
+                          title={badgeTitle}
+                          aria-label={badgeTitle}
                           className={`rounded-full px-2 py-0.5 text-[10px] font-bold tabular-nums ${toneClass[item.tone ?? 'muted']}`}
                         >
                           {count.toLocaleString('es-PE')}

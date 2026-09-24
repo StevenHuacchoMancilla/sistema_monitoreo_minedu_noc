@@ -2,6 +2,7 @@
 
 namespace App\Domain\Incidents\Services;
 
+use App\Domain\Incidents\Support\IncidentCaseStatus;
 use App\Domain\Incidents\Support\OutageDuration;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Enums\FieldDispatchStatus;
@@ -12,13 +13,37 @@ use App\Enums\RecoveryReviewStatus;
 use App\Models\FieldDispatch;
 use App\Models\Incident;
 use App\Models\IncidentUpdate;
+use App\Models\TrackingRecord;
+use App\Support\OperationalTime;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 
 class IncidentRecoveryService
 {
+    /** Columnas mínimas que necesita recoveryFlags() + métricas del resumen. */
+    private const FLAG_COLUMNS = [
+        'id', 'started_at', 'recovered_at', 'management_classification',
+        'recovered_while_managing', 'recovery_review_status',
+    ];
+
+    /**
+     * Relaciones proyectadas para calcular flags sin consultas por fila.
+     *
+     * @return array<string, \Closure>
+     */
+    private function flagRelations(): array
+    {
+        return [
+            'updates' => fn ($q) => $q
+                ->select(['id', 'incident_id', 'type', 'status_before', 'status_after'])
+                ->orderByDesc('id'),
+            'fieldDispatches' => fn ($q) => $q->select(['id', 'incident_id', 'status']),
+        ];
+    }
+
     /**
      * @param  array<string, mixed>  $filters
      * @return array{data: list<array<string, mixed>>, meta: array<string, int>, filters: array<string, mixed>}
@@ -33,12 +58,16 @@ class IncidentRecoveryService
             ->with([
                 'school:id,local_educativo,codigo_local,provincia,distrito',
                 'networkAssignment:id,cid,tecnologia_acceso,prtg_province,prtg_district',
-                'sensor:id,name,normalized_status',
-                'updates' => fn ($q) => $q->orderByDesc('id')->limit(20),
-                'managements' => fn ($q) => $q->orderByDesc('id')->limit(5),
-                'fieldDispatches' => fn ($q) => $q->orderByDesc('id')->limit(5),
+                'trackingRecords' => fn ($q) => $q
+                    ->select(['id', 'incident_id', 'status', 'report_ticket', 'ticket', 'closed_by_user_id', 'closed_by_legacy_name'])
+                    ->orderByDesc('id'),
+                'trackingRecords.closedBy:id,name',
+                ...$this->flagRelations(),
             ])
-            ->orderByDesc('recovered_at');
+            ->withCount('managements');
+
+        [$sort, $direction] = $this->resolveSort($filters);
+        $query->orderBy($sort, $direction)->orderBy('id', $direction);
 
         /** @var LengthAwarePaginator $page */
         $page = $query->paginate($perPage);
@@ -54,12 +83,10 @@ class IncidentRecoveryService
                 'total' => $page->total(),
             ],
             'filters' => [
-                'date_from' => $from->toDateString(),
-                'date_to' => $to->toDateString(),
+                'date_from' => $this->localDay($from),
+                'date_to' => $this->localDay($to),
                 'preset' => $filters['preset'] ?? 'today',
-                'provincias' => $this->distinctPrtgColumn('prtg_province'),
-                'distritos' => $this->distinctPrtgColumn('prtg_district', $filters['provincia'] ?? null),
-                'tecnologias' => $this->distinctTechnologies(),
+                ...$this->locationCatalog(isset($filters['provincia']) ? (string) $filters['provincia'] : null),
                 'classifications' => collect(ManagementClassification::cases())
                     ->map(fn (ManagementClassification $c) => ['value' => $c->value, 'label' => $c->label()])
                     ->values()
@@ -80,23 +107,34 @@ class IncidentRecoveryService
     {
         [$from, $to] = $this->resolveDateRange($filters);
 
-        $inPeriod = $this->baseQuery($from, $to, $filters)->get();
+        $inPeriod = $this->baseQuery($from, $to, $filters)
+            ->select(self::FLAG_COLUMNS)
+            ->with($this->flagRelations())
+            ->get();
         $flags = $inPeriod->mapWithKeys(fn (Incident $i) => [$i->id => $this->recoveryFlags($i)]);
 
-        $todayFrom = today()->startOfDay();
-        $todayTo = today()->endOfDay();
-        $weekFrom = now()->startOfWeek();
-        $weekTo = now()->endOfWeek();
+        $localNow = OperationalTime::now();
+        $todayFrom = OperationalTime::dayStart($localNow);
+        $todayTo = OperationalTime::dayEnd($localNow);
+        $weekFrom = OperationalTime::dayStart($localNow->copy()->startOfWeek());
+        $weekTo = OperationalTime::dayEnd($localNow->copy()->endOfWeek());
 
-        $recoveredToday = Incident::query()
+        $counts = Incident::query()
             ->whereNotNull('recovered_at')
-            ->whereBetween('recovered_at', [$todayFrom, $todayTo])
-            ->count();
+            ->where('recovered_at', '>=', $weekFrom)
+            ->selectRaw(
+                'sum(case when recovered_at between ? and ? then 1 else 0 end) as today',
+                [$todayFrom, $todayTo]
+            )
+            ->selectRaw(
+                'sum(case when recovered_at between ? and ? then 1 else 0 end) as week',
+                [$weekFrom, $weekTo]
+            )
+            ->toBase()
+            ->first();
 
-        $recoveredWeek = Incident::query()
-            ->whereNotNull('recovered_at')
-            ->whereBetween('recovered_at', [$weekFrom, $weekTo])
-            ->count();
+        $recoveredToday = (int) ($counts->today ?? 0);
+        $recoveredWeek = (int) ($counts->week ?? 0);
 
         $duringManagement = $flags->filter(fn (array $f) => $f['recovered_during_management'])->count();
         $withActiveDispatch = $flags->filter(fn (array $f) => $f['had_field_tech'])->count();
@@ -113,8 +151,8 @@ class IncidentRecoveryService
         )->count();
 
         return [
-            'date_from' => $from->toDateString(),
-            'date_to' => $to->toDateString(),
+            'date_from' => $this->localDay($from),
+            'date_to' => $this->localDay($to),
             'recovered_today' => $recoveredToday,
             'recovered_this_week' => $recoveredWeek,
             'recovered_in_period' => $inPeriod->count(),
@@ -135,22 +173,42 @@ class IncidentRecoveryService
         $preset = (string) ($filters['preset'] ?? 'today');
 
         if (! empty($filters['date_from']) || ! empty($filters['date_to'])) {
-            $from = ! empty($filters['date_from'])
-                ? Carbon::parse((string) $filters['date_from'])->startOfDay()
-                : Carbon::parse((string) $filters['date_to'])->startOfDay();
-            $to = ! empty($filters['date_to'])
-                ? Carbon::parse((string) $filters['date_to'])->endOfDay()
-                : Carbon::parse((string) $filters['date_from'])->endOfDay();
+            $fromDay = (string) ($filters['date_from'] ?: $filters['date_to']);
+            $toDay = (string) ($filters['date_to'] ?: $filters['date_from']);
 
-            return [$from, $to];
+            return [OperationalTime::dayStart($fromDay), OperationalTime::dayEnd($toDay)];
         }
 
+        $today = OperationalTime::now();
+
         return match ($preset) {
-            'yesterday' => [today()->subDay()->startOfDay(), today()->subDay()->endOfDay()],
-            'last_7_days' => [now()->subDays(6)->startOfDay(), now()->endOfDay()],
-            'this_month' => [now()->startOfMonth()->startOfDay(), now()->endOfDay()],
-            default => [today()->startOfDay(), today()->endOfDay()],
+            'yesterday' => [OperationalTime::dayStart($today->copy()->subDay()), OperationalTime::dayEnd($today->copy()->subDay())],
+            'last_7_days' => [OperationalTime::dayStart($today->copy()->subDays(6)), OperationalTime::dayEnd($today)],
+            'this_month' => [OperationalTime::dayStart($today->copy()->startOfMonth()), OperationalTime::dayEnd($today)],
+            default => [OperationalTime::dayStart($today), OperationalTime::dayEnd($today)],
         };
+    }
+
+    /**
+     * Orden server-side antes de paginar; default recovered_at DESC, id DESC.
+     *
+     * @param  array<string, mixed>  $filters
+     * @return array{0: string, 1: 'asc'|'desc'}
+     */
+    private function resolveSort(array $filters): array
+    {
+        $sort = in_array($filters['sort'] ?? null, ['recovered_at', 'started_at'], true)
+            ? (string) $filters['sort']
+            : 'recovered_at';
+        $direction = strtolower((string) ($filters['direction'] ?? '')) === 'asc' ? 'asc' : 'desc';
+
+        return [$sort, $direction];
+    }
+
+    /** Fecha local (YYYY-MM-DD) de un límite almacenado en UTC, para eco en filtros. */
+    private function localDay(Carbon $bound): string
+    {
+        return (string) OperationalTime::localDate($bound);
     }
 
     /**
@@ -195,12 +253,9 @@ class IncidentRecoveryService
         }
 
         if (! empty($filters['same_day']) && filter_var($filters['same_day'], FILTER_VALIDATE_BOOLEAN)) {
-            $driver = DB::connection()->getDriverName();
-            if ($driver === 'pgsql') {
-                $query->whereRaw('date(started_at) = date(recovered_at)');
-            } else {
-                $query->whereRaw("date(started_at) = date(recovered_at)");
-            }
+            $query->whereRaw(
+                OperationalTime::sqlLocalDate('started_at').' = '.OperationalTime::sqlLocalDate('recovered_at')
+            );
         }
 
         if (! empty($filters['review_status'])) {
@@ -220,7 +275,7 @@ class IncidentRecoveryService
         // Flags that need post-filter after loading updates — apply via whereIn ids if requested
         $needsFlagFilter = ! empty($filters['during_management']) || ! empty($filters['had_field_tech']);
         if ($needsFlagFilter) {
-            $candidates = (clone $query)->with('updates')->get();
+            $candidates = (clone $query)->select(self::FLAG_COLUMNS)->with($this->flagRelations())->get();
             $ids = $candidates->filter(function (Incident $incident) use ($filters) {
                 $flags = $this->recoveryFlags($incident);
                 if (! empty($filters['during_management']) && filter_var($filters['during_management'], FILTER_VALIDATE_BOOLEAN)) {
@@ -250,6 +305,8 @@ class IncidentRecoveryService
     {
         $flags = $this->recoveryFlags($incident);
         $seconds = OutageDuration::seconds($incident->started_at, $incident->recovered_at);
+        /** @var TrackingRecord|null $tracking */
+        $tracking = $incident->relationLoaded('trackingRecords') ? $incident->trackingRecords->first() : null;
         $location = PrtgOperationalLocation::apiFields($incident->networkAssignment, $incident->school);
 
         return [
@@ -275,6 +332,15 @@ class IncidentRecoveryService
             'active_field_dispatch' => $flags['active_field_dispatch'],
             'recovery_review_status' => $flags['recovery_review_status'],
             'requires_review' => $flags['requires_review'],
+            'managements_count' => (int) ($incident->managements_count ?? 0),
+            'case_status' => IncidentCaseStatus::resolve($incident, $tracking),
+            'tracking' => $tracking ? [
+                'id' => $tracking->id,
+                'status' => $tracking->status?->value,
+                'status_label' => $tracking->status?->label(),
+                'ticket' => $tracking->report_ticket ?? $tracking->ticket,
+                'closed_by_name' => $tracking->closedByDisplayName(),
+            ] : null,
             'badges' => array_values(array_filter([
                 $flags['requires_review'] ? 'REVISAR_GESTION' : null,
                 ($flags['had_field_tech'] || $flags['active_field_dispatch']) && $flags['requires_review']
@@ -297,9 +363,7 @@ class IncidentRecoveryService
      */
     private function recoveryFlags(Incident $incident): array
     {
-        $sameDay = $incident->started_at && $incident->recovered_at
-            ? $incident->started_at->toDateString() === $incident->recovered_at->toDateString()
-            : false;
+        $sameDay = OperationalTime::sameLocalDay($incident->started_at, $incident->recovered_at);
 
         $recoveryUpdate = $incident->relationLoaded('updates')
             ? $incident->updates->first(function (IncidentUpdate $u) {
@@ -361,6 +425,22 @@ class IncidentRecoveryService
                 || (($duringManagement || $hadFieldTech || $hasActiveDispatch) && $reviewStatus === null),
             'active_field_dispatch' => $hasActiveDispatch,
         ];
+    }
+
+    /**
+     * Catálogos de filtros: cambian poco, se cachean para no recalcular joins en cada listado.
+     *
+     * @return array{provincias: list<string>, distritos: list<string>, tecnologias: list<string>}
+     */
+    private function locationCatalog(?string $provincia): array
+    {
+        $key = 'recoveries:catalog:'.md5(mb_strtoupper((string) $provincia));
+
+        return Cache::remember($key, now()->addMinutes(10), fn () => [
+            'provincias' => $this->distinctPrtgColumn('prtg_province'),
+            'distritos' => $this->distinctPrtgColumn('prtg_district', $provincia),
+            'tecnologias' => $this->distinctTechnologies(),
+        ]);
     }
 
     /**

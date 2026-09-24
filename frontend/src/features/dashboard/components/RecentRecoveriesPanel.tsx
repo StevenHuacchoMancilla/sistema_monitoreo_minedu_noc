@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom'
 import { SectionCard } from '../../../components/ui/Card'
 import { EmptyState } from '../../../components/ui/States'
-import { ReincidenteBadge } from '../../../components/monitoring/StatusBadges'
+import { formatDateTime } from '../../../lib/datetime'
 import type { DashboardSummary } from '../../../types/api'
 
 export function RecentRecoveriesPanel({
@@ -33,17 +33,13 @@ export function RecentRecoveriesPanel({
               >
                 <span className="w-1.5 shrink-0 bg-noc-success" />
                 <div className="min-w-0 flex-1 p-3">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-semibold">CID {item.cid ?? '—'}</span>
-                    <ReincidenteBadge count={item.reincidente_count} />
-                  </div>
+                  <span className="font-semibold">CID {item.cid ?? '—'}</span>
                   <p className="mt-1 truncate text-sm text-noc-muted">
                     {item.codigo_local ? `${item.codigo_local} ` : ''}
                     {item.local_educativo}
                   </p>
                   <p className="mt-1 text-xs text-noc-muted">
-                    Recuperado:{' '}
-                    {item.recovered_at ? new Date(item.recovered_at).toLocaleString() : '—'}
+                    Recuperado: {formatDateTime(item.recovered_at)}
                   </p>
                   <p className="text-xs text-noc-muted">Duración: {item.duracion ?? '—'}</p>
                 </div>

@@ -3,6 +3,7 @@
 namespace App\Domain\Tracking\Services;
 
 use App\Domain\Tracking\Exceptions\TrackingLifecycleConflict;
+use App\Domain\Tracking\Support\TrackingTicketCodes;
 use App\Enums\AuditModule;
 use App\Enums\AuditSource;
 use App\Enums\DatePrecision;
@@ -10,6 +11,7 @@ use App\Enums\TrackingEventType;
 use App\Enums\TrackingStatus;
 use App\Models\TrackingRecord;
 use App\Models\TrackingUpdate;
+use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
@@ -19,6 +21,7 @@ class TrackingLifecycleService
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly TrackingDetailService $detail,
+        private readonly TrackingTicketCodes $tickets,
     ) {}
 
     /**
@@ -27,6 +30,12 @@ class TrackingLifecycleService
      */
     public function close(TrackingRecord $tracking, array $payload, int $userId): array
     {
+        if ($userId < 1) {
+            throw ValidationException::withMessages([
+                'user' => ['Se requiere un usuario autenticado para cerrar el Tracking.'],
+            ]);
+        }
+
         return DB::transaction(function () use ($tracking, $payload, $userId) {
             /** @var TrackingRecord $locked */
             $locked = TrackingRecord::query()->whereKey($tracking->id)->lockForUpdate()->firstOrFail();
@@ -45,6 +54,7 @@ class TrackingLifecycleService
             $note = isset($payload['closing_note']) ? trim((string) $payload['closing_note']) : '';
             $note = $note !== '' ? $note : null;
             $now = now();
+            $closerName = User::query()->whereKey($userId)->value('name') ?: 'Operador';
 
             $before = [
                 'status' => $locked->status instanceof TrackingStatus
@@ -52,8 +62,16 @@ class TrackingLifecycleService
                     : (string) $locked->status,
                 'closed_at' => $locked->closed_at?->toIso8601String(),
                 'closed_by_user_id' => $locked->closed_by_user_id,
+                'opened_by_user_id' => $locked->opened_by_user_id,
                 'lock_version' => (int) $locked->lock_version,
+                'report_ticket' => $locked->report_ticket,
+                'case_code' => $locked->case_code,
             ];
+
+            $previousTicket = $locked->report_ticket ?? $locked->ticket;
+            $finalTicket = $locked->case_code
+                ? $this->tickets->reportTicketClosed((string) $locked->case_code, $now)
+                : $previousTicket;
 
             $locked->status = TrackingStatus::Closed;
             $locked->closed_at = $now;
@@ -61,6 +79,8 @@ class TrackingLifecycleService
             $locked->closed_by_user_id = $userId;
             $locked->closed_by_legacy_name = null;
             $locked->closing_note = $note;
+            $locked->report_ticket = $finalTicket;
+            $locked->ticket = $finalTicket;
             $locked->bumpLockVersion();
             $locked->save();
 
@@ -76,6 +96,16 @@ class TrackingLifecycleService
                 ]);
             }
 
+            TrackingUpdate::query()->create([
+                'tracking_record_id' => $locked->id,
+                'event_type' => TrackingEventType::SystemEvent,
+                'body' => "Tracking cerrado formalmente por {$closerName}.",
+                'created_by_user_id' => $userId,
+                'legacy_actor_name' => null,
+                'occurred_on' => $now->toDateString(),
+                'occurred_at' => $now,
+            ]);
+
             $this->audit->record(
                 $locked,
                 'CLOSE_TRACKING',
@@ -84,8 +114,14 @@ class TrackingLifecycleService
                     'status' => TrackingStatus::Closed->value,
                     'closed_at' => $now->toIso8601String(),
                     'closed_by_user_id' => $userId,
+                    'closed_by_name' => $closerName,
+                    'opened_by_user_id' => $locked->opened_by_user_id,
                     'closing_note' => $note,
                     'lock_version' => (int) $locked->lock_version,
+                    'previous_ticket_code' => $previousTicket,
+                    'final_ticket_code' => $finalTicket,
+                    'case_code' => $locked->case_code,
+                    'public_id' => $locked->public_id,
                 ],
                 AuditModule::TrackingGeneral,
                 AuditSource::Api,
@@ -143,6 +179,7 @@ class TrackingLifecycleService
                 'closed_by_user_id' => $locked->closed_by_user_id,
                 'closing_note' => $locked->closing_note,
                 'lock_version' => (int) $locked->lock_version,
+                'report_ticket' => $locked->report_ticket,
             ];
 
             $locked->status = TrackingStatus::InProgress;
@@ -153,6 +190,11 @@ class TrackingLifecycleService
             // Conservar closing_note histórico en actividad vía update; limpiar campo cabecera.
             $previousNote = $locked->closing_note;
             $locked->closing_note = null;
+            if ($locked->case_code) {
+                $openTicket = $this->tickets->reportTicketOpen((string) $locked->case_code);
+                $locked->report_ticket = $openTicket;
+                $locked->ticket = $openTicket;
+            }
             $locked->bumpLockVersion();
             $locked->save();
 
@@ -273,7 +315,7 @@ class TrackingLifecycleService
     private function alreadyClosedMessage(TrackingRecord $locked): string
     {
         $who = $locked->closedByDisplayName() ?? 'otro operador';
-        $when = $locked->closed_at?->timezone(config('app.timezone'))->format('H:i') ?? '—';
+        $when = \App\Support\OperationalTime::format($locked->closed_at, 'H:i') ?? '—';
 
         return "Este Tracking ya fue cerrado por {$who} a las {$when}.";
     }

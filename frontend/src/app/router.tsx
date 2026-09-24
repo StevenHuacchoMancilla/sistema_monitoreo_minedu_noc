@@ -5,6 +5,7 @@ import { ActiveIncidentsPage } from '../features/incidents/pages/ActiveIncidents
 import { ConcentrationsPage } from '../features/incidents/pages/ConcentrationsPage'
 import { SchoolHistoryIndexPage } from '../features/history/pages/SchoolHistoryIndexPage'
 import { SchoolHistoryDetailPage } from '../features/history/pages/SchoolHistoryDetailPage'
+import { IncidentCaseFilePage } from '../features/history/pages/IncidentCaseFilePage'
 import { RecoveriesPage } from '../features/recoveries/pages/RecoveriesPage'
 import { AdminPage } from '../features/administration/pages/AdminPage'
 import { SchoolDetailPage } from '../features/schools/pages/SchoolDetailPage'
@@ -63,6 +64,7 @@ export function AppRouter() {
           <Route path="/history" element={<Navigate to="/history/schools" replace />} />
           <Route path="/history/schools" element={<SchoolHistoryIndexPage />} />
           <Route path="/history/schools/:schoolId" element={<SchoolHistoryDetailPage />} />
+          <Route path="/history/incidents/:incidentId" element={<IncidentCaseFilePage />} />
           <Route path="/tracking" element={<TrackingListPage />} />
           <Route path="/tracking/report" element={<TrackingReportPage />} />
           <Route path="/tracking/:id" element={<TrackingDetailPage />} />

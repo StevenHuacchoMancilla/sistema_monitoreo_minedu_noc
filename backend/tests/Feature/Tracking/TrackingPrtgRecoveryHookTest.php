@@ -136,6 +136,9 @@ class TrackingPrtgRecoveryHookTest extends TestCase
 
     public function test_prtg_reoutage_relinks_open_tracking_without_closing(): void
     {
+        // Reincidencia operativa (nueva fila), no coalesce de flaps.
+        config(['incidents.flap_reopen_seconds' => 0]);
+
         ['assignment' => $assignment, 'sensor' => $sensor, 'incident' => $oldIncident, 'tracking' => $tracking] = $this->seedOpenTracking();
 
         app(IncidentService::class)->applyTechnicalRecovery(

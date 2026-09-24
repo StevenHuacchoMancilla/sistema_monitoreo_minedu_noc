@@ -55,7 +55,7 @@ class OperationalReportColumnsTest extends TestCase
             'last_synced_at' => now(),
         ]);
 
-        $started = Carbon::parse('2026-09-21 12:12:41', config('app.timezone', 'UTC'));
+        $started = Carbon::parse('2026-09-21 12:12:41', 'America/Lima')->utc();
 
         return Incident::query()->create([
             'school_id' => $school->id,

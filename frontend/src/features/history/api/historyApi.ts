@@ -1,5 +1,6 @@
 import { apiGet } from '../../../api/client'
 import type {
+  IncidentCaseFile,
   SchoolHistoryIndexResponse,
   SchoolHistoryIncidentsResponse,
   SchoolHistoryOverview,
@@ -28,3 +29,10 @@ export function fetchSchoolHistoryIncidents(
 ) {
   return apiGet<SchoolHistoryIncidentsResponse>(`/history/schools/${schoolId}/incidents${toQuery(params)}`)
 }
+
+export function fetchIncidentCaseFile(incidentId: number) {
+  return apiGet<IncidentCaseFile>(`/history/incidents/${incidentId}`)
+}
+
+/** Ruta de la página de expediente completo de una incidencia. */
+export const incidentCaseFilePath = (incidentId: number) => `/history/incidents/${incidentId}`

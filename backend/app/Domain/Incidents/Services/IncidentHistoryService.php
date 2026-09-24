@@ -2,6 +2,7 @@
 
 namespace App\Domain\Incidents\Services;
 
+use App\Domain\Incidents\Support\IncidentCaseStatus;
 use App\Domain\Incidents\Support\OutageDuration;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Enums\ManagementClassification;
@@ -10,9 +11,14 @@ use App\Enums\MonitoringStatus;
 use App\Models\Incident;
 use App\Models\PrtgSensor;
 use App\Models\School;
+use App\Models\TrackingRecord;
+use App\Support\OperationalTime;
+use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
 use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 
 class IncidentHistoryService
 {
@@ -31,6 +37,8 @@ class IncidentHistoryService
         $tecnologia = trim((string) ($filters['tecnologia'] ?? ''));
         $currentStatus = strtoupper(trim((string) ($filters['current_status'] ?? '')));
 
+        [$downtimeSql, $downtimeBindings] = $this->downtimeSecondsExpression();
+
         $agg = Incident::query()
             ->select([
                 'school_id',
@@ -40,7 +48,14 @@ class IncidentHistoryService
                 DB::raw('max(started_at) as ultima_caida'),
                 DB::raw('max(recovered_at) as ultima_recuperacion'),
             ])
+            ->selectRaw("sum({$downtimeSql}) as downtime_seconds", $downtimeBindings)
             ->groupBy('school_id');
+
+        $pings = PrtgSensor::query()
+            ->where('name', 'Ping')
+            ->whereNotNull('network_assignment_id')
+            ->select('network_assignment_id', DB::raw('max(normalized_status) as ping_status'))
+            ->groupBy('network_assignment_id');
 
         $schoolQuery = School::query()
             ->joinSub($agg, 'incident_stats', function ($join) {
@@ -49,6 +64,7 @@ class IncidentHistoryService
             ->leftJoin('network_assignments as na', function ($join) {
                 $join->on('na.school_id', '=', 'schools.id')->where('na.is_active', true);
             })
+            ->leftJoinSub($pings, 'ping', 'ping.network_assignment_id', '=', 'na.id')
             ->select([
                 'schools.id as school_id',
                 'schools.local_educativo',
@@ -65,6 +81,8 @@ class IncidentHistoryService
                 'incident_stats.activas',
                 'incident_stats.ultima_caida',
                 'incident_stats.ultima_recuperacion',
+                'incident_stats.downtime_seconds',
+                'ping.ping_status',
             ])
             ->orderByDesc('incident_stats.caidas')
             ->orderBy('schools.local_educativo');
@@ -87,22 +105,22 @@ class IncidentHistoryService
             $schoolQuery->whereRaw('upper(coalesce(na.tecnologia_acceso, \'\')) = ?', [mb_strtoupper($tecnologia)]);
         }
 
-        // Filter by current PRTG status requires ping join — apply after building base if needed
-        $allRows = $schoolQuery->get();
-        $assignmentIds = $allRows->pluck('assignment_id')->filter()->unique()->values();
-        $pings = PrtgSensor::query()
-            ->where('name', 'Ping')
-            ->whereIn('network_assignment_id', $assignmentIds)
-            ->get()
-            ->keyBy('network_assignment_id');
+        if ($currentStatus === MonitoringStatus::SinDatos->value) {
+            $schoolQuery->where(function (Builder $q) {
+                $q->whereNull('ping.ping_status')->orWhere('ping.ping_status', MonitoringStatus::SinDatos->value);
+            });
+        } elseif ($currentStatus !== '') {
+            $schoolQuery->where('ping.ping_status', $currentStatus);
+        }
 
-        $mapped = $allRows->map(function ($row) use ($pings) {
-            $ping = $row->assignment_id ? $pings->get($row->assignment_id) : null;
-            $estado = $ping?->normalized_status?->value ?? MonitoringStatus::SinDatos->value;
+        $paginator = $schoolQuery->paginate($perPage, ['*'], 'page', $page);
+
+        $rows = collect($paginator->items())->map(function ($row) {
             $province = PrtgOperationalLocation::clean($row->prtg_province)
                 ?? PrtgOperationalLocation::clean($row->admin_provincia);
             $district = PrtgOperationalLocation::clean($row->prtg_district)
                 ?? PrtgOperationalLocation::clean($row->admin_distrito);
+            $seconds = max(0, (int) round((float) ($row->downtime_seconds ?? 0)));
 
             return [
                 'school_id' => (int) $row->school_id,
@@ -115,50 +133,70 @@ class IncidentHistoryService
                 'caidas' => (int) $row->caidas,
                 'recuperaciones' => (int) $row->recuperaciones,
                 'activas' => (int) $row->activas,
-                'estado_actual' => $estado,
-                'ultima_caida' => $row->ultima_caida,
-                'ultima_recuperacion' => $row->ultima_recuperacion,
+                'estado_actual' => $row->ping_status ?: MonitoringStatus::SinDatos->value,
+                'ultima_caida' => $this->toIso($row->ultima_caida),
+                'ultima_recuperacion' => $this->toIso($row->ultima_recuperacion),
+                'tiempo_total_caido_segundos' => $seconds,
+                'tiempo_total_caido' => OutageDuration::human($seconds),
             ];
-        });
+        })->values()->all();
 
-        if ($currentStatus !== '') {
-            $mapped = $mapped->filter(
-                fn (array $row) => strtoupper((string) $row['estado_actual']) === $currentStatus
-            )->values();
-        }
-
-        $schoolIds = $mapped->pluck('school_id')->all();
-        $downtimeBySchool = $this->totalDowntimeSecondsBySchool($schoolIds);
-
-        $mapped = $mapped->map(function (array $row) use ($downtimeBySchool) {
-            $seconds = $downtimeBySchool[$row['school_id']] ?? 0;
-            $row['tiempo_total_caido_segundos'] = $seconds;
-            $row['tiempo_total_caido'] = OutageDuration::human($seconds);
-
-            return $row;
-        });
-
-        $total = $mapped->count();
-        $lastPage = max(1, (int) ceil($total / $perPage));
-        $page = min($page, $lastPage);
-        $slice = $mapped->slice(($page - 1) * $perPage, $perPage)->values()->all();
+        $totals = Incident::query()
+            ->selectRaw('count(*) as total')
+            ->selectRaw('sum(case when recovered_at is not null then 1 else 0 end) as recuperadas')
+            ->toBase()
+            ->first();
+        $totalIncidents = (int) ($totals->total ?? 0);
+        $recoveredIncidents = (int) ($totals->recuperadas ?? 0);
 
         return [
-            'data' => $slice,
+            'data' => $rows,
             'meta' => [
-                'current_page' => $page,
-                'last_page' => $lastPage,
-                'per_page' => $perPage,
-                'total' => $total,
+                'current_page' => $paginator->currentPage(),
+                'last_page' => $paginator->lastPage(),
+                'per_page' => $paginator->perPage(),
+                'total' => $paginator->total(),
             ],
             'filters' => $this->catalogFilters($provincia),
             'stats' => [
-                'colegios_con_historial' => $total,
-                'incidencias_historicas' => (int) Incident::query()->count(),
-                'recuperadas' => (int) Incident::query()->whereNotNull('recovered_at')->count(),
-                'activas' => (int) Incident::query()->whereNull('recovered_at')->count(),
+                'colegios_con_historial' => $paginator->total(),
+                'incidencias_historicas' => $totalIncidents,
+                'recuperadas' => $recoveredIncidents,
+                'activas' => $totalIncidents - $recoveredIncidents,
             ],
         ];
+    }
+
+    /**
+     * Segundos caídos por fila (activa = hasta ahora), portable pgsql/sqlite.
+     *
+     * @return array{0: string, 1: list<string>}
+     */
+    private function downtimeSecondsExpression(): array
+    {
+        $now = now()->format('Y-m-d H:i:s');
+
+        if (DB::connection()->getDriverName() === 'pgsql') {
+            $end = 'coalesce(recovered_at, cast(? as timestamp))';
+            $diff = "extract(epoch from ({$end} - started_at))";
+        } else {
+            $end = 'coalesce(recovered_at, ?)';
+            $diff = "(julianday({$end}) - julianday(started_at)) * 86400";
+        }
+
+        return [
+            "case when started_at is not null and {$end} > started_at then {$diff} else 0 end",
+            [$now, $now],
+        ];
+    }
+
+    private function toIso(mixed $value): ?string
+    {
+        if ($value === null || $value === '') {
+            return null;
+        }
+
+        return Carbon::parse((string) $value)->toIso8601String();
     }
 
     /**
@@ -276,14 +314,36 @@ class IncidentHistoryService
 
         $query = Incident::query()
             ->where('school_id', $school->id)
-            ->with(['sensor:id,name,normalized_status,device_name', 'networkAssignment:id,cid,tecnologia_acceso'])
-            ->orderByDesc('started_at');
+            ->select([
+                'id', 'school_id', 'started_at', 'recovered_at', 'followup_status',
+                'management_scope', 'recovery_review_status', 'cause',
+            ])
+            ->with([
+                'trackingRecords' => fn ($q) => $q
+                    ->select([
+                        'id', 'incident_id', 'status', 'report_ticket', 'ticket', 'case_code',
+                        'opened_at', 'closed_at', 'closing_note',
+                        'opened_by_user_id', 'closed_by_user_id', 'opened_by_legacy_name', 'closed_by_legacy_name',
+                    ])
+                    ->orderByDesc('id'),
+                'trackingRecords.openedBy:id,name',
+                'trackingRecords.closedBy:id,name',
+                'trackingRecords.latestUpdate' => fn ($q) => $q->select([
+                    'tracking_updates.id', 'tracking_updates.tracking_record_id', 'tracking_updates.event_type',
+                    'tracking_updates.body', 'tracking_updates.created_by_user_id', 'tracking_updates.legacy_actor_name',
+                    'tracking_updates.occurred_at', 'tracking_updates.created_at',
+                ]),
+                'trackingRecords.latestUpdate.createdBy:id,name',
+            ])
+            ->withCount(['managements', 'fieldDispatches'])
+            ->orderByDesc('started_at')
+            ->orderByDesc('id');
 
         if (! empty($filters['date_from'])) {
-            $query->whereDate('started_at', '>=', $filters['date_from']);
+            $query->where('started_at', '>=', OperationalTime::dayStart((string) $filters['date_from']));
         }
         if (! empty($filters['date_to'])) {
-            $query->whereDate('started_at', '<=', $filters['date_to']);
+            $query->where('started_at', '<=', OperationalTime::dayEnd((string) $filters['date_to']));
         }
 
         $status = strtoupper((string) ($filters['status'] ?? ''));
@@ -300,18 +360,21 @@ class IncidentHistoryService
             $query->where('management_scope', $filters['scope']);
         }
 
-        $totalForSchool = Incident::query()->where('school_id', $school->id)->count();
         $orderedIds = Incident::query()
             ->where('school_id', $school->id)
             ->orderBy('started_at')
             ->orderBy('id')
             ->pluck('id')
             ->all();
+        $totalForSchool = count($orderedIds);
         $rankById = array_flip($orderedIds);
 
         return $query->paginate($perPage)->through(function (Incident $incident) use ($totalForSchool, $rankById) {
             $seconds = OutageDuration::seconds($incident->started_at, $incident->recovered_at);
             $ordinal = isset($rankById[$incident->id]) ? ((int) $rankById[$incident->id] + 1) : null;
+            /** @var TrackingRecord|null $tracking */
+            $tracking = $incident->trackingRecords->first();
+            $lastUpdate = $tracking?->latestUpdate;
 
             return [
                 'id' => $incident->id,
@@ -319,16 +382,31 @@ class IncidentHistoryService
                 'recovered_at' => $incident->recovered_at?->toIso8601String(),
                 'duration_seconds' => $seconds,
                 'duration' => OutageDuration::human($seconds),
-                'same_day' => $incident->started_at && $incident->recovered_at
-                    ? $incident->started_at->toDateString() === $incident->recovered_at->toDateString()
-                    : false,
+                'same_day' => \App\Support\OperationalTime::sameLocalDay($incident->started_at, $incident->recovered_at),
                 'followup_status' => $incident->followup_status?->value,
                 'followup_label' => $incident->followup_status?->label(),
-                'management_classification' => $incident->management_classification?->value,
-                'management_classification_label' => $incident->management_classification?->label(),
                 'management_scope' => $incident->management_scope?->value,
-                'current_status' => $incident->current_status,
-                'prtg_status' => $incident->sensor?->normalized_status?->value,
+                'cause' => $incident->cause,
+                'case_status' => IncidentCaseStatus::resolve($incident, $tracking),
+                'managements_count' => (int) $incident->managements_count,
+                'field_dispatches_count' => (int) $incident->field_dispatches_count,
+                'tracking' => $tracking ? [
+                    'id' => $tracking->id,
+                    'status' => $tracking->status?->value,
+                    'status_label' => $tracking->status?->label(),
+                    'ticket' => $tracking->report_ticket ?? $tracking->ticket,
+                    'case_code' => $tracking->case_code,
+                    'opened_at' => $tracking->opened_at?->toIso8601String(),
+                    'opened_by_name' => $tracking->openedByDisplayName(),
+                    'closed_at' => $tracking->closed_at?->toIso8601String(),
+                    'closed_by_name' => $tracking->closedByDisplayName(),
+                    'closing_note' => $tracking->closing_note,
+                    'last_update' => $lastUpdate ? [
+                        'at' => ($lastUpdate->occurred_at ?? $lastUpdate->created_at)?->toIso8601String(),
+                        'actor' => $lastUpdate->actorDisplayName(),
+                        'body' => Str::limit((string) $lastUpdate->body, 140),
+                    ] : null,
+                ] : null,
                 'reincidencia' => [
                     'numero' => $ordinal,
                     'total' => $totalForSchool,
@@ -339,35 +417,21 @@ class IncidentHistoryService
     }
 
     /**
-     * @param  list<int>  $schoolIds
-     * @return array<int, int>
-     */
-    private function totalDowntimeSecondsBySchool(array $schoolIds): array
-    {
-        if ($schoolIds === []) {
-            return [];
-        }
-
-        $rows = Incident::query()
-            ->whereIn('school_id', $schoolIds)
-            ->get(['school_id', 'started_at', 'recovered_at']);
-
-        $now = now();
-        $out = [];
-        foreach ($rows as $row) {
-            $seconds = OutageDuration::seconds($row->started_at, $row->recovered_at, $now) ?? 0;
-            $out[(int) $row->school_id] = ($out[(int) $row->school_id] ?? 0) + $seconds;
-        }
-
-        return $out;
-    }
-
-    /**
      * @return array{provincias: list<string>, distritos: list<string>, tecnologias: list<string>, classifications: list<array{value: string, label: string}>, scopes: list<array{value: string, label: string}>}
      */
     private function catalogFilters(?string $provincia): array
     {
-        $schoolIds = Incident::query()->distinct()->pluck('school_id');
+        $key = 'history:catalog:'.md5(mb_strtoupper((string) $provincia));
+
+        return Cache::remember($key, now()->addMinutes(10), fn () => $this->buildCatalogFilters($provincia));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function buildCatalogFilters(?string $provincia): array
+    {
+        $schoolIds = Incident::query()->select('school_id')->distinct();
 
         $provincias = DB::table('network_assignments')
             ->whereIn('school_id', $schoolIds)

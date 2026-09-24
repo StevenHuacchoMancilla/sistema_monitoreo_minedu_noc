@@ -1,81 +1,115 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ClipboardList } from 'lucide-react'
+import { Check, ClipboardList, ExternalLink, MapPin, Phone, Radio, X } from 'lucide-react'
 import { endpoints } from '../../../api/endpoints'
-import { useAuth } from '../../auth/context/AuthContext'
-import { FollowupBadge, PrtgStatusBadge, ReincidenteBadge } from '../../../components/monitoring/StatusBadges'
+import { ClassificationBadge, FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
+import { Badge } from '../../../components/ui/SoftBadge'
+import { Button } from '../../../components/ui/Button'
+import { IconButton } from '../../../components/ui/IconButton'
+import { FormField, Select } from '../../../components/ui/FormControls'
 import { ErrorState, LoadingState } from '../../../components/ui/States'
-import { CLASSIFICATION_BADGE_CLASS } from '../../reports/types/operationalReport'
+import { inputClassName } from '../../../lib/uiTokens'
+import { formatDateTime, formatDuration } from '../../../lib/datetime'
+import { useNow } from '../../../lib/useNow'
 import type { ManagementPayload } from '../../reports/types/operationalReport'
-import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
-import { openTrackingFromIncident } from '../../tracking/api/trackingApi'
+import { trackingStatusTone } from '../../tracking/lib/trackingStatus'
+import { incidentCaseFilePath } from '../../history/api/historyApi'
+import { VoiceDictationButton } from '../../voice/components/VoiceDictationButton'
 import { FieldDispatchPanel } from './FieldDispatchPanel'
+import type { IncidentDetail } from '../../../types/api'
 
-function Field({ label, children }: { label: string; children: ReactNode }) {
-  return (
-    <label className="block text-sm">
-      <span className="mb-1 block text-xs uppercase tracking-wide text-noc-muted">{label}</span>
-      {children}
-    </label>
-  )
-}
+type TabKey = 'summary' | 'management' | 'dispatch' | 'history'
 
-function DataGrid({ items }: { items: Array<{ label: string; value: ReactNode }> }) {
-  return (
-    <dl className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-      {items.map((item) => (
-        <div key={item.label} className="rounded-xl border border-noc-border/70 bg-[#f5f5f7]/80 px-3 py-2">
-          <dt className="text-[10px] font-semibold uppercase tracking-wide text-noc-muted">{item.label}</dt>
-          <dd className="mt-0.5 text-sm text-noc-text">{item.value ?? '—'}</dd>
-        </div>
-      ))}
-    </dl>
-  )
-}
+const TABS: Array<{ key: TabKey; label: string }> = [
+  { key: 'summary', label: 'Resumen' },
+  { key: 'management', label: 'Contacto y gestión' },
+  { key: 'dispatch', label: 'Desplazamiento' },
+  { key: 'history', label: 'Historial' },
+]
 
-const inputClass =
-  'w-full rounded-xl border border-noc-border bg-white px-3 py-2 text-sm text-noc-text shadow-sm outline-none focus:border-noc-info'
-const selectClass = inputClass
-const textareaClass = `${inputClass} min-h-20 resize-y`
+const TIMELINE_PAGE = 15
 
 const RESULT_OPTIONS: Array<{
   value: ManagementPayload['classification']
   label: string
   hint: string
-  color: string
+  selected: string
 }> = [
   {
     value: 'CONTACT_CONFIRMED',
     label: 'Contacto confirmado',
-    hint: 'Se confirmó la situación con el local (rojo)',
-    color: 'border-red-300 bg-red-50',
+    hint: 'Se confirmó la situación con el local',
+    selected: 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
   },
   {
     value: 'NO_RESPONSE',
-    label: 'Sin respuesta / no fue posible contactar',
-    hint: 'Continúa caído sin contacto efectivo (naranja)',
-    color: 'border-orange-300 bg-orange-50',
+    label: 'Sin respuesta',
+    hint: 'No fue posible contactar; sigue caído',
+    selected: 'border-orange-300 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40',
   },
   {
     value: 'COMPLAINT',
-    label: 'Queja / reclamo del local educativo',
-    hint: 'Queja o reclamo reportado (azul)',
-    color: 'border-blue-300 bg-blue-50',
+    label: 'Queja / reclamo',
+    hint: 'El local reportó una queja o reclamo',
+    selected: 'border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
   },
 ]
+
+const panelClass =
+  'rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900'
+const panelTitleClass =
+  'mb-3 inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-900 dark:text-slate-100'
+const textareaClass = `${inputClassName} !h-auto min-h-20 resize-y py-2`
+
+function Panel({ title, icon, action, children }: { title: string; icon?: ReactNode; action?: ReactNode; children: ReactNode }) {
+  return (
+    <section className={panelClass}>
+      <div className="flex items-start justify-between gap-2">
+        <h3 className={panelTitleClass}>
+          {icon}
+          {title}
+        </h3>
+        {action}
+      </div>
+      {children}
+    </section>
+  )
+}
+
+function KeyValue({ label, children }: { label: string; children: ReactNode }) {
+  return (
+    <div className="min-w-0">
+      <dt className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</dt>
+      <dd className="mt-0.5 truncate text-[13px] text-slate-900 dark:text-slate-100">{children ?? '—'}</dd>
+    </div>
+  )
+}
+
+function durationSeconds(estado: IncidentDetail['estado'], now: number): number | null {
+  if (!estado.fecha_caida) return estado.duracion_segundos
+  const start = Date.parse(estado.fecha_caida)
+  if (Number.isNaN(start)) return estado.duracion_segundos
+  const end = estado.recovered_at ? Date.parse(estado.recovered_at) : now
+  return Math.max(0, Math.floor((end - start) / 1000))
+}
 
 export function IncidentManageModal({
   incidentId,
   onClose,
+  initialTab = 'summary',
+  readOnly = false,
 }: {
   incidentId: number
   onClose: () => void
+  initialTab?: TabKey
+  readOnly?: boolean
 }) {
   const client = useQueryClient()
-  const navigate = useNavigate()
-  const { user } = useAuth()
-  const canWrite = Boolean(user?.can_write)
+  const titleId = useId()
+  const closeRef = useRef<HTMLButtonElement>(null)
+  const now = useNow()
+  const [tab, setTab] = useState<TabKey>(initialTab)
 
   const detail = useQuery({
     queryKey: ['incidents', incidentId],
@@ -88,36 +122,40 @@ export function IncidentManageModal({
   const [detailText, setDetailText] = useState('')
   const [observation, setObservation] = useState('')
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
-  const [trackingError, setTrackingError] = useState<string | null>(null)
 
-  const openTracking = useMutation({
-    mutationFn: () => openTrackingFromIncident(incidentId),
-    onSuccess: async (res) => {
-      setTrackingError(null)
-      await client.invalidateQueries({ queryKey: ['incidents', incidentId] })
-      await client.invalidateQueries({ queryKey: ['tracking'] })
-      onClose()
-      navigate(`/tracking/${res.data.id}`)
-    },
-    onError: (e) => {
-      setTrackingError(e instanceof Error ? e.message : 'No se pudo abrir el Tracking')
-    },
-  })
-
+  // Hidratar una sola vez: los refetch traen duraciones nuevas y no deben pisar lo que se escribe.
+  const hydrated = useRef(false)
   useEffect(() => {
-    if (!detail.data) return
+    if (!detail.data || hydrated.current) return
+    hydrated.current = true
     const g = detail.data.gestion
     const current = g.management_classification
-    if (current === 'CONTACT_CONFIRMED' || current === 'NO_RESPONSE' || current === 'COMPLAINT') {
-      setClassification(current)
-    } else {
-      setClassification('')
-    }
+    setClassification(current === 'CONTACT_CONFIRMED' || current === 'NO_RESPONSE' || current === 'COMPLAINT' ? current : '')
     setScope((g.management_scope as '' | 'PEXT' | 'PINT') || '')
     setContactId(g.last_managed_contact_id ?? '')
     setDetailText(g.detail_text ?? '')
     setObservation('')
   }, [detail.data])
+
+  const onCloseRef = useRef(onClose)
+  useEffect(() => {
+    onCloseRef.current = onClose
+  }, [onClose])
+
+  // Solo al montar: el padre recrea onClose en cada refresco y no debe robar el foco.
+  useEffect(() => {
+    closeRef.current?.focus()
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onCloseRef.current()
+    }
+    const previousOverflow = document.body.style.overflow
+    document.body.style.overflow = 'hidden'
+    window.addEventListener('keydown', onKey)
+    return () => {
+      window.removeEventListener('keydown', onKey)
+      document.body.style.overflow = previousOverflow
+    }
+  }, [])
 
   const save = useMutation({
     mutationFn: () => {
@@ -132,345 +170,533 @@ export function IncidentManageModal({
       })
     },
     onSuccess: async (data) => {
-      setSavedMsg('Gestión registrada')
-      await client.invalidateQueries({ queryKey: ['dashboard'] })
-      await client.invalidateQueries({ queryKey: ['reports'] })
-      await client.invalidateQueries({ queryKey: ['incidents', incidentId] })
+      const sync = data.tracking_sync
+      const ref = sync ? `#${sync.incident_number ?? sync.tracking_id}` : ''
+      setSavedMsg(
+        sync?.created
+          ? `Gestión registrada · Tracking ${ref} abierto`
+          : sync
+            ? `Gestión registrada · Tracking ${ref} actualizado`
+            : 'Gestión registrada',
+      )
+      hydrated.current = false
       client.setQueryData(['incidents', incidentId], data)
-      window.setTimeout(() => setSavedMsg(null), 2500)
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['dashboard'] }),
+        client.invalidateQueries({ queryKey: ['reports'] }),
+        client.invalidateQueries({ queryKey: ['tracking'] }),
+      ])
+      window.setTimeout(() => setSavedMsg(null), 3500)
     },
   })
 
-  const colorKey = detail.data?.gestion.management_classification
-    ? detail.data.opciones.management_classifications?.find(
-        (c) => c.value === detail.data?.gestion.management_classification,
-      )?.color_key ??
-      (detail.data.gestion.management_classification === 'NEW_OUTAGE' ? 'yellow' : 'slate')
-    : 'yellow'
-
-  const titleCid = detail.data?.colegio.cid ? `CID ${detail.data.colegio.cid}` : `Incidencia #${incidentId}`
-  const subtitle =
-    detail.data?.colegio.legacy_reference ??
-    detail.data?.colegio.codigo_local ??
-    detail.data?.colegio.local_educativo ??
-    ''
-
-  const managementHistory = useMemo(() => detail.data?.managements ?? [], [detail.data])
+  const data = detail.data
+  const seconds = data ? durationSeconds(data.estado, now) : null
+  const recovered = Boolean(data?.estado.recovered_at)
 
   return (
-    <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-3 backdrop-blur-[2px] sm:p-6 md:p-8">
-      <button type="button" className="absolute inset-0 cursor-default" aria-label="Cerrar" onClick={onClose} />
-      <div className="relative z-10 mb-8 w-full max-w-4xl rounded-2xl border border-noc-border bg-noc-surface shadow-[0_24px_80px_rgba(0,0,0,0.18)]">
-        <div className="sticky top-0 z-10 flex items-start justify-between gap-3 border-b border-noc-border bg-noc-surface px-5 py-4">
-          <div>
-            <h2 className="text-xl font-semibold text-noc-text">{titleCid}</h2>
-            <p className="text-sm text-noc-muted">{subtitle}</p>
-            {detail.data ? (
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <PrtgStatusBadge status={detail.data.estado.estado_prtg} />
-                <FollowupBadge status={detail.data.estado.followup_status} />
-                <span
-                  className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
-                    CLASSIFICATION_BADGE_CLASS[colorKey] ?? CLASSIFICATION_BADGE_CLASS.slate
-                  }`}
-                >
-                  {detail.data.gestion.management_classification_label ?? 'Nueva caída'}
-                </span>
-                <ReincidenteBadge count={detail.data.antecedentes.incidencias_registradas} />
-              </div>
-            ) : null}
-          </div>
-          <button
-            type="button"
-            onClick={onClose}
-            className="rounded-lg border border-noc-border px-3 py-1.5 text-sm text-noc-muted hover:text-noc-text"
-          >
-            Cerrar
-          </button>
-        </div>
-
-        <div className="space-y-5 p-5">
-          {detail.isLoading ? <LoadingState /> : null}
-          {detail.isError ? (
-            <ErrorState message={detail.error instanceof Error ? detail.error.message : 'Error'} />
-          ) : null}
-
-          {detail.data ? (
-            <>
-              <section className="rounded-2xl border border-violet-200 bg-violet-50/50 p-4">
-                <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div>
-                    <h3 className="inline-flex items-center gap-1.5 text-sm font-semibold text-violet-900">
-                      <ClipboardList className="h-4 w-4" aria-hidden />
-                      Tracking General
-                    </h3>
-                    <p className="mt-1 text-xs text-violet-800/80">
-                      {detail.data.active_tracking
-                        ? `Tracking #${detail.data.active_tracking.incident_number ?? detail.data.active_tracking.id} · ${
-                            detail.data.active_tracking.status_label ?? detail.data.active_tracking.status ?? 'Abierto'
-                          }${
-                            detail.data.active_tracking.opened_by_name
-                              ? ` · ${detail.data.active_tracking.opened_by_name}`
-                              : ''
-                          }`
-                        : 'Sin Tracking activo. Abrir crea seguimiento operativo (no cierra la incidencia PRTG).'}
-                    </p>
-                    {trackingError ? (
-                      <p className="mt-2 text-xs font-semibold text-red-600">{trackingError}</p>
-                    ) : null}
-                  </div>
-                  {detail.data.active_tracking ? (
-                    <Link
-                      to={`/tracking/${detail.data.active_tracking.id}`}
-                      onClick={onClose}
-                      className="inline-flex items-center gap-1.5 rounded-xl border border-violet-300 bg-white px-3.5 py-2 text-sm font-semibold text-violet-800 hover:bg-violet-50"
-                    >
-                      Ver Tracking
-                    </Link>
-                  ) : canWrite ? (
-                    <button
-                      type="button"
-                      disabled={openTracking.isPending}
-                      onClick={() => openTracking.mutate()}
-                      className="inline-flex items-center gap-1.5 rounded-xl bg-violet-600 px-3.5 py-2 text-sm font-semibold text-white hover:bg-violet-700 disabled:opacity-50"
-                    >
-                      {openTracking.isPending ? 'Abriendo…' : 'Abrir Tracking'}
-                    </button>
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button
+        type="button"
+        tabIndex={-1}
+        aria-label="Cerrar panel"
+        className="absolute inset-0 cursor-default bg-slate-950/40 backdrop-blur-[2px]"
+        onClick={onClose}
+      />
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+        className="relative z-10 flex h-full w-full flex-col border-l border-slate-200 bg-slate-50 shadow-2xl sm:w-[min(900px,90vw)] dark:border-slate-800 dark:bg-slate-950"
+      >
+        <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <h2 id={titleId} className="truncate text-base font-bold text-slate-950 dark:text-slate-50">
+                {data?.colegio.cid ? `CID ${data.colegio.cid}` : `Incidencia #${incidentId}`}
+                {data?.colegio.local_educativo ? (
+                  <span className="font-medium text-slate-500 dark:text-slate-400"> · {data.colegio.local_educativo}</span>
+                ) : null}
+              </h2>
+              {data ? (
+                <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  <PrtgStatusBadge status={data.estado.estado_prtg} />
+                  <Badge tone={recovered ? 'success' : 'danger'} title={recovered ? 'Duración total de la caída' : 'Tiempo caído hasta ahora'}>
+                    {recovered ? 'Duró' : 'Caído'} {formatDuration(seconds)}
+                  </Badge>
+                  {data.active_tracking ? (
+                    <Badge tone={trackingStatusTone(data.active_tracking.status)} title="Estado del Tracking vinculado">
+                      Tracking · {data.active_tracking.status_label ?? data.active_tracking.status}
+                    </Badge>
                   ) : (
-                    <span className="text-xs text-slate-500">Solo lectura</span>
+                    <Badge tone="neutral" title="Se abre al guardar la primera gestión">
+                      Sin Tracking
+                    </Badge>
                   )}
                 </div>
-              </section>
+              ) : null}
+            </div>
+            <IconButton
+              ref={closeRef}
+              label="Cerrar"
+              onClick={onClose}
+              className="focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none"
+            >
+              <X className="h-4 w-4" aria-hidden />
+            </IconButton>
+          </div>
 
-              <section>
-                <h3 className="mb-2 text-sm font-semibold text-noc-text">Datos del local</h3>
-                <DataGrid
-                  items={[
-                    { label: 'CID', value: detail.data.colegio.cid },
-                    { label: 'Local educativo', value: detail.data.colegio.local_educativo },
-                    { label: 'Código local', value: detail.data.colegio.codigo_local },
-                    {
-                      label: 'Provincia (PRTG)',
-                      value: detail.data.colegio.prtg_province ?? detail.data.colegio.provincia,
-                    },
-                    {
-                      label: 'Distrito (PRTG)',
-                      value: detail.data.colegio.prtg_district ?? detail.data.colegio.distrito,
-                    },
-                    {
-                      label: 'Provincia admin',
-                      value: detail.data.colegio.admin_provincia ?? '—',
-                    },
-                    {
-                      label: 'Distrito admin',
-                      value: detail.data.colegio.admin_distrito ?? '—',
-                    },
-                    { label: 'Tecnología', value: detail.data.colegio.tecnologia },
-                    { label: 'Nodo/POP', value: detail.data.colegio.nodo_pop },
-                    { label: 'Presentación PRTG', value: detail.data.colegio.nombre_prtg },
-                  ]}
-                />
-                {detail.data.colegio.location_mismatch ? (
-                  <div className="mt-3">
-                    <LocationMismatchBadge info={detail.data.colegio} />
-                  </div>
-                ) : (
-                  <p className="mt-2 text-xs text-slate-500">
-                    Provincia/distrito operativo vienen de la jerarquía PRTG. Admin = ficha Excel.
+          {data ? <SummaryBand data={data} /> : null}
+
+          <div role="tablist" aria-label="Secciones de la incidencia" className="-mb-3.5 mt-3 flex gap-1 overflow-x-auto">
+            {TABS.map((t) => (
+              <button
+                key={t.key}
+                type="button"
+                role="tab"
+                id={`${titleId}-tab-${t.key}`}
+                aria-selected={tab === t.key}
+                aria-controls={`${titleId}-panel`}
+                onClick={() => setTab(t.key)}
+                className={`shrink-0 border-b-2 px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
+                  tab === t.key
+                    ? 'border-blue-600 text-blue-700 dark:border-blue-400 dark:text-blue-300'
+                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
+          </div>
+        </header>
+
+        <div
+          id={`${titleId}-panel`}
+          role="tabpanel"
+          aria-labelledby={`${titleId}-tab-${tab}`}
+          className="min-h-0 flex-1 overflow-y-auto px-5 py-4"
+        >
+          {detail.isLoading ? <LoadingState /> : null}
+          {detail.isError ? <ErrorState message={detail.error instanceof Error ? detail.error.message : 'Error'} /> : null}
+
+          {data && tab === 'summary' ? <SummaryTab data={data} onNavigate={onClose} /> : null}
+
+          {data && tab === 'management' ? (
+            <div className="space-y-4">
+              <ContactsPanel contacts={data.contactos} />
+              {readOnly ? (
+                <Panel title="Gestión">
+                  <p className="text-[13px] text-slate-600 dark:text-slate-300">
+                    Tu rol solo permite consulta. Las gestiones se registran con ADMIN o NOC_OPERATOR.
                   </p>
-                )}
-              </section>
-
-              <section>
-                <h3 className="mb-2 text-sm font-semibold text-noc-text">Estado PRTG</h3>
-                <DataGrid
-                  items={[
-                    {
-                      label: 'Estado actual',
-                      value: <PrtgStatusBadge status={detail.data.estado.estado_prtg} />,
-                    },
-                    {
-                      label: 'Fecha de caída (PRTG)',
-                      value: detail.data.estado.fecha_caida
-                        ? new Date(detail.data.estado.fecha_caida).toLocaleString('es-PE')
-                        : '—',
-                    },
-                    { label: 'Duración', value: detail.data.estado.duracion },
-                    {
-                      label: 'Último check',
-                      value: detail.data.estado.ultima_comprobacion
-                        ? new Date(detail.data.estado.ultima_comprobacion).toLocaleString('es-PE')
-                        : '—',
-                    },
-                    {
-                      label: 'Tipo de acceso',
-                      value: detail.data.colegio.tecnologia ?? '—',
-                    },
-                  ]}
-                />
-                <p className="mt-2 text-xs text-slate-500">
-                  Fecha de caída y tipo son de solo lectura · provienen de PRTG / asignación de red.
-                </p>
-              </section>
-
-              <FieldDispatchPanel
-                incidentId={incidentId}
-                active={Boolean(detail.data.estado.recovered_at)}
-                dispatch={detail.data.field_dispatch}
-                history={detail.data.field_dispatches ?? []}
-              />
-
-              <section className="rounded-2xl border border-blue-200 bg-blue-50/40 p-4">
-                <h3 className="mb-1 text-sm font-semibold text-noc-text">Resultado de gestión</h3>
-                <p className="mb-3 text-xs font-medium text-slate-500">
-                  Elige el resultado operativo (no colores). Se registrará en historial y actualizará el reporte.
-                </p>
-                <div className="grid gap-2">
+                  <div className="mt-3">
+                    <RecentManagements managements={data.managements ?? []} />
+                  </div>
+                </Panel>
+              ) : (
+                <>
+              <Panel title="Resultado de gestión">
+                <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Resultado de gestión">
                   {RESULT_OPTIONS.map((opt) => (
                     <label
                       key={opt.value}
-                      className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-2.5 ${
-                        classification === opt.value ? opt.color : 'border-slate-200 bg-white'
+                      className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 ${
+                        classification === opt.value
+                          ? opt.selected
+                          : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800'
                       }`}
                     >
                       <input
                         type="radio"
-                        className="mt-1"
-                        name="mgmt-result"
+                        className="mt-0.5"
+                        name={`${titleId}-result`}
                         checked={classification === opt.value}
                         onChange={() => setClassification(opt.value)}
                       />
-                      <span>
-                        <span className="block text-sm font-semibold text-slate-900">{opt.label}</span>
-                        <span className="text-xs text-slate-500">{opt.hint}</span>
+                      <span className="min-w-0">
+                        <span className="block text-[13px] font-semibold text-slate-900 dark:text-slate-100">{opt.label}</span>
+                        <span className="block text-[11px] text-slate-500 dark:text-slate-400">{opt.hint}</span>
                       </span>
                     </label>
                   ))}
                 </div>
 
                 <div className="mt-4 grid gap-3 sm:grid-cols-2">
-                  <Field label="Contacto utilizado">
-                    <select
-                      className={selectClass}
-                      value={contactId}
-                      onChange={(e) => setContactId(e.target.value ? Number(e.target.value) : '')}
-                    >
+                  <FormField label="Contacto utilizado">
+                    <Select value={contactId} onChange={(e) => setContactId(e.target.value ? Number(e.target.value) : '')}>
                       <option value="">— Sin seleccionar —</option>
-                      {detail.data.contactos.map((c, idx) => (
+                      {data.contactos.map((c, idx) => (
                         <option key={c.id} value={c.id}>
                           {idx + 1}. {c.nombre ?? 'Sin nombre'} · {c.telefono ?? 's/n'}
                         </option>
                       ))}
-                    </select>
-                  </Field>
-                  <Field label="PEXT / PINT">
-                    <select
-                      className={selectClass}
-                      value={scope}
-                      onChange={(e) => setScope(e.target.value as '' | 'PEXT' | 'PINT')}
-                    >
+                    </Select>
+                  </FormField>
+                  <FormField label="PEXT / PINT">
+                    <Select value={scope} onChange={(e) => setScope(e.target.value as '' | 'PEXT' | 'PINT')}>
                       <option value="">— Sin definir —</option>
                       <option value="PEXT">PEXT (externo)</option>
                       <option value="PINT">PINT (interno)</option>
-                    </select>
-                  </Field>
-                </div>
-
-                <div className="mt-3 grid gap-3">
-                  <Field label="DETALLE (texto libre reporte)">
+                    </Select>
+                  </FormField>
+                  <FormField
+                    label="Detalle (reporte)"
+                    className="sm:col-span-2"
+                    action={
+                      <VoiceDictationButton
+                        lang="es-PE"
+                        onFinalTranscript={(text) =>
+                          setDetailText((prev) => (prev ? `${prev.trim()} ${text}` : text))
+                        }
+                      />
+                    }
+                  >
                     <textarea
                       className={textareaClass}
                       value={detailText}
                       onChange={(e) => setDetailText(e.target.value)}
                       placeholder="Ej. Equipos encendidos / sin internet / queja de usuario"
                     />
-                  </Field>
-                  <Field label="Observación adicional">
+                  </FormField>
+                  <FormField
+                    label="Observación adicional"
+                    className="sm:col-span-2"
+                    action={
+                      <VoiceDictationButton
+                        lang="es-PE"
+                        onFinalTranscript={(text) =>
+                          setObservation((prev) => (prev ? `${prev.trim()} ${text}` : text))
+                        }
+                      />
+                    }
+                  >
                     <textarea
                       className={textareaClass}
                       value={observation}
                       onChange={(e) => setObservation(e.target.value)}
                       placeholder="Opcional · queda en historial"
                     />
-                  </Field>
+                  </FormField>
                 </div>
-
-                <div className="mt-4 flex flex-wrap items-center gap-3">
-                  <button
-                    type="button"
-                    disabled={!classification || save.isPending}
-                    onClick={() => save.mutate()}
-                    className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-                  >
-                    {save.isPending ? 'Guardando…' : 'Guardar gestión'}
-                  </button>
-                  {savedMsg ? <span className="text-sm font-semibold text-noc-success">{savedMsg}</span> : null}
-                  {save.isError ? (
-                    <span className="text-sm font-semibold text-noc-danger">
-                      {save.error instanceof Error ? save.error.message : 'Error al guardar'}
-                    </span>
-                  ) : null}
-                </div>
-              </section>
-
-              <section>
-                <h3 className="mb-2 text-sm font-semibold text-noc-text">Contactos del local</h3>
-                {detail.data.contactos.length === 0 ? (
-                  <p className="text-sm text-noc-muted">Sin contactos registrados.</p>
-                ) : (
-                  <div className="grid gap-3 sm:grid-cols-3">
-                    {detail.data.contactos.map((c, idx) => (
-                      <div key={c.id} className="rounded-xl border border-noc-border/70 bg-[#f5f5f7]/80 p-3 text-sm">
-                        <p className="text-xs uppercase text-noc-muted">Contacto {idx + 1}</p>
-                        <p className="mt-1 font-medium">{c.nombre ?? '—'}</p>
-                        <p className="text-noc-muted">{c.cargo ?? '—'}</p>
-                        <p className="mt-1">{c.telefono ?? '—'}</p>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </section>
-
-              <section>
-                <h3 className="mb-2 text-sm font-semibold text-noc-text">Historial de gestión</h3>
-                {managementHistory.length === 0 ? (
-                  <p className="text-sm text-noc-muted">Sin gestiones humanas aún · clasificación automática NUEVA CAÍDA.</p>
-                ) : (
-                  <ul className="space-y-2">
-                    {managementHistory.map((m) => (
-                      <li key={m.id} className="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm">
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs font-semibold text-slate-500">
-                            {m.created_at ? new Date(m.created_at).toLocaleString('es-PE') : '—'}
-                          </span>
-                          <span
-                            className={`rounded-full px-2 py-0.5 text-[10px] font-semibold ${
-                              CLASSIFICATION_BADGE_CLASS[m.color_key ?? 'slate']
-                            }`}
-                          >
-                            {m.classification_label}
-                          </span>
-                          {m.scope ? <span className="text-xs font-semibold text-slate-600">{m.scope}</span> : null}
-                        </div>
-                        {m.contact_name_snapshot ? (
-                          <p className="mt-1 text-xs text-slate-600">
-                            Contacto: {m.contact_name_snapshot}
-                            {m.contact_role_snapshot ? ` · ${m.contact_role_snapshot}` : ''}
-                            {m.contact_phone_snapshot ? ` · ${m.contact_phone_snapshot}` : ''}
-                          </p>
-                        ) : null}
-                        {m.outage_text ? <p className="mt-1 text-xs"><span className="font-semibold">CAÍDA:</span> {m.outage_text}</p> : null}
-                        {m.detail ? <p className="text-xs"><span className="font-semibold">DETALLE:</span> {m.detail}</p> : null}
-                        {m.observation ? <p className="text-xs text-slate-500">{m.observation}</p> : null}
-                      </li>
-                    ))}
-                  </ul>
-                )}
-              </section>
-            </>
+              </Panel>
+              <RecentManagements managements={data.managements ?? []} />
+                </>
+              )}
+            </div>
           ) : null}
+
+          {data && tab === 'dispatch' ? (
+            <FieldDispatchPanel
+              incidentId={incidentId}
+              active={recovered}
+              dispatch={data.field_dispatch}
+              history={data.field_dispatches ?? []}
+            />
+          ) : null}
+
+          {data && tab === 'history' ? <HistoryTab data={data} incidentId={incidentId} onNavigate={onClose} /> : null}
         </div>
+
+        <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-3 dark:border-slate-800 dark:bg-slate-900">
+          <div className="mr-auto min-w-0 text-[12px] font-medium" aria-live="polite">
+            {savedMsg ? <span className="text-emerald-700 dark:text-emerald-400">{savedMsg}</span> : null}
+            {save.isError ? (
+              <span className="text-red-700 dark:text-red-400">
+                {save.error instanceof Error ? save.error.message : 'Error al guardar'}
+              </span>
+            ) : null}
+            {!savedMsg && !save.isError && !classification ? (
+              <span className="text-slate-500 dark:text-slate-400">
+                Elige un resultado en <strong>Contacto y gestión</strong> para guardar.
+              </span>
+            ) : null}
+          </div>
+          <Button variant="secondary" onClick={onClose}>
+            {readOnly ? 'Cerrar' : 'Cancelar'}
+          </Button>
+          {!readOnly ? (
+            <Button variant="primary" disabled={!data || !classification} loading={save.isPending} onClick={() => save.mutate()}>
+              Guardar gestión
+            </Button>
+          ) : null}
+        </footer>
       </div>
+    </div>
+  )
+}
+
+function SummaryBand({ data }: { data: IncidentDetail }) {
+  const reincidencia = data.antecedentes.reincidencia
+  return (
+    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-slate-50 px-3 py-2.5 sm:grid-cols-3 lg:grid-cols-5 dark:bg-slate-950/60">
+      <KeyValue label="Caída">{data.estado.fecha_caida ? formatDateTime(data.estado.fecha_caida) : '—'}</KeyValue>
+      <KeyValue label={data.estado.recovered_at ? 'Recuperado' : 'Último check'}>
+        {data.estado.recovered_at
+          ? formatDateTime(data.estado.recovered_at)
+          : data.estado.ultima_comprobacion
+            ? formatDateTime(data.estado.ultima_comprobacion)
+            : '—'}
+      </KeyValue>
+      <KeyValue label="Seguimiento">
+        <FollowupBadge status={data.estado.followup_status} />
+      </KeyValue>
+      <KeyValue label="Tecnología">{data.colegio.tecnologia ?? '—'}</KeyValue>
+      <KeyValue label="Reincidencia">
+        {reincidencia && reincidencia.total > 1 ? (
+          <span title={reincidencia.label}>
+            {reincidencia.numero} de {reincidencia.total}
+          </span>
+        ) : (
+          'Primera caída'
+        )}
+      </KeyValue>
+    </dl>
+  )
+}
+
+function SummaryTab({ data, onNavigate }: { data: IncidentDetail; onNavigate: () => void }) {
+  const c = data.colegio
+  const prtgProvince = c.prtg_province ?? c.provincia
+  const prtgDistrict = c.prtg_district ?? c.distrito
+  const hasAdmin = Boolean(c.admin_provincia || c.admin_distrito)
+
+  return (
+    <div className="grid gap-4 lg:grid-cols-2">
+      <Panel
+        title="Ubicación"
+        icon={<MapPin className="h-4 w-4 text-slate-500" aria-hidden />}
+        action={
+          hasAdmin && !c.location_mismatch ? (
+            <Badge tone="success" title="La jerarquía PRTG coincide con la ficha administrativa">
+              <Check className="h-3 w-3" aria-hidden /> Coincide
+            </Badge>
+          ) : null
+        }
+      >
+        {c.location_mismatch ? (
+          <div className="grid grid-cols-2 gap-3 rounded-lg border border-amber-200 bg-amber-50/60 p-3 dark:border-amber-900 dark:bg-amber-950/30">
+            <dl className="space-y-1.5">
+              <p className="text-[11px] font-semibold text-amber-800 uppercase dark:text-amber-300">PRTG (operativo)</p>
+              <KeyValue label="Provincia">{prtgProvince}</KeyValue>
+              <KeyValue label="Distrito">{prtgDistrict}</KeyValue>
+            </dl>
+            <dl className="space-y-1.5">
+              <p className="text-[11px] font-semibold text-slate-600 uppercase dark:text-slate-400">Ficha administrativa</p>
+              <KeyValue label="Provincia">{c.admin_provincia}</KeyValue>
+              <KeyValue label="Distrito">{c.admin_distrito}</KeyValue>
+            </dl>
+          </div>
+        ) : (
+          <dl className="grid grid-cols-2 gap-3">
+            <KeyValue label="Provincia">{prtgProvince}</KeyValue>
+            <KeyValue label="Distrito">{prtgDistrict}</KeyValue>
+          </dl>
+        )}
+        <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <KeyValue label="Código local">{c.codigo_local}</KeyValue>
+          <KeyValue label="Centro poblado">{c.centro_poblado}</KeyValue>
+        </dl>
+      </Panel>
+
+      <Panel title="Estado PRTG" icon={<Radio className="h-4 w-4 text-slate-500" aria-hidden />}>
+        <dl className="grid grid-cols-2 gap-3">
+          <KeyValue label="Estado">
+            <PrtgStatusBadge status={data.estado.estado_prtg} />
+          </KeyValue>
+          <KeyValue label="Último check">
+            {data.estado.ultima_comprobacion ? formatDateTime(data.estado.ultima_comprobacion) : '—'}
+          </KeyValue>
+          <KeyValue label="Sensor PRTG">{data.estado.prtg_sensor_objid ?? '—'}</KeyValue>
+          <KeyValue label="Nodo / POP">{c.nodo_pop}</KeyValue>
+        </dl>
+        {data.estado.estado_prtg_text ? (
+          <p className="mt-3 truncate text-[12px] text-slate-500 dark:text-slate-400" title={data.estado.estado_prtg_text}>
+            {data.estado.estado_prtg_text}
+          </p>
+        ) : null}
+      </Panel>
+
+      {c.ip_publica || c.ip_loopback || c.capacidad_mbps ? (
+        <Panel title="Red">
+          <dl className="grid grid-cols-3 gap-3">
+            {c.ip_publica ? <KeyValue label="IP pública">{c.ip_publica}</KeyValue> : null}
+            {c.ip_loopback ? <KeyValue label="Loopback">{c.ip_loopback}</KeyValue> : null}
+            {c.capacidad_mbps ? <KeyValue label="Capacidad">{`${c.capacidad_mbps} Mbps`}</KeyValue> : null}
+          </dl>
+        </Panel>
+      ) : null}
+
+      <Panel title="Tracking General" icon={<ClipboardList className="h-4 w-4 text-slate-500" aria-hidden />}>
+        {data.active_tracking ? (
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0">
+              <p className="truncate text-[13px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                {data.active_tracking.report_ticket ?? data.active_tracking.ticket ?? `#${data.active_tracking.incident_number ?? data.active_tracking.id}`}
+              </p>
+              <p className="text-[12px] text-slate-500 dark:text-slate-400">
+                {data.active_tracking.status_label ?? data.active_tracking.status}
+                {data.active_tracking.opened_by_name ? ` · ${data.active_tracking.opened_by_name}` : ''}
+              </p>
+            </div>
+            <Link
+              to={`/tracking/${data.active_tracking.id}`}
+              onClick={onNavigate}
+              className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-blue-700 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300 dark:hover:bg-blue-950/40"
+            >
+              Ver Tracking <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+            </Link>
+          </div>
+        ) : (
+          <p className="text-[12px] text-slate-500 dark:text-slate-400">
+            Se abre automáticamente al guardar la primera gestión.
+          </p>
+        )}
+      </Panel>
+    </div>
+  )
+}
+
+function ContactsPanel({ contacts }: { contacts: IncidentDetail['contactos'] }) {
+  return (
+    <Panel title="Contactos del local" icon={<Phone className="h-4 w-4 text-slate-500" aria-hidden />}>
+      {contacts.length === 0 ? (
+        <p className="text-[13px] text-slate-500 dark:text-slate-400">Sin contactos registrados.</p>
+      ) : (
+        <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          {contacts.map((c, idx) => (
+            <li key={c.id} className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
+              <p className="truncate text-[13px] font-semibold text-slate-900 dark:text-slate-100">
+                {idx + 1}. {c.nombre ?? '—'}
+              </p>
+              <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">{c.cargo ?? 'Sin cargo'}</p>
+              {c.telefono ? (
+                <a
+                  href={`tel:${c.telefono}`}
+                  className="mt-0.5 inline-block text-[13px] font-medium text-blue-700 tabular-nums hover:underline dark:text-blue-300"
+                >
+                  {c.telefono}
+                </a>
+              ) : (
+                <p className="mt-0.5 text-[13px] text-slate-400">—</p>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
+  )
+}
+
+function RecentManagements({ managements }: { managements: NonNullable<IncidentDetail['managements']> }) {
+  if (managements.length === 0) {
+    return (
+      <p className="px-1 text-[12px] text-slate-500 dark:text-slate-400">Aún no hay gestiones registradas en esta caída.</p>
+    )
+  }
+  return (
+    <Panel title={`Gestiones anteriores (${managements.length})`}>
+      <ul className="space-y-2">
+        {managements.slice(0, 3).map((m) => (
+          <li key={m.id} className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] dark:border-slate-700">
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="font-semibold text-slate-500 tabular-nums">{formatDateTime(m.created_at)}</span>
+              <ClassificationBadge classification={m.classification} label={m.classification_label} colorKey={m.color_key} />
+              {m.scope ? <span className="font-semibold text-slate-600 dark:text-slate-300">{m.scope}</span> : null}
+              {m.created_by_name ? <span className="text-slate-500">· {m.created_by_name}</span> : null}
+            </div>
+            {m.detail ? <p className="mt-1 text-slate-700 dark:text-slate-300">{m.detail}</p> : null}
+            {m.observation ? <p className="text-slate-500 dark:text-slate-400">{m.observation}</p> : null}
+          </li>
+        ))}
+      </ul>
+      {managements.length > 3 ? (
+        <p className="mt-2 text-[11px] text-slate-500">Las demás gestiones están en la pestaña Historial.</p>
+      ) : null}
+    </Panel>
+  )
+}
+
+function HistoryTab({
+  data,
+  incidentId,
+  onNavigate,
+}: {
+  data: IncidentDetail
+  incidentId: number
+  onNavigate: () => void
+}) {
+  const [visible, setVisible] = useState(TIMELINE_PAGE)
+  const events = useMemo(() => data.timeline ?? [], [data.timeline])
+  const previous = data.historial.filter((h) => !h.es_actual).slice(0, 5)
+
+  return (
+    <div className="space-y-4">
+      <Panel
+        title="Línea de tiempo"
+        action={
+          <Link
+            to={incidentCaseFilePath(incidentId)}
+            onClick={onNavigate}
+            className="inline-flex items-center gap-1 text-[12px] font-semibold text-blue-700 hover:underline focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
+          >
+            Expediente completo <ExternalLink className="h-3.5 w-3.5" aria-hidden />
+          </Link>
+        }
+      >
+        {events.length === 0 ? (
+          <p className="text-[13px] text-slate-500 dark:text-slate-400">Sin eventos registrados.</p>
+        ) : (
+          <ol className="relative space-y-3 border-l border-slate-200 pl-4 dark:border-slate-700">
+            {events.slice(0, visible).map((e) => (
+              <li key={e.id} className="relative">
+                <span className="absolute top-1.5 -left-[21px] h-2 w-2 rounded-full bg-slate-400 ring-4 ring-white dark:bg-slate-500 dark:ring-slate-900" />
+                <div className="flex flex-wrap items-baseline gap-x-2 text-[12px]">
+                  <time className="font-semibold text-slate-500 tabular-nums">{formatDateTime(e.at)}</time>
+                  <span className="font-semibold text-slate-900 dark:text-slate-100">{e.title}</span>
+                  {e.actor ? <span className="text-slate-500">· {e.actor}</span> : null}
+                </div>
+                {e.detail ? <p className="mt-0.5 text-[12px] text-slate-600 dark:text-slate-300">{e.detail}</p> : null}
+              </li>
+            ))}
+          </ol>
+        )}
+        {events.length > visible ? (
+          <Button size="sm" variant="ghost" className="mt-3" onClick={() => setVisible((v) => v + TIMELINE_PAGE)}>
+            Ver {Math.min(TIMELINE_PAGE, events.length - visible)} más
+          </Button>
+        ) : null}
+      </Panel>
+
+      <Panel title={`Caídas anteriores (${data.antecedentes.incidencias_registradas})`}>
+        {previous.length === 0 ? (
+          <p className="text-[13px] text-slate-500 dark:text-slate-400">No hay caídas anteriores para este CID.</p>
+        ) : (
+          <ul className="divide-y divide-slate-100 text-[12px] dark:divide-slate-800">
+            {previous.map((h) => (
+              <li key={h.id} className="flex items-center justify-between gap-3 py-1.5">
+                <span className="tabular-nums text-slate-700 dark:text-slate-300">{formatDateTime(h.started_at)}</span>
+                <span className="text-slate-500">{h.duracion ?? '—'}</span>
+                <Link
+                  to={incidentCaseFilePath(h.id)}
+                  onClick={onNavigate}
+                  className="font-semibold text-blue-700 hover:underline dark:text-blue-300"
+                >
+                  Ver
+                </Link>
+              </li>
+            ))}
+          </ul>
+        )}
+        {data.colegio.school_id ? (
+          <Link
+            to={`/history/schools/${data.colegio.school_id}`}
+            onClick={onNavigate}
+            className="mt-2 inline-block text-[12px] font-semibold text-blue-700 hover:underline dark:text-blue-300"
+          >
+            Historial completo del colegio
+          </Link>
+        ) : null}
+      </Panel>
     </div>
   )
 }

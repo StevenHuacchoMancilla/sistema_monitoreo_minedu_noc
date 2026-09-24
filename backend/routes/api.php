@@ -40,6 +40,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/history/schools', [SchoolHistoryController::class, 'index']);
     Route::get('/history/schools/{school}', [SchoolHistoryController::class, 'show']);
     Route::get('/history/schools/{school}/incidents', [SchoolHistoryController::class, 'incidents']);
+    Route::get('/history/incidents/{incident}', [SchoolHistoryController::class, 'incidentCaseFile']);
 
     Route::get('/schools', [SchoolController::class, 'index']);
     Route::get('/schools/{school}', [SchoolController::class, 'show']);

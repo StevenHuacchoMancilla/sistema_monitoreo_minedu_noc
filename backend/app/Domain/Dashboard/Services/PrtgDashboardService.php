@@ -60,7 +60,7 @@ class PrtgDashboardService
         $enGestion = Incident::query()->active()->whereIn('followup_status', FollowupStatus::managingValues())->count();
         $recoveredToday = Incident::query()
             ->whereNotNull('recovered_at')
-            ->whereDate('recovered_at', today())
+            ->whereBetween('recovered_at', [\App\Support\OperationalTime::dayStart(), \App\Support\OperationalTime::dayEnd()])
             ->count();
         $pendingReviews = Incident::query()
             ->whereNotNull('recovered_at')
@@ -372,7 +372,7 @@ class PrtgDashboardService
 
                 return [
                     'at' => $run->finished_at?->toIso8601String(),
-                    'label' => $run->finished_at?->timezone(config('app.timezone'))->format('H:i') ?? '',
+                    'label' => \App\Support\OperationalTime::format($run->finished_at, 'H:i') ?? '',
                     'operational' => $operativos,
                     'down' => $downs,
                     'availability_pct' => round(($operativos / $base) * 100, 1),

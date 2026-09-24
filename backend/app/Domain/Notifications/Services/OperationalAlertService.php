@@ -106,7 +106,7 @@ class OperationalAlertService
             'field_dispatch_status' => $active?->status instanceof FieldDispatchStatus
                 ? $active->status->value
                 : ($active?->status),
-            'href' => '/recoveries?review_status=PENDING_REVIEW&focus='.$incident->id,
+            'href' => '/history/incidents/'.$incident->id,
         ];
     }
 }

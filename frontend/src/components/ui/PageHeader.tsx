@@ -18,21 +18,25 @@ export function PageHeader({
   breadcrumb?: ReactNode
 }) {
   return (
-    <header className="mb-6 flex min-w-0 flex-col gap-4 border-b border-slate-200 pb-5 lg:flex-row lg:items-start lg:justify-between">
+    <header className="mb-5 flex min-w-0 flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-start lg:justify-between dark:border-slate-800">
       <div className="min-w-0">
         {breadcrumb ? <div className="mb-2">{breadcrumb}</div> : null}
         <div className="flex items-start gap-3">
           {icon ? (
-            <div className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 sm:h-11 sm:w-11">
+            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 sm:h-10 sm:w-10 dark:bg-blue-950/50 dark:text-blue-300">
               {icon}
             </div>
           ) : null}
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">{title}</h1>
+              <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl dark:text-slate-50">
+                {title}
+              </h1>
               {badges}
             </div>
-            {description ? <p className="mt-1 max-w-2xl text-sm font-medium text-slate-500">{description}</p> : null}
+            {description ? (
+              <p className="mt-0.5 max-w-2xl text-[13px] font-medium text-slate-500 dark:text-slate-400">{description}</p>
+            ) : null}
           </div>
         </div>
       </div>

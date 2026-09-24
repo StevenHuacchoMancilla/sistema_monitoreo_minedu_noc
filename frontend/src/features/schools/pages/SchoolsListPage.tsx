@@ -26,7 +26,7 @@ import { MasterSourceBadge, PageHeader } from '../../../components/ui/PageHeader
 import { PaginationBar } from '../../../components/ui/PaginationBar'
 import { Badge } from '../../../components/ui/SoftBadge'
 import { TableSkeleton } from '../../../components/ui/TableSkeleton'
-import { DataTableFrame } from '../../../components/ui/DataTableFrame'
+import { DataTableContainer, Truncate, tableClassName, tdClassName, thClassName, theadClassName, trClassName } from '../../../components/ui/DataTableFrame'
 import { endpoints } from '../../../api/endpoints'
 import { techBadgeClass } from '../../../lib/uiTokens'
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
@@ -223,8 +223,8 @@ export function SchoolsListPage() {
         </FilterCard>
 
         {showCreate ? (
-          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
-            <h2 className="mb-4 text-lg font-semibold text-slate-900">Crear local educativo</h2>
+          <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-50">Crear local educativo</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
               {(
                 [
@@ -270,7 +270,7 @@ export function SchoolsListPage() {
         {list.isLoading ? <TableSkeleton rows={10} cols={8} /> : null}
 
         {list.isError ? (
-          <section className="rounded-xl border border-red-200 bg-red-50 p-6 text-center">
+          <section className="rounded-xl border border-red-200 bg-red-50 p-6 text-center dark:border-red-900 dark:bg-red-950/40">
             <TriangleAlert className="mx-auto h-8 w-8 text-red-600" />
             <p className="mt-2 text-sm font-semibold text-red-800">No pudimos cargar los locales educativos.</p>
             <Button type="button" className="mt-3" onClick={() => void list.refetch()}>
@@ -280,9 +280,9 @@ export function SchoolsListPage() {
         ) : null}
 
         {!list.isLoading && !list.isError && rows.length === 0 ? (
-          <section className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm">
+          <section className="rounded-xl border border-slate-200 bg-white px-6 py-12 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <SearchX className="mx-auto h-10 w-10 text-slate-400" />
-            <p className="mt-3 text-base font-semibold text-slate-900">No se encontraron locales educativos.</p>
+            <p className="mt-3 text-base font-semibold text-slate-900 dark:text-slate-50">No se encontraron locales educativos.</p>
             <p className="mt-1 text-sm text-slate-500">Prueba modificando los filtros de búsqueda.</p>
             <Button type="button" className="mt-4" onClick={clearFilters}>
               Limpiar filtros
@@ -291,10 +291,10 @@ export function SchoolsListPage() {
         ) : null}
 
         {!list.isLoading && rows.length > 0 && meta ? (
-          <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5 sm:py-4">
+          <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5 sm:py-4 dark:border-slate-800">
               <div className="min-w-0">
-                <h2 className="text-lg font-semibold text-slate-900">Locales educativos</h2>
+                <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Locales educativos</h2>
                 <p className="text-sm font-medium text-slate-500">
                   {meta.total.toLocaleString('es-PE')} registros
                   <span className="ml-2 hidden text-xs text-slate-400 sm:inline">
@@ -304,55 +304,49 @@ export function SchoolsListPage() {
               </div>
             </div>
 
-            <DataTableFrame>
-              <table className="w-full min-w-[1160px] border-collapse text-left text-[13px] leading-snug">
-                <thead className="sticky top-0 z-10 border-b border-slate-200 bg-slate-50 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+            <DataTableContainer>
+              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 780 }}>
+                <thead className={theadClassName}>
                   <tr>
-                    <th className="whitespace-nowrap px-3 py-2.5">N°</th>
-                    <th className="whitespace-nowrap px-3 py-2.5">CID</th>
-                    <th className="whitespace-nowrap px-3 py-2.5">Cód. local</th>
-                    <th className="whitespace-nowrap px-3 py-2.5">Modular</th>
-                    <th className="min-w-[160px] px-3 py-2.5">Local educativo</th>
-                    <th className="whitespace-nowrap px-3 py-2.5">Provincia</th>
-                    <th className="whitespace-nowrap px-3 py-2.5">Distrito</th>
-                    <th className="whitespace-nowrap px-3 py-2.5">Tecnología</th>
-                    <th className="whitespace-nowrap px-3 py-2.5">Capacidad</th>
-                    <th className="whitespace-nowrap px-3 py-2.5">Nodo/POP</th>
-                    <th className="sticky right-[7.25rem] z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)]">
+                    <th className={`${thClassName} w-[3.5rem]`}>N°</th>
+                    <th className={`${thClassName} w-[5.5rem]`}>CID</th>
+                    <th className={`${thClassName} hidden md:table-cell w-[6rem]`}>Cód. local</th>
+                    <th className={`${thClassName} hidden xl:table-cell w-[6rem]`}>Modular</th>
+                    <th className={thClassName}>Local educativo</th>
+                    <th className={`${thClassName} hidden lg:table-cell w-[8rem]`}>Provincia</th>
+                    <th className={`${thClassName} hidden xl:table-cell w-[8rem]`}>Distrito</th>
+                    <th className={`${thClassName} hidden md:table-cell w-[6.5rem]`}>Tecnología</th>
+                    <th className={`${thClassName} hidden xl:table-cell w-[5.5rem]`}>Capacidad</th>
+                    <th className={`${thClassName} hidden xl:table-cell w-[7rem]`}>Nodo/POP</th>
+                    <th className={`${thClassName} sticky right-[7.25rem] z-20 w-[6.5rem] bg-slate-50 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}>
                       Estado
                     </th>
-                    <th className="sticky right-0 z-20 whitespace-nowrap bg-slate-50 px-3 py-2.5 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.18)]">
+                    <th className={`${thClassName} sticky right-0 z-20 w-[7.25rem] bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.18)] dark:bg-slate-900`}>
                       Acciones
                     </th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <tr
-                      key={row.id}
-                      className="group h-12 border-b border-slate-100 transition-colors hover:bg-slate-50/80"
-                    >
-                      <td className="whitespace-nowrap px-3 py-2.5 font-medium tabular-nums text-slate-500">
-                        {row.n ?? '—'}
-                      </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] font-semibold tabular-nums text-slate-900">
+                    <tr key={row.id} className={`${trClassName} group h-12`}>
+                      <td className={`${tdClassName} font-medium tabular-nums text-slate-500`}>{row.n ?? '—'}</td>
+                      <td className={`${tdClassName} font-mono text-xs font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
                         {row.cid ?? '—'}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-slate-600">
+                      <td className={`${tdClassName} hidden md:table-cell font-mono text-xs text-slate-600`}>
                         {row.codigo_local ?? '—'}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 font-mono text-[12px] text-slate-600">
+                      <td className={`${tdClassName} hidden xl:table-cell font-mono text-xs text-slate-600`}>
                         {row.codigo_modular ?? '—'}
                       </td>
-                      <td
-                        className="max-w-[200px] truncate px-3 py-2.5 font-medium text-slate-900"
-                        title={row.local_educativo ?? ''}
-                      >
-                        {row.local_educativo}
+                      <td className={tdClassName}>
+                        <Truncate title={row.local_educativo} className="font-medium text-slate-900 dark:text-slate-100">
+                          {row.local_educativo}
+                        </Truncate>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">
-                        <div className="flex flex-col gap-1">
-                          <span>{row.provincia ?? '—'}</span>
+                      <td className={`${tdClassName} hidden lg:table-cell`}>
+                        <div className="flex min-w-0 flex-col gap-1">
+                          <Truncate title={row.provincia}>{row.provincia ?? '—'}</Truncate>
                           <LocationMismatchBadge
                             compact
                             info={{
@@ -368,8 +362,8 @@ export function SchoolsListPage() {
                           />
                         </div>
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 text-slate-700">{row.distrito ?? '—'}</td>
-                      <td className="whitespace-nowrap px-3 py-2.5">
+                      <td className={`${tdClassName} hidden xl:table-cell`}>{row.distrito ?? '—'}</td>
+                      <td className={`${tdClassName} hidden md:table-cell`}>
                         {row.tecnologia ? (
                           <span className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${techBadgeClass(row.tecnologia)}`}>
                             {row.tecnologia}
@@ -378,25 +372,22 @@ export function SchoolsListPage() {
                           '—'
                         )}
                       </td>
-                      <td className="whitespace-nowrap px-3 py-2.5 tabular-nums text-slate-700">
+                      <td className={`${tdClassName} hidden xl:table-cell tabular-nums`}>
                         {formatCapacity(row.capacidad_mbps)}
                       </td>
-                      <td
-                        className="max-w-[120px] truncate whitespace-nowrap px-3 py-2.5 text-slate-700"
-                        title={row.nodo_pop ?? ''}
-                      >
-                        <span className="inline-flex max-w-full items-center gap-1">
+                      <td className={`${tdClassName} hidden xl:table-cell`}>
+                        <span className="inline-flex max-w-full items-center gap-1" title={row.nodo_pop ?? undefined}>
                           {row.nodo_pop ? <Server className="h-3.5 w-3.5 shrink-0 text-slate-400" aria-hidden /> : null}
-                          <span className="truncate">{row.nodo_pop ?? '—'}</span>
+                          <Truncate title={row.nodo_pop}>{row.nodo_pop ?? '—'}</Truncate>
                         </span>
                       </td>
-                      <td className="sticky right-[7.25rem] z-10 whitespace-nowrap bg-white px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.08)] group-hover:bg-slate-50">
+                      <td className="sticky right-[7.25rem] z-10 bg-white px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.08)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
                         <Badge tone={row.active ? 'success' : 'neutral'}>
                           {row.active ? <CircleCheck className="h-3 w-3" /> : <CircleX className="h-3 w-3" />}
                           {row.active ? 'Activo' : 'Inactivo'}
                         </Badge>
                       </td>
-                      <td className="sticky right-0 z-10 whitespace-nowrap bg-white px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.14)] group-hover:bg-slate-50">
+                      <td className="sticky right-0 z-10 bg-white px-3 py-2.5 shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.14)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
                         <div className="flex items-center justify-end gap-1">
                           <IconButton
                             label="Ver historial operativo"
@@ -408,7 +399,7 @@ export function SchoolsListPage() {
                             <Eye className="h-4 w-4" />
                           </IconButton>
                           <Link to={`/schools/${row.id}`} aria-label="Editar">
-                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900">
+                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
                               <Pencil className="h-4 w-4" />
                             </span>
                           </Link>
@@ -418,7 +409,7 @@ export function SchoolsListPage() {
                   ))}
                 </tbody>
               </table>
-            </DataTableFrame>
+            </DataTableContainer>
 
             <PaginationBar
               page={meta.current_page}

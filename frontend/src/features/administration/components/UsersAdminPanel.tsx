@@ -7,7 +7,15 @@ import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/SoftBadge'
 import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, SearchField, Select } from '../../../components/ui/FormControls'
-import { DataTableFrame } from '../../../components/ui/DataTableFrame'
+import {
+  DataTableContainer,
+  tableClassName,
+  tdClassName,
+  thClassName,
+  theadClassName,
+  trClassName,
+} from '../../../components/ui/DataTableFrame'
+import { inputClassName } from '../../../lib/uiTokens'
 import { PaginationBar } from '../../../components/ui/PaginationBar'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
 import {
@@ -19,6 +27,7 @@ import {
   updateUser,
 } from '../api/usersApi'
 import type { ManagedUser, ManagedUserRole } from '../types/users'
+import { formatDateTime } from '../../../lib/datetime'
 
 const ROLE_OPTIONS: Array<{ value: ManagedUserRole; label: string }> = [
   { value: 'ADMIN', label: 'Administrador' },
@@ -128,11 +137,11 @@ export function UsersAdminPanel() {
     <div className="space-y-4">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900">
-            <Shield className="h-5 w-5 text-violet-700" aria-hidden />
+          <h2 className="inline-flex items-center gap-2 text-lg font-semibold text-slate-900 dark:text-slate-50">
+            <Shield className="h-5 w-5 text-violet-700 dark:text-violet-400" aria-hidden />
             Usuarios
           </h2>
-          <p className="mt-1 text-sm text-slate-500">
+          <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">
             Alta, roles, activación y reset de contraseña · solo administradores.
           </p>
         </div>
@@ -151,7 +160,7 @@ export function UsersAdminPanel() {
         </Button>
       </div>
 
-      {banner ? <p className="text-sm font-semibold text-emerald-700">{banner}</p> : null}
+      {banner ? <p className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">{banner}</p> : null}
 
       <FilterCard>
         <SearchField
@@ -204,39 +213,39 @@ export function UsersAdminPanel() {
           <EmptyState title="Sin usuarios" description="Ajusta filtros o crea el primero." />
         ) : (
           <>
-            <DataTableFrame>
-              <table className="min-w-[900px] w-full text-left text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+            <DataTableContainer>
+              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 720 }}>
+                <thead className={theadClassName}>
                   <tr>
-                    <th className="px-3 py-2.5">Nombre</th>
-                    <th className="px-3 py-2.5">Email</th>
-                    <th className="px-3 py-2.5">Rol</th>
-                    <th className="px-3 py-2.5">Estado</th>
-                    <th className="px-3 py-2.5">Último acceso</th>
-                    <th className="px-3 py-2.5">Acciones</th>
+                    <th className={thClassName}>Nombre</th>
+                    <th className={thClassName}>Email</th>
+                    <th className={`${thClassName} hidden md:table-cell w-[8rem]`}>Rol</th>
+                    <th className={`${thClassName} w-[6rem]`}>Estado</th>
+                    <th className={`${thClassName} hidden lg:table-cell w-[9rem]`}>Último acceso</th>
+                    <th className={`${thClassName} w-[14rem]`}>Acciones</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {rows.map((row) => {
                     const isSelf = me?.id === row.id
                     return (
-                      <tr key={row.id} className="bg-white hover:bg-slate-50/80">
-                        <td className="px-3 py-2.5 font-semibold text-slate-900">{row.name}</td>
-                        <td className="px-3 py-2.5 text-slate-700">{row.email}</td>
-                        <td className="px-3 py-2.5">
+                      <tr key={row.id} className={trClassName}>
+                        <td className={`${tdClassName} font-semibold text-slate-900 dark:text-slate-100`}>{row.name}</td>
+                        <td className={tdClassName}>{row.email}</td>
+                        <td className={`${tdClassName} hidden md:table-cell`}>
                           <Badge tone={roleTone(row.role)}>{row.role_label || row.role || '—'}</Badge>
                         </td>
-                        <td className="px-3 py-2.5">
+                        <td className={tdClassName}>
                           <Badge tone={row.active ? 'success' : 'neutral'}>
                             {row.active ? 'Activo' : 'Inactivo'}
                           </Badge>
                         </td>
-                        <td className="px-3 py-2.5 whitespace-nowrap text-slate-600">
+                        <td className={`${tdClassName} hidden lg:table-cell whitespace-nowrap text-slate-500`}>
                           {row.last_login_at
-                            ? new Date(row.last_login_at).toLocaleString('es-PE')
+                            ? formatDateTime(row.last_login_at)
                             : '—'}
                         </td>
-                        <td className="px-3 py-2.5">
+                        <td className={tdClassName}>
                           <div className="flex flex-wrap gap-1.5">
                             <Button
                               type="button"
@@ -290,7 +299,7 @@ export function UsersAdminPanel() {
                   })}
                 </tbody>
               </table>
-            </DataTableFrame>
+            </DataTableContainer>
             {meta ? (
               <PaginationBar
                 page={meta.current_page}
@@ -407,7 +416,7 @@ function UserFormModal({
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px]">
       <button type="button" className="absolute inset-0 cursor-default" aria-label="Cerrar" onClick={onClose} />
       <form
-        className="relative z-10 mt-8 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+        className="relative z-10 mt-8 w-full max-w-lg rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900"
         onSubmit={(e) => {
           e.preventDefault()
           setLocalError(null)
@@ -424,13 +433,13 @@ function UserFormModal({
           }).catch(() => undefined)
         }}
       >
-        <h3 className="text-lg font-semibold text-slate-900">{title}</h3>
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50">{title}</h3>
         <div className="mt-4 grid gap-3">
           <FormField label="Nombre">
             <input
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+              className={`${inputClassName} focus:border-violet-500 focus:ring-violet-500/20 dark:focus:border-violet-400 dark:focus:ring-violet-400/20`}
               required
             />
           </FormField>
@@ -439,7 +448,7 @@ function UserFormModal({
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+              className={`${inputClassName} focus:border-violet-500 focus:ring-violet-500/20 dark:focus:border-violet-400 dark:focus:ring-violet-400/20`}
               required
             />
           </FormField>
@@ -459,7 +468,7 @@ function UserFormModal({
                   type="password"
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+                  className={`${inputClassName} focus:border-violet-500 focus:ring-violet-500/20 dark:focus:border-violet-400 dark:focus:ring-violet-400/20`}
                   required
                   minLength={8}
                 />
@@ -469,7 +478,7 @@ function UserFormModal({
                   type="password"
                   value={passwordConfirmation}
                   onChange={(e) => setPasswordConfirmation(e.target.value)}
-                  className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+                  className={`${inputClassName} focus:border-violet-500 focus:ring-violet-500/20 dark:focus:border-violet-400 dark:focus:ring-violet-400/20`}
                   required
                   minLength={8}
                 />
@@ -521,7 +530,7 @@ function ResetPasswordModal({
     <div className="fixed inset-0 z-50 flex items-start justify-center overflow-y-auto bg-black/40 p-4 backdrop-blur-[2px]">
       <button type="button" className="absolute inset-0 cursor-default" aria-label="Cerrar" onClick={onClose} />
       <form
-        className="relative z-10 mt-8 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl"
+        className="relative z-10 mt-8 w-full max-w-md rounded-2xl border border-slate-200 bg-white p-5 shadow-xl dark:border-slate-700 dark:bg-slate-900"
         onSubmit={(e) => {
           e.preventDefault()
           setLocalError(null)
@@ -532,15 +541,15 @@ function ResetPasswordModal({
           void onSubmit(password, passwordConfirmation).catch(() => undefined)
         }}
       >
-        <h3 className="text-lg font-semibold text-slate-900">Restablecer contraseña</h3>
-        <p className="mt-1 text-sm text-slate-500">{user.name} · {user.email}</p>
+        <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-50">Restablecer contraseña</h3>
+        <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{user.name} · {user.email}</p>
         <div className="mt-4 grid gap-3">
           <FormField label="Nueva contraseña">
             <input
               type="password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+              className={`${inputClassName} focus:border-violet-500 focus:ring-violet-500/20 dark:focus:border-violet-400 dark:focus:ring-violet-400/20`}
               required
               minLength={8}
             />
@@ -550,7 +559,7 @@ function ResetPasswordModal({
               type="password"
               value={passwordConfirmation}
               onChange={(e) => setPasswordConfirmation(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 px-3 text-sm outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+              className={`${inputClassName} focus:border-violet-500 focus:ring-violet-500/20 dark:focus:border-violet-400 dark:focus:ring-violet-400/20`}
               required
               minLength={8}
             />

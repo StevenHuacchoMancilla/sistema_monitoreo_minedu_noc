@@ -34,6 +34,8 @@ class RecoveredIncidentController extends Controller
             'review_status' => ['nullable', 'string', Rule::in(RecoveryReviewStatus::values())],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', Rule::in([10, 25, 50, 100])],
+            'sort' => ['nullable', Rule::in(['recovered_at', 'started_at'])],
+            'direction' => ['nullable', Rule::in(['asc', 'desc'])],
         ]);
 
         return response()->json($this->recoveries->list($filters));

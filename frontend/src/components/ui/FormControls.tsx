@@ -7,15 +7,20 @@ export function FormField({
   htmlFor,
   children,
   className = '',
+  action,
 }: {
   label: string
   htmlFor?: string
   children: ReactNode
   className?: string
+  action?: ReactNode
 }) {
   return (
     <label htmlFor={htmlFor} className={`block ${className}`}>
-      <span className={labelClassName}>{label}</span>
+      <span className="mb-1.5 flex items-center justify-between gap-2">
+        <span className={labelClassName.replace(/^mb-1\.5\s+/, '')}>{label}</span>
+        {action}
+      </span>
       {children}
     </label>
   )

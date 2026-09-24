@@ -3,6 +3,7 @@
 namespace App\Domain\Monitoring\PRTG\Services;
 
 use App\Domain\Incidents\Services\IncidentService;
+use App\Domain\Monitoring\PRTG\Support\PrtgTimestamps;
 use App\Enums\CidStatus;
 use App\Enums\MonitoringStatus;
 use App\Enums\SyncIssueSeverity;
@@ -116,7 +117,7 @@ class PrtgSyncService
         ]);
         $sensors = $this->prtg->fetchTable('sensors', [
             'id' => $root['objid'],
-            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,type,parentid,message',
+            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,uptimesince,lastup,type,parentid,message',
             'count' => $tableCount,
         ]);
 
@@ -217,7 +218,7 @@ class PrtgSyncService
         ]);
         $sensors = $this->prtg->fetchTable('sensors', [
             'id' => $root['objid'],
-            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,type,parentid,message',
+            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,uptimesince,lastup,type,parentid,message',
             'count' => $tableCount,
         ]);
 
@@ -428,7 +429,7 @@ class PrtgSyncService
         ]);
         $sensors = $this->prtg->fetchTable('sensors', [
             'id' => $root['objid'],
-            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,type,parentid,message',
+            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,uptimesince,lastup,type,parentid,message',
             'count' => $tableCount,
         ]);
 
@@ -559,7 +560,7 @@ class PrtgSyncService
 
                     if ($sensorModel) {
                         $previous = $previousBySensor[(string) $ping['objid']] ?? null;
-                        $this->handleStatusTransition($assignment, $sensorModel, $previous);
+                        $this->handleStatusTransition($assignment, $sensorModel, $previous, $ping, $run, $cid);
                         if ($sensorModel->normalized_status === MonitoringStatus::Caido) {
                             $summary['downs']++;
                         } elseif ($sensorModel->normalized_status === MonitoringStatus::Operativo) {
@@ -980,7 +981,7 @@ class PrtgSyncService
             'normalized_status' => $normalized,
             'last_value' => $sensorRow['lastvalue'] ?? null,
             'unit' => null,
-            'last_check' => now(),
+            'last_check' => PrtgTimestamps::checkAt($sensorRow, now())['at'] ?? now(),
             'down_since' => $sensorRow['downtimesince'] ?? null,
             'last_synced_at' => now(),
             'metadata' => [
@@ -1009,24 +1010,42 @@ class PrtgSyncService
         return ['created' => 1, 'updated' => 0];
     }
 
+    /**
+     * @param  array<string, mixed>  $pingRow
+     */
     private function handleStatusTransition(
         NetworkAssignment $assignment,
         PrtgSensor $sensor,
-        ?MonitoringStatus $previous
+        ?MonitoringStatus $previous,
+        array $pingRow,
+        SyncRun $run,
+        string $cid,
     ): void {
         $current = $sensor->normalized_status;
+        $codigoLocal = $assignment->school?->codigo_local;
+        $onAnomaly = function (string $code, string $message, array $context) use ($run, $cid, $codigoLocal): void {
+            $this->issue($run, SyncIssueSeverity::Warning, $code, $cid, $codigoLocal, $message, $context);
+        };
 
-        if ($previous === null) {
-            if ($current === MonitoringStatus::Caido) {
-                $this->incidentService->ensureOpen($assignment, $sensor);
-            }
-
-            return;
+        $field = $current === MonitoringStatus::Caido ? 'downtimesince' : 'uptimesince';
+        $since = PrtgTimestamps::stateSince($pingRow, $field, now());
+        if ($since['future']) {
+            $onAnomaly('PRTG_FUTURE_TIMESTAMP', "{$field} PRTG en el futuro; se usa la hora de detección.", [
+                'field' => $field,
+                'raw' => $since['raw'],
+                'lastcheck_raw' => $pingRow['lastcheck_raw'] ?? null,
+                'parsed' => $since['parsed'],
+                'now' => now()->toIso8601String(),
+                'timezone' => config('app.timezone'),
+            ]);
         }
+        // Evidencia + hora operativa: lastcheck − downtimesince/uptimesince (Apps Script LLEE).
+        // Si INCIDENT_USE_SYSTEM_CLOCK=true, IncidentService ignora esto para started_at/recovered_at.
+        $stateSince = $since['at'];
 
-        if ($previous === $current) {
+        if ($previous === null || $previous === $current) {
             if ($current === MonitoringStatus::Caido) {
-                $this->incidentService->ensureOpen($assignment, $sensor);
+                $this->incidentService->ensureOpen($assignment, $sensor, $stateSince, $onAnomaly);
             }
 
             return;
@@ -1047,7 +1066,7 @@ class PrtgSyncService
         ]);
 
         if ($sensor->name === 'Ping' || strcasecmp((string) $sensor->name, 'Ping') === 0) {
-            $this->incidentService->applyPingTransition($assignment, $sensor, $previous, $current);
+            $this->incidentService->applyPingTransition($assignment, $sensor, $previous, $current, $stateSince, $onAnomaly);
         }
     }
 

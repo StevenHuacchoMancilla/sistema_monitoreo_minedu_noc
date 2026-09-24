@@ -19,6 +19,8 @@ class Incident extends Model
         return [
             'started_at' => 'datetime',
             'recovered_at' => 'datetime',
+            'prtg_down_started_at' => 'datetime',
+            'prtg_up_at' => 'datetime',
             'last_contact_at' => 'datetime',
             'followup_status' => FollowupStatus::class,
             'management_classification' => ManagementClassification::class,

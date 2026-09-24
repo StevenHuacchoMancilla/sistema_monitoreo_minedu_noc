@@ -11,6 +11,9 @@ function appendTranscript(current: string, chunk: string): string {
   return `${current}${needsSpace ? ' ' : ''}${next}`
 }
 
+const textareaClass =
+  'w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100 dark:placeholder:text-slate-500'
+
 export function TrackingUpdateComposer({
   disabled,
   submitting,
@@ -48,10 +51,13 @@ export function TrackingUpdateComposer({
   }
 
   return (
-    <form onSubmit={onForm} className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4">
+    <form
+      onSubmit={onForm}
+      className="rounded-xl border border-slate-200 bg-slate-50/80 p-3 sm:p-4 dark:border-slate-800 dark:bg-slate-900/60"
+    >
       <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-        <div className="flex items-center gap-2 text-sm font-semibold text-slate-800">
-          <MessageSquareText className="h-4 w-4 text-violet-600" aria-hidden />
+        <div className="flex items-center gap-2 text-sm font-semibold text-slate-800 dark:text-slate-100">
+          <MessageSquareText className="h-4 w-4 text-violet-600 dark:text-violet-400" aria-hidden />
           Nuevo seguimiento
         </div>
         <VoiceDictationButton
@@ -66,11 +72,11 @@ export function TrackingUpdateComposer({
         disabled={disabled || submitting}
         rows={3}
         placeholder="Registrar diagnóstico, contacto, intervención o avance…"
-        className="w-full resize-y rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none placeholder:text-slate-400 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 disabled:opacity-60"
+        className={textareaClass}
       />
-      {error ? <p className="mt-2 text-sm text-red-600">{error}</p> : null}
+      {error ? <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p> : null}
       <div className="mt-3 flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs text-slate-500">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
           {disabled
             ? 'Tracking cerrado: no se pueden agregar seguimientos.'
             : 'Revisa el texto dictado antes de guardar · Ctrl/Cmd + Enter'}

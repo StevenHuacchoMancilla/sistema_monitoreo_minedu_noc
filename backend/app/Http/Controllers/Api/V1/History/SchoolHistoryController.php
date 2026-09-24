@@ -2,11 +2,13 @@
 
 namespace App\Http\Controllers\Api\V1\History;
 
+use App\Domain\Incidents\Services\IncidentCaseFileService;
 use App\Domain\Incidents\Services\IncidentHistoryService;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Enums\MonitoringStatus;
 use App\Http\Controllers\Controller;
+use App\Models\Incident;
 use App\Models\School;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
@@ -60,5 +62,10 @@ class SchoolHistoryController extends Controller
                 'total' => $page->total(),
             ],
         ]);
+    }
+
+    public function incidentCaseFile(Incident $incident, IncidentCaseFileService $caseFile): JsonResponse
+    {
+        return response()->json($caseFile->build($incident));
     }
 }

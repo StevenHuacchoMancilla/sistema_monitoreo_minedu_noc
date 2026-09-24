@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tracking\Services;
 
+use App\Domain\Tracking\Support\TrackingTicketCodes;
 use App\Enums\AuditModule;
 use App\Enums\AuditSource;
 use App\Enums\DatePrecision;
@@ -19,10 +20,11 @@ class TrackingOpenService
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly TrackingDetailService $detail,
+        private readonly TrackingTicketCodes $tickets,
     ) {}
 
     /**
-     * Abre Tracking desde una incidencia PRTG (o reutiliza el activo).
+     * Abre Tracking desde una incidencia PRTG (o reutiliza el existente, abierto o cerrado).
      *
      * @return array{created: bool, data: array<string, mixed>}
      */
@@ -34,8 +36,9 @@ class TrackingOpenService
             ]);
         }
 
+        // 1 incidente → 1 Tracking (aunque esté cerrado).
         $existing = TrackingRecord::query()
-            ->openForIncident((int) $incident->id)
+            ->where('incident_id', (int) $incident->id)
             ->orderByDesc('id')
             ->first();
 
@@ -47,19 +50,15 @@ class TrackingOpenService
 
         $cid = trim((string) ($incident->networkAssignment?->cid ?? ''));
         $tss = $incident->school?->current_sequence;
-        $ticketResolved = $ticket !== null && trim($ticket) !== ''
-            ? trim($ticket)
-            : (trim((string) ($incident->glpi_ticket ?? '')) ?: null);
-
         $technical = $incident->recovered_at === null
             ? TrackingTechnicalStatus::Down
             : TrackingTechnicalStatus::Recovered;
 
         try {
             /** @var array{created: bool, tracking: TrackingRecord} $result */
-            $result = DB::transaction(function () use ($incident, $userId, $cid, $tss, $ticketResolved, $technical) {
+            $result = DB::transaction(function () use ($incident, $userId, $cid, $tss, $technical) {
                 $locked = TrackingRecord::query()
-                    ->openForIncident((int) $incident->id)
+                    ->where('incident_id', (int) $incident->id)
                     ->lockForUpdate()
                     ->first();
 
@@ -72,18 +71,28 @@ class TrackingOpenService
                     $nextNumber = 1;
                 }
 
+                $openedAt = now();
+                $identity = $this->mintUniqueIdentity(
+                    $tss !== null ? (string) $tss : '0',
+                    $cid !== '' ? $cid : '0',
+                    $openedAt,
+                );
+
                 $tracking = TrackingRecord::query()->create([
+                    'public_id' => $identity['public_id'],
                     'incident_number' => $nextNumber,
                     'incident_id' => $incident->id,
                     'school_id' => $incident->school_id,
                     'network_assignment_id' => $incident->network_assignment_id,
-                    'ticket' => $ticketResolved,
+                    'ticket' => $identity['report_ticket'],
+                    'case_code' => $identity['case_code'],
+                    'report_ticket' => $identity['report_ticket'],
                     'tss_snapshot' => $tss !== null ? (string) $tss : null,
                     'cid_snapshot' => $cid !== '' ? $cid : null,
                     'description' => $this->defaultDescription($cid),
                     'status' => TrackingStatus::Open,
                     'technical_status' => $technical,
-                    'opened_at' => now(),
+                    'opened_at' => $openedAt,
                     'opened_at_precision' => DatePrecision::DateTime,
                     'opened_by_user_id' => $userId,
                     'opened_by_legacy_name' => null,
@@ -97,6 +106,9 @@ class TrackingOpenService
                     [
                         'incident_id' => $incident->id,
                         'incident_number' => $tracking->incident_number,
+                        'public_id' => $tracking->public_id,
+                        'case_code' => $tracking->case_code,
+                        'report_ticket' => $tracking->report_ticket,
                         'school_id' => $tracking->school_id,
                         'network_assignment_id' => $tracking->network_assignment_id,
                         'tss_snapshot' => $tracking->tss_snapshot,
@@ -114,7 +126,7 @@ class TrackingOpenService
             });
         } catch (QueryException $e) {
             $race = TrackingRecord::query()
-                ->openForIncident((int) $incident->id)
+                ->where('incident_id', (int) $incident->id)
                 ->orderByDesc('id')
                 ->first();
 
@@ -126,6 +138,28 @@ class TrackingOpenService
         }
 
         return $this->payload($result['created'], $result['tracking']);
+    }
+
+    /**
+     * @return array{public_id: string, suffix: string, case_code: string, report_ticket: string}
+     */
+    private function mintUniqueIdentity(string $tss, string $cid, $openedAt): array
+    {
+        for ($i = 0; $i < 8; $i++) {
+            $identity = $this->tickets->mint($tss, $cid, $openedAt);
+            $exists = TrackingRecord::query()
+                ->where('public_id', $identity['public_id'])
+                ->orWhere('case_code', $identity['case_code'])
+                ->orWhere('report_ticket', $identity['report_ticket'])
+                ->exists();
+            if (! $exists) {
+                return $identity;
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'ticket' => ['No se pudo generar un ticket único. Reintenta.'],
+        ]);
     }
 
     /**

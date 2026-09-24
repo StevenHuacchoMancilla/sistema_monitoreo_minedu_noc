@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { useDebouncedValue } from '../../../lib/useDebouncedValue'
 import { Link } from 'react-router-dom'
 import {
   CircleCheck,
@@ -12,7 +13,16 @@ import { SectionCard } from '../../../components/ui/Card'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
 import { PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
 import { PageHeader } from '../../../components/ui/PageHeader'
-import { DataTableFrame } from '../../../components/ui/DataTableFrame'
+import {
+  DataTableContainer,
+  IsoDateTimeCell,
+  Truncate,
+  tableClassName,
+  tdClassName,
+  thClassName,
+  theadClassName,
+  trClassName,
+} from '../../../components/ui/DataTableFrame'
 import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, SearchField, Select } from '../../../components/ui/FormControls'
 import { MetricCard } from '../../../components/ui/MetricCard'
@@ -32,11 +42,14 @@ export function SchoolHistoryIndexPage() {
   const [perPage, setPerPage] = useState(25)
   const { prtg, cloudnet } = useManualSync()
 
+  const qDebounced = useDebouncedValue(q.trim())
+
   const history = useQuery({
-    queryKey: ['history', 'schools', q, provincia, distrito, tecnologia, currentStatus, page, perPage],
+    queryKey: ['history', 'schools', qDebounced, provincia, distrito, tecnologia, currentStatus, page, perPage],
+    placeholderData: keepPreviousData,
     queryFn: () =>
       fetchSchoolHistoryIndex({
-        q: q || undefined,
+        q: qDebounced || undefined,
         provincia: provincia || undefined,
         distrito: distrito || undefined,
         tecnologia: tecnologia || undefined,
@@ -180,50 +193,56 @@ export function SchoolHistoryIndexPage() {
         ) : null}
         {rows.length > 0 ? (
           <>
-            <DataTableFrame>
-              <table className="min-w-[1100px] w-full text-left text-sm">
-                <thead className="text-xs uppercase text-slate-500">
+            <DataTableContainer>
+              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 880 }}>
+                <thead className={theadClassName}>
                   <tr>
-                    <th className="px-2 py-2">CID</th>
-                    <th className="px-2 py-2">Local educativo</th>
-                    <th className="px-2 py-2">Caídas</th>
-                    <th className="px-2 py-2">Recuperaciones</th>
-                    <th className="px-2 py-2">Tiempo total caído</th>
-                    <th className="px-2 py-2">Estado actual</th>
-                    <th className="px-2 py-2">Última caída</th>
-                    <th className="px-2 py-2">Última recuperación</th>
-                    <th className="px-2 py-2 text-right">Acción</th>
+                    <th className={`${thClassName} w-[4.5rem]`}>CID</th>
+                    <th className={thClassName}>Local educativo</th>
+                    <th className={`${thClassName} w-[4.5rem]`}>Caídas</th>
+                    <th className={`${thClassName} w-[5rem]`}>Recup.</th>
+                    <th className={`${thClassName} hidden md:table-cell w-[7rem]`}>Tiempo caído</th>
+                    <th className={`${thClassName} w-[6.5rem]`}>Estado</th>
+                    <th className={`${thClassName} hidden lg:table-cell w-[7rem]`}>Última caída</th>
+                    <th className={`${thClassName} hidden xl:table-cell w-[7rem]`}>Última recup.</th>
+                    <th className={`${thClassName} sticky right-0 z-10 w-[7.5rem] bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}>
+                      Acción
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <tr key={row.school_id} className="border-t border-slate-200/80">
-                      <td className="px-2 py-2 font-medium tabular-nums text-slate-900">{row.cid ?? '—'}</td>
-                      <td className="max-w-[260px] truncate px-2 py-2 text-slate-700" title={row.local_educativo ?? ''}>
-                        {row.codigo_local ? `${row.codigo_local} · ` : ''}
-                        {row.local_educativo}
+                    <tr key={row.school_id} className={`${trClassName} group`}>
+                      <td className={`${tdClassName} font-medium tabular-nums text-slate-900 dark:text-slate-100`}>
+                        {row.cid ?? '—'}
                       </td>
-                      <td className="px-2 py-2 tabular-nums">{row.caidas}</td>
-                      <td className="px-2 py-2 tabular-nums text-emerald-700">{row.recuperaciones}</td>
-                      <td className="whitespace-nowrap px-2 py-2 text-slate-600">
+                      <td className={tdClassName}>
+                        <Truncate title={row.local_educativo}>
+                          {row.codigo_local ? `${row.codigo_local} · ` : ''}
+                          {row.local_educativo}
+                        </Truncate>
+                      </td>
+                      <td className={`${tdClassName} tabular-nums`}>{row.caidas}</td>
+                      <td className={`${tdClassName} tabular-nums text-emerald-700 dark:text-emerald-400`}>
+                        {row.recuperaciones}
+                      </td>
+                      <td className={`${tdClassName} hidden md:table-cell whitespace-nowrap text-slate-500`}>
                         {row.tiempo_total_caido ?? '—'}
                       </td>
-                      <td className="px-2 py-2">
+                      <td className={tdClassName}>
                         <PrtgStatusBadge status={row.estado_actual} />
                       </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-slate-500">
-                        {row.ultima_caida ? new Date(row.ultima_caida).toLocaleString('es-PE') : '—'}
+                      <td className={`${tdClassName} hidden lg:table-cell`}>
+                        <IsoDateTimeCell value={row.ultima_caida} />
                       </td>
-                      <td className="whitespace-nowrap px-2 py-2 text-slate-500">
-                        {row.ultima_recuperacion
-                          ? new Date(row.ultima_recuperacion).toLocaleString('es-PE')
-                          : '—'}
+                      <td className={`${tdClassName} hidden xl:table-cell`}>
+                        <IsoDateTimeCell value={row.ultima_recuperacion} />
                       </td>
-                      <td className="px-2 py-2 text-right">
+                      <td className="sticky right-0 z-10 bg-white px-3 py-2.5 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
                         <Link
                           to={`/history/schools/${row.school_id}`}
                           title="Ver historial completo del colegio"
-                          className="inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm font-semibold text-blue-700 transition hover:bg-blue-50"
+                          className="inline-flex items-center gap-1.5 rounded-lg px-2 py-1 text-[13px] font-semibold whitespace-nowrap text-blue-700 transition hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/40"
                         >
                           <History className="h-4 w-4" aria-hidden />
                           Ver historial
@@ -233,7 +252,7 @@ export function SchoolHistoryIndexPage() {
                   ))}
                 </tbody>
               </table>
-            </DataTableFrame>
+            </DataTableContainer>
             {meta ? (
               <PaginationBar
                 page={meta.current_page}

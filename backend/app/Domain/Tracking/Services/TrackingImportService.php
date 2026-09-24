@@ -5,6 +5,7 @@ namespace App\Domain\Tracking\Services;
 use App\Domain\Tracking\Support\TrackingDateParser;
 use App\Domain\Tracking\Support\TrackingExcelReader;
 use App\Domain\Tracking\Support\TrackingFollowupParser;
+use App\Domain\Tracking\Support\TrackingTicketCodes;
 use App\Enums\AuditModule;
 use App\Enums\AuditSource;
 use App\Enums\SyncIssueSeverity;
@@ -30,6 +31,7 @@ class TrackingImportService
         private readonly TrackingDateParser $dates,
         private readonly TrackingFollowupParser $followups,
         private readonly TrackingSchoolResolver $schools,
+        private readonly TrackingTicketCodes $tickets,
         private readonly AuditLogger $audit,
     ) {}
 
@@ -314,14 +316,28 @@ class TrackingImportService
                 $summary['created_count']++;
             }
 
+            $tssSnap = IdentifierNormalizer::identifier($row['tss'] ?? null);
+            $cidSnap = IdentifierNormalizer::identifier($row['cid'] ?? null);
+            $identity = $this->tickets->mint(
+                $tssSnap !== null && $tssSnap !== '' ? (string) $tssSnap : '0',
+                $cidSnap !== null && $cidSnap !== '' ? (string) $cidSnap : '0',
+                $opened['at'],
+            );
+            $reportTicket = $isClosed && ($closedParsed['at'] ?? null)
+                ? $this->tickets->reportTicketClosed($identity['case_code'], $closedParsed['at'])
+                : $identity['report_ticket'];
+
             $tracking = TrackingRecord::query()->create([
+                'public_id' => $identity['public_id'],
                 'incident_number' => $incidentNumber,
                 'incident_id' => null,
                 'school_id' => $school->id,
                 'network_assignment_id' => $assignment?->id,
-                'ticket' => IdentifierNormalizer::text($row['ticket'] ?? null),
-                'tss_snapshot' => IdentifierNormalizer::identifier($row['tss'] ?? null),
-                'cid_snapshot' => IdentifierNormalizer::identifier($row['cid'] ?? null),
+                'ticket' => $reportTicket,
+                'case_code' => $identity['case_code'],
+                'report_ticket' => $reportTicket,
+                'tss_snapshot' => $tssSnap,
+                'cid_snapshot' => $cidSnap,
                 'description' => IdentifierNormalizer::text($row['description'] ?? null),
                 'status' => $status,
                 'technical_status' => $isClosed

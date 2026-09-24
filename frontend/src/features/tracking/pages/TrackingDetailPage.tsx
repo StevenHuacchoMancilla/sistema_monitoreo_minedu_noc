@@ -21,6 +21,7 @@ import { fetchTrackingDetail, postTrackingUpdate, closeTracking, reopenTracking,
 import { TrackingTimeline } from '../components/TrackingTimeline'
 import { TrackingUpdateComposer } from '../components/TrackingUpdateComposer'
 import { TrackingLifecyclePanel } from '../components/TrackingLifecyclePanel'
+import { TrackingTicketCard } from '../components/TrackingTicketCard'
 import { formatDuration } from '../lib/format'
 import { trackingStatusTone } from '../lib/trackingStatus'
 
@@ -146,7 +147,7 @@ export function TrackingDetailPage() {
             {data.school ? (
               <Link
                 to={`/schools/${data.school.id}`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
               >
                 <GraduationCap className="h-3.5 w-3.5" aria-hidden />
                 Ver ficha maestra
@@ -155,39 +156,40 @@ export function TrackingDetailPage() {
             {data.incident_id ? (
               <Link
                 to={`/incidents/active`}
-                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50"
+                className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 font-medium text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200 dark:hover:bg-slate-800"
                 title={`Incidencia #${data.incident_id}`}
               >
                 <TriangleAlert className="h-3.5 w-3.5" aria-hidden />
                 Incidencia PRTG #{data.incident_id}
               </Link>
             ) : (
-              <span className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 px-2.5 py-1.5 text-slate-500">
+              <span className="inline-flex items-center gap-1.5 rounded-lg border border-dashed border-slate-200 px-2.5 py-1.5 text-slate-500 dark:border-slate-700 dark:text-slate-400">
                 Sin incidencia PRTG vinculada
               </span>
             )}
           </div>
 
           {data.status === 'TECHNICALLY_RECOVERED' ? (
-            <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-900">
+            <div className="mb-5 rounded-xl border border-emerald-200 bg-emerald-50/80 px-4 py-3 text-sm text-emerald-900 dark:border-emerald-900/50 dark:bg-emerald-950/40 dark:text-emerald-100">
               <p className="font-semibold">PRTG recuperó el enlace (recuperación técnica).</p>
-              <p className="mt-0.5 text-emerald-800/90">
+              <p className="mt-0.5 text-emerald-800/90 dark:text-emerald-200/80">
                 El Tracking permanece abierto hasta el cierre operativo del NOC. No se cierra automáticamente.
               </p>
             </div>
           ) : null}
 
+          <TrackingTicketCard tracking={data} />
+
           <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <SummaryTile label="TSS" value={data.tss_snapshot || '—'} />
             <SummaryTile label="CID" value={data.cid_snapshot || '—'} />
-            <SummaryTile label="Ticket" value={data.ticket || '—'} />
             <SummaryTile label="Duración" value={formatDuration(data.duration_seconds)} />
-            <SummaryTile label="Apertura" value={data.opened_at_display || '—'} hint={data.opened_by_name || undefined} />
             <SummaryTile
               label="Estado técnico PRTG"
               value={data.prtg.status_label || '—'}
               hint={data.school?.local_educativo || undefined}
             />
+            <SummaryTile label="Apertura" value={data.opened_at_display || '—'} hint={data.opened_by_name || undefined} />
             <SummaryTile
               label="Cierre"
               value={data.closed_at_display || '—'}
@@ -202,9 +204,10 @@ export function TrackingDetailPage() {
                   .join(' · ') || undefined
               }
             />
+            <SummaryTile label="N°" value={String(data.incident_number ?? data.id)} />
           </div>
 
-          <div className="mb-4 flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit">
+          <div className="mb-4 flex gap-1 rounded-lg border border-slate-200 bg-slate-50 p-1 w-fit dark:border-slate-700 dark:bg-slate-900">
             <TabButton active={tab === 'seguimiento'} onClick={() => setTab('seguimiento')} icon={<Activity className="h-3.5 w-3.5" />}>
               Seguimiento
             </TabButton>
@@ -252,16 +255,16 @@ export function TrackingDetailPage() {
             <SectionCard title="Actividad" action={<CalendarClock className="h-4 w-4 text-slate-400" />}>
               <ul className="space-y-3">
                 {data.activity.map((item, i) => (
-                  <li key={`${item.kind}-${i}`} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5">
-                    <div className="flex flex-wrap gap-2 text-xs text-slate-500">
+                  <li key={`${item.kind}-${i}`} className="rounded-lg border border-slate-100 bg-slate-50/60 px-3 py-2.5 dark:border-slate-800 dark:bg-slate-900/50">
+                    <div className="flex flex-wrap gap-2 text-xs text-slate-500 dark:text-slate-400">
                       <span className="font-semibold tabular-nums">{item.display || '—'}</span>
-                      <span className="font-medium text-slate-800">{item.actor || 'Sistema'}</span>
-                      <span className="rounded bg-white px-1.5 py-0.5 font-semibold text-slate-600 ring-1 ring-slate-200">
+                      <span className="font-medium text-slate-800 dark:text-slate-200">{item.actor || 'Sistema'}</span>
+                      <span className="rounded bg-white px-1.5 py-0.5 font-semibold text-slate-600 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-700">
                         {item.label}
                       </span>
                     </div>
                     {item.body ? (
-                      <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700">{item.body}</p>
+                      <p className="mt-1 whitespace-pre-wrap text-sm text-slate-700 dark:text-slate-300">{item.body}</p>
                     ) : null}
                   </li>
                 ))}
@@ -276,13 +279,13 @@ export function TrackingDetailPage() {
 
 function SummaryTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm">
-      <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">{label}</p>
-      <p className="mt-1 truncate text-sm font-bold text-slate-950" title={value}>
+    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</p>
+      <p className="mt-1 truncate text-sm font-bold text-slate-950 dark:text-slate-50" title={value}>
         {value}
       </p>
       {hint ? (
-        <p className="mt-0.5 truncate text-xs text-slate-500" title={hint}>
+        <p className="mt-0.5 truncate text-xs text-slate-500 dark:text-slate-400" title={hint}>
           {hint}
         </p>
       ) : null}
@@ -307,7 +310,9 @@ function TabButton({
       onClick={onClick}
       className={[
         'inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold transition',
-        active ? 'bg-white text-violet-700 shadow-sm' : 'text-slate-600 hover:text-slate-900',
+        active
+          ? 'bg-white text-violet-700 shadow-sm dark:bg-slate-800 dark:text-violet-300'
+          : 'text-slate-600 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100',
       ].join(' ')}
     >
       {icon}

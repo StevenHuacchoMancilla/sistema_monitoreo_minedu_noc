@@ -30,23 +30,30 @@ class TrackingController extends Controller
 
     public function index(Request $request): JsonResponse
     {
-        $filters = $request->validate([
-            'q' => ['nullable', 'string', 'max:200'],
-            'search' => ['nullable', 'string', 'max:200'],
-            'status' => ['nullable', 'string', Rule::in(TrackingStatus::values())],
-            'provincia' => ['nullable', 'string', 'max:120'],
-            'distrito' => ['nullable', 'string', 'max:120'],
-            'opened_by' => ['nullable', 'string', 'max:120'],
-            'closed_by' => ['nullable', 'string', 'max:120'],
-            'opened_from' => ['nullable', 'date'],
-            'opened_to' => ['nullable', 'date', 'after_or_equal:opened_from'],
-            'closed_from' => ['nullable', 'date'],
-            'closed_to' => ['nullable', 'date', 'after_or_equal:closed_from'],
-            'period_from' => ['nullable', 'date'],
-            'period_to' => ['nullable', 'date', 'after_or_equal:period_from'],
-            'page' => ['nullable', 'integer', 'min:1'],
-            'per_page' => ['nullable', 'integer', Rule::in([25, 50, 100])],
-        ]);
+        $filters = $request->validate(
+            [
+                'q' => ['nullable', 'string', 'max:200'],
+                'search' => ['nullable', 'string', 'max:200'],
+                'status' => ['nullable', 'string', Rule::in(TrackingStatus::values())],
+                'provincia' => ['nullable', 'string', 'max:120'],
+                'distrito' => ['nullable', 'string', 'max:120'],
+                'opened_by' => ['nullable', 'string', 'max:120'],
+                'closed_by' => ['nullable', 'string', 'max:120'],
+                'opened_from' => ['nullable', 'date'],
+                'opened_to' => ['nullable', 'date', 'after_or_equal:opened_from'],
+                'closed_from' => ['nullable', 'date'],
+                'closed_to' => ['nullable', 'date', 'after_or_equal:closed_from'],
+                'period_from' => ['nullable', 'date'],
+                'period_to' => ['nullable', 'date', 'after_or_equal:period_from'],
+                'page' => ['nullable', 'integer', 'min:1'],
+                'per_page' => ['nullable', 'integer', Rule::in([25, 50, 100])],
+            ],
+            [
+                'opened_to.after_or_equal' => 'La fecha inicial no puede ser posterior a la fecha final.',
+                'closed_to.after_or_equal' => 'La fecha inicial no puede ser posterior a la fecha final.',
+                'period_to.after_or_equal' => 'La fecha inicial no puede ser posterior a la fecha final.',
+            ]
+        );
 
         return response()->json($this->list->list($filters));
     }
@@ -84,20 +91,26 @@ class TrackingController extends Controller
      */
     private function reportFilters(Request $request): array
     {
-        return $request->validate([
-            'q' => ['nullable', 'string', 'max:200'],
-            'search' => ['nullable', 'string', 'max:200'],
-            'status' => ['nullable', 'string', Rule::in(TrackingStatus::values())],
-            'provincia' => ['nullable', 'string', 'max:120'],
-            'distrito' => ['nullable', 'string', 'max:120'],
-            'opened_by' => ['nullable', 'string', 'max:120'],
-            'closed_by' => ['nullable', 'string', 'max:120'],
-            'opened_from' => ['nullable', 'date'],
-            'opened_to' => ['nullable', 'date', 'after_or_equal:opened_from'],
-            'closed_from' => ['nullable', 'date'],
-            'closed_to' => ['nullable', 'date', 'after_or_equal:closed_from'],
-            'limit' => ['nullable', 'integer', 'min:1', 'max:5000'],
-        ]);
+        return $request->validate(
+            [
+                'q' => ['nullable', 'string', 'max:200'],
+                'search' => ['nullable', 'string', 'max:200'],
+                'status' => ['nullable', 'string', Rule::in(TrackingStatus::values())],
+                'provincia' => ['nullable', 'string', 'max:120'],
+                'distrito' => ['nullable', 'string', 'max:120'],
+                'opened_by' => ['nullable', 'string', 'max:120'],
+                'closed_by' => ['nullable', 'string', 'max:120'],
+                'opened_from' => ['nullable', 'date'],
+                'opened_to' => ['nullable', 'date', 'after_or_equal:opened_from'],
+                'closed_from' => ['nullable', 'date'],
+                'closed_to' => ['nullable', 'date', 'after_or_equal:closed_from'],
+                'limit' => ['nullable', 'integer', 'min:1', 'max:5000'],
+            ],
+            [
+                'opened_to.after_or_equal' => 'La fecha inicial no puede ser posterior a la fecha final.',
+                'closed_to.after_or_equal' => 'La fecha inicial no puede ser posterior a la fecha final.',
+            ]
+        );
     }
 
     public function show(TrackingRecord $tracking): JsonResponse

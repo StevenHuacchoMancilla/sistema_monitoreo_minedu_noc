@@ -4,7 +4,28 @@
     <meta charset="UTF-8" />
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light dark" />
     <title>NOC Loreto · Monitoreo LLEE</title>
+    <script>
+      ;(function () {
+        try {
+          var key = 'noc.theme'
+          var stored = localStorage.getItem(key)
+          var dark
+          if (stored === 'dark') dark = true
+          else if (stored === 'light') dark = false
+          else {
+            // system u otro → preferencia del SO, y persistir claro/oscuro
+            dark = window.matchMedia('(prefers-color-scheme: dark)').matches
+            try {
+              localStorage.setItem(key, dark ? 'dark' : 'light')
+            } catch (e2) {}
+          }
+          if (dark) document.documentElement.classList.add('dark')
+          document.documentElement.style.colorScheme = dark ? 'dark' : 'light'
+        } catch (e) {}
+      })()
+    </script>
   </head>
   <body>
     <div id="root"></div>

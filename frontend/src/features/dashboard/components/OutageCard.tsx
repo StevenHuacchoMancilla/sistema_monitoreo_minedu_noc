@@ -1,4 +1,5 @@
-import { FollowupBadge, ReincidenteBadge } from '../../../components/monitoring/StatusBadges'
+import { FollowupBadge } from '../../../components/monitoring/StatusBadges'
+import { formatDateTime } from '../../../lib/datetime'
 import type { OutageRow } from '../../../types/api'
 
 export function OutageCard({
@@ -20,10 +21,7 @@ export function OutageCard({
     >
       <span className={`w-1.5 shrink-0 ${bar}`} />
       <div className="min-w-0 flex-1 p-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <span className="font-semibold text-noc-text">CID {row.cid ?? '—'}</span>
-          <ReincidenteBadge count={row.reincidente_count} />
-        </div>
+        <span className="font-semibold text-noc-text">CID {row.cid ?? '—'}</span>
         <p className="mt-1 truncate text-sm text-noc-muted">
           {row.codigo_local ? `${row.codigo_local} ` : ''}
           {row.local_educativo}
@@ -35,17 +33,14 @@ export function OutageCard({
           {tone === 'success' ? (
             <>
               <p>
-                Recuperado:{' '}
-                {/* recovered_at may arrive via recovery panel; for outage rows use started_at + duracion */}
-                {row.started_at ? new Date(row.started_at).toLocaleString() : '—'}
+                Recuperado: {formatDateTime(row.started_at)}
               </p>
               <p>Duración: {row.duracion ?? '—'}</p>
             </>
           ) : (
             <>
               <p>
-                Fecha de caída:{' '}
-                {row.started_at ? new Date(row.started_at).toLocaleString() : '—'}
+                Fecha de caída: {formatDateTime(row.started_at)}
               </p>
               <p>PRTG reportó: {row.duracion ?? '—'}</p>
             </>

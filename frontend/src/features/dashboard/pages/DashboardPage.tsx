@@ -8,6 +8,7 @@ import { CloudnetStatusPanel } from '../components/CloudnetStatusPanel'
 import { ConcentrationsPreview } from '../components/ConcentrationsPreview'
 import { OutageCardList } from '../components/OutageCardList'
 import { IncidentManageModal } from '../../incidents/components/IncidentManageModal'
+import { formatDateTime } from '../../../lib/datetime'
 
 export function DashboardPage() {
   const summary = useDashboardSummary()
@@ -21,7 +22,7 @@ export function DashboardPage() {
   return (
     <AppLayout
       title="Resumen operativo"
-      lastUpdated={lastUpdated ? new Date(lastUpdated).toLocaleString() : null}
+      lastUpdated={lastUpdated ? formatDateTime(lastUpdated) : null}
       syncing={syncing}
       onRefresh={() => void summary.refetch()}
       onSyncPrtg={() => prtg.mutate()}

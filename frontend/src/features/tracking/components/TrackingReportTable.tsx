@@ -1,5 +1,5 @@
 import { Link } from 'react-router-dom'
-import { DataTableFrame } from '../../../components/ui/DataTableFrame'
+import { DataTableContainer } from '../../../components/ui/DataTableFrame'
 import type { TrackingReportColumn, TrackingReportRow } from '../types/trackingReport'
 
 const COLUMN_WIDTH: Record<string, string> = {
@@ -30,10 +30,10 @@ export function TrackingReportTable({
 }) {
   const th =
     'whitespace-nowrap px-2.5 py-2 text-[10px] font-semibold uppercase tracking-wide text-white'
-  const td = 'px-2.5 py-2 align-top text-xs text-slate-800'
+  const td = 'px-2.5 py-2 align-top text-xs text-slate-800 dark:text-slate-200'
 
   return (
-    <DataTableFrame>
+    <DataTableContainer>
       <table className="w-full min-w-[1400px] border-collapse text-left">
         <thead className="sticky top-0 z-20 border-b border-violet-900/40 bg-violet-900">
           <tr>
@@ -52,11 +52,18 @@ export function TrackingReportTable({
         <tbody>
           {rows.map((row) => {
             const closed = row.is_closed
-            const rowBg = closed ? 'bg-emerald-50/80' : 'bg-white'
-            const stickyBg = closed ? 'bg-emerald-50' : 'bg-white'
+            const rowBg = closed
+              ? 'bg-emerald-50/80 dark:bg-emerald-950/30'
+              : 'bg-white dark:bg-slate-900'
+            const stickyBg = closed
+              ? 'bg-emerald-50 dark:bg-emerald-950/40'
+              : 'bg-white dark:bg-slate-900'
 
             return (
-              <tr key={row.id} className={`border-b border-slate-100 ${rowBg} hover:bg-violet-50/40`}>
+              <tr
+                key={row.id}
+                className={`border-b border-slate-100 dark:border-slate-800 ${rowBg} hover:bg-violet-50/40 dark:hover:bg-violet-950/30`}
+              >
                 {columns.map((col, idx) => {
                   const value = cellValue(row, col.key)
                   const isSeguimiento = col.key === 'seguimiento'
@@ -76,7 +83,7 @@ export function TrackingReportTable({
                       {isFirst ? (
                         <Link
                           to={`/tracking/${row.id}`}
-                          className="text-violet-800 hover:underline"
+                          className="text-violet-800 hover:underline dark:text-violet-300"
                           title="Abrir detalle"
                         >
                           {value}
@@ -92,6 +99,6 @@ export function TrackingReportTable({
           })}
         </tbody>
       </table>
-    </DataTableFrame>
+    </DataTableContainer>
   )
 }

@@ -2,8 +2,10 @@
 
 namespace App\Domain\Tracking\Services;
 
+use App\Domain\Tracking\Support\TrackingDateBounds;
 use App\Enums\TrackingStatus;
 use App\Models\TrackingRecord;
+use App\Support\OperationalTime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
 
@@ -55,13 +57,11 @@ class TrackingListService
      */
     public function kpis(array $filters = []): array
     {
-        $todayFrom = now()->startOfDay();
-        $todayTo = now()->endOfDay();
+        $todayFrom = OperationalTime::dayStart();
+        $todayTo = OperationalTime::dayEnd();
 
-        // KPIs globales del módulo (no se reducen por filtros de tabla,
-        // excepto rango de periodo explícito si viene).
-        $periodFrom = $this->parseDate($filters['period_from'] ?? null)?->startOfDay();
-        $periodTo = $this->parseDate($filters['period_to'] ?? null)?->endOfDay();
+        $periodFrom = TrackingDateBounds::startOfDay($filters['period_from'] ?? null);
+        $periodTo = TrackingDateBounds::endOfDay($filters['period_to'] ?? null);
 
         $base = TrackingRecord::query();
         if ($periodFrom) {
@@ -90,8 +90,6 @@ class TrackingListService
     }
 
     /**
-     * Query filtrada reutilizable (lista + reporte).
-     *
      * @param  array<string, mixed>  $filters
      */
     public function filteredQuery(array $filters): Builder
@@ -116,6 +114,9 @@ class TrackingListService
             $like = '%'.mb_strtolower($search).'%';
             $q->where(function (Builder $inner) use ($like, $search) {
                 $inner->whereRaw('lower(coalesce(tracking_records.ticket, \'\')) like ?', [$like])
+                    ->orWhereRaw('lower(coalesce(tracking_records.report_ticket, \'\')) like ?', [$like])
+                    ->orWhereRaw('lower(coalesce(tracking_records.case_code, \'\')) like ?', [$like])
+                    ->orWhereRaw('lower(coalesce(tracking_records.public_id, \'\')) like ?', [$like])
                     ->orWhereRaw('lower(coalesce(tracking_records.cid_snapshot, \'\')) like ?', [$like])
                     ->orWhereRaw('lower(coalesce(tracking_records.tss_snapshot, \'\')) like ?', [$like])
                     ->orWhereRaw('lower(coalesce(tracking_records.description, \'\')) like ?', [$like])
@@ -173,21 +174,22 @@ class TrackingListService
             }
         }
 
-        $openedFrom = $this->parseDate($filters['opened_from'] ?? null);
+        // Cada extremo es independiente (desde sola / hasta sola / ambas inclusivas).
+        $openedFrom = TrackingDateBounds::startOfDay($filters['opened_from'] ?? null);
         if ($openedFrom) {
-            $q->where('tracking_records.opened_at', '>=', $openedFrom->startOfDay());
+            $q->where('tracking_records.opened_at', '>=', $openedFrom);
         }
-        $openedTo = $this->parseDate($filters['opened_to'] ?? null);
+        $openedTo = TrackingDateBounds::endOfDay($filters['opened_to'] ?? null);
         if ($openedTo) {
-            $q->where('tracking_records.opened_at', '<=', $openedTo->endOfDay());
+            $q->where('tracking_records.opened_at', '<=', $openedTo);
         }
-        $closedFrom = $this->parseDate($filters['closed_from'] ?? null);
+        $closedFrom = TrackingDateBounds::startOfDay($filters['closed_from'] ?? null);
         if ($closedFrom) {
-            $q->where('tracking_records.closed_at', '>=', $closedFrom->startOfDay());
+            $q->where('tracking_records.closed_at', '>=', $closedFrom);
         }
-        $closedTo = $this->parseDate($filters['closed_to'] ?? null);
+        $closedTo = TrackingDateBounds::endOfDay($filters['closed_to'] ?? null);
         if ($closedTo) {
-            $q->where('tracking_records.closed_at', '<=', $closedTo->endOfDay());
+            $q->where('tracking_records.closed_at', '<=', $closedTo);
         }
 
         return $q;
@@ -265,29 +267,17 @@ class TrackingListService
         return $out;
     }
 
-    private function parseDate(mixed $value): ?Carbon
-    {
-        if ($value === null || $value === '') {
-            return null;
-        }
-
-        try {
-            return Carbon::parse((string) $value);
-        } catch (\Throwable) {
-            return null;
-        }
-    }
-
     private function formatDateDisplay(mixed $at, mixed $precision): ?string
     {
         if (! $at instanceof Carbon) {
             return null;
         }
 
+        $local = $at->copy()->timezone(TrackingDateBounds::timezone());
         $isDateOnly = $precision === 'DATE' || $precision === \App\Enums\DatePrecision::Date;
 
         return $isDateOnly
-            ? $at->format('d/m/Y')
-            : $at->format('d/m/Y H:i');
+            ? $local->format('d/m/Y')
+            : $local->format('d/m/Y H:i');
     }
 }

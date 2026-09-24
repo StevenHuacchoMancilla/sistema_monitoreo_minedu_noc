@@ -81,10 +81,16 @@ class TrackingOpenFromIncidentTest extends TestCase
             ->assertJsonPath('data.cid_snapshot', '258450')
             ->assertJsonPath('data.tss_snapshot', '88')
             ->assertJsonPath('data.description', 'LINK DOWN CID258450')
-            ->assertJsonPath('data.ticket', 'TK-100')
             ->assertJsonPath('data.status', TrackingStatus::Open->value)
             ->assertJsonPath('data.opened_by_user_id', $opener->id)
             ->assertJsonPath('data.opened_by_name', $opener->name);
+
+        $ticket = (string) $response->json('data.ticket');
+        $caseCode = (string) $response->json('data.case_code');
+        $this->assertNotEmpty($response->json('data.public_id'));
+        $this->assertMatchesRegularExpression('/^INC88_258450_A\d{14}_[0-9A-HJKMNP-TV-Z]{8}$/', $caseCode);
+        $this->assertMatchesRegularExpression('/^INC88_258450_A\d{14}_COPEN_[0-9A-HJKMNP-TV-Z]{8}$/', $ticket);
+        $this->assertSame($ticket, $response->json('data.report_ticket'));
 
         $this->assertDatabaseHas('tracking_records', [
             'incident_id' => $incident->id,

@@ -1,10 +1,11 @@
-import { useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { Link } from 'react-router-dom'
 import {
   Activity,
   CircleCheck,
   ClipboardList,
+  Eye,
   FileSpreadsheet,
   MessageSquareText,
   PlayCircle,
@@ -15,18 +16,32 @@ import { PageHeader } from '../../../components/ui/PageHeader'
 import { MetricCard } from '../../../components/ui/MetricCard'
 import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, SearchField, Select } from '../../../components/ui/FormControls'
-import { DataTableFrame } from '../../../components/ui/DataTableFrame'
+import { DateRangeFields, quickApertureRange } from '../../../components/ui/DateRangeFields'
+import {
+  DataTableContainer,
+  DateTimeCell,
+  ShortName,
+  Truncate,
+  tableClassName,
+  tdClassName,
+  thClassName,
+  theadClassName,
+  trClassName,
+} from '../../../components/ui/DataTableFrame'
+import { TicketCell } from '../../../components/ui/TicketCell'
 import { PaginationBar } from '../../../components/ui/PaginationBar'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/SoftBadge'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
 import { PrtgLocationFilterFields } from '../../locations/components/PrtgLocationFilterFields'
 import { useManualSync } from '../../dashboard/hooks/useDashboard'
+import { ApiError } from '../../../api/client'
 import { fetchTrackingList } from '../api/trackingApi'
 import { trackingStatusTone } from '../lib/trackingStatus'
 
 export function TrackingListPage() {
   const [q, setQ] = useState('')
+  const [qDebounced, setQDebounced] = useState('')
   const [status, setStatus] = useState('')
   const [provincia, setProvincia] = useState('')
   const [distrito, setDistrito] = useState('')
@@ -40,11 +55,30 @@ export function TrackingListPage() {
   const [perPage, setPerPage] = useState(25)
   const { prtg, cloudnet } = useManualSync()
 
+  useEffect(() => {
+    const timer = window.setTimeout(() => setQDebounced(q.trim()), 350)
+    return () => window.clearTimeout(timer)
+  }, [q])
+
+  useEffect(() => {
+    setPage(1)
+  }, [qDebounced])
+
+  const openedRangeError =
+    openedFrom && openedTo && openedFrom > openedTo
+      ? 'La fecha inicial no puede ser posterior a la fecha final.'
+      : null
+  const closedRangeError =
+    closedFrom && closedTo && closedFrom > closedTo
+      ? 'La fecha inicial no puede ser posterior a la fecha final.'
+      : null
+  const dateError = openedRangeError || closedRangeError
+
   const list = useQuery({
     queryKey: [
       'tracking',
       'list',
-      q,
+      qDebounced,
       status,
       provincia,
       distrito,
@@ -57,9 +91,10 @@ export function TrackingListPage() {
       page,
       perPage,
     ],
+    enabled: !dateError,
     queryFn: () =>
       fetchTrackingList({
-        q: q || undefined,
+        q: qDebounced || undefined,
         status: status || undefined,
         provincia: provincia || undefined,
         distrito: distrito || undefined,
@@ -81,6 +116,7 @@ export function TrackingListPage() {
 
   const clearFilters = () => {
     setQ('')
+    setQDebounced('')
     setStatus('')
     setProvincia('')
     setDistrito('')
@@ -93,9 +129,40 @@ export function TrackingListPage() {
     setPage(1)
   }
 
+  const applyQuickAperture = (kind: 'today' | 'yesterday' | 'last7' | 'month') => {
+    const range = quickApertureRange(kind)
+    setOpenedFrom(range.from)
+    setOpenedTo(range.to)
+    setPage(1)
+  }
+
   const hasFilters = Boolean(
-    q || status || provincia || distrito || openedBy || closedBy || openedFrom || openedTo || closedFrom || closedTo,
+    q ||
+      status ||
+      provincia ||
+      distrito ||
+      openedBy ||
+      closedBy ||
+      openedFrom ||
+      openedTo ||
+      closedFrom ||
+      closedTo,
   )
+
+  const listErrorMessage = useMemo(() => {
+    if (dateError) return dateError
+    if (!list.isError) return null
+    if (list.error instanceof ApiError) {
+      const body = list.error.body as { errors?: { opened_to?: string[]; closed_to?: string[] }; message?: string } | null
+      return (
+        body?.errors?.opened_to?.[0] ??
+        body?.errors?.closed_to?.[0] ??
+        body?.message ??
+        list.error.message
+      )
+    }
+    return list.error instanceof Error ? list.error.message : 'Error al cargar Tracking'
+  }, [dateError, list.error, list.isError])
 
   return (
     <AppLayout
@@ -157,22 +224,42 @@ export function TrackingListPage() {
       <div className="mb-4">
         <FilterCard
           actions={
-            hasFilters ? (
-              <Button type="button" size="sm" variant="ghost" onClick={clearFilters}>
-                <RotateCcw className="h-3.5 w-3.5" aria-hidden />
-                Limpiar
-              </Button>
-            ) : null
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="hidden text-[11px] font-semibold tracking-wide text-slate-400 uppercase sm:inline">
+                Apertura rápida
+              </span>
+              {(
+                [
+                  ['today', 'Hoy'],
+                  ['yesterday', 'Ayer'],
+                  ['last7', '7 días'],
+                  ['month', 'Este mes'],
+                ] as const
+              ).map(([kind, label]) => (
+                <Button
+                  key={kind}
+                  type="button"
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => applyQuickAperture(kind)}
+                >
+                  {label}
+                </Button>
+              ))}
+              {hasFilters ? (
+                <Button type="button" size="sm" variant="ghost" onClick={clearFilters}>
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                  Limpiar filtros
+                </Button>
+              ) : null}
+            </div>
           }
         >
           <SearchField
             label="Buscar"
             value={q}
             placeholder="N°, ticket, TSS, CID, colegio, responsable…"
-            onChange={(e) => {
-              setQ(e.target.value)
-              setPage(1)
-            }}
+            onChange={(e) => setQ(e.target.value)}
           />
           <FormField label="Estado">
             <Select
@@ -236,134 +323,151 @@ export function TrackingListPage() {
               ))}
             </Select>
           </FormField>
-          <FormField label="Apertura desde">
-            <input
-              type="date"
-              value={openedFrom}
-              onChange={(e) => {
-                setOpenedFrom(e.target.value)
-                setPage(1)
-              }}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
-          </FormField>
-          <FormField label="Apertura hasta">
-            <input
-              type="date"
-              value={openedTo}
-              onChange={(e) => {
-                setOpenedTo(e.target.value)
-                setPage(1)
-              }}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
-          </FormField>
-          <FormField label="Cierre desde">
-            <input
-              type="date"
-              value={closedFrom}
-              onChange={(e) => {
-                setClosedFrom(e.target.value)
-                setPage(1)
-              }}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
-          </FormField>
-          <FormField label="Cierre hasta">
-            <input
-              type="date"
-              value={closedTo}
-              onChange={(e) => {
-                setClosedTo(e.target.value)
-                setPage(1)
-              }}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20"
-            />
-          </FormField>
+          <DateRangeFields
+            title="Apertura"
+            from={openedFrom}
+            to={openedTo}
+            error={openedRangeError}
+            onFromChange={(value) => {
+              setOpenedFrom(value)
+              setPage(1)
+            }}
+            onToChange={(value) => {
+              setOpenedTo(value)
+              setPage(1)
+            }}
+          />
+          <DateRangeFields
+            title="Cierre"
+            from={closedFrom}
+            to={closedTo}
+            error={closedRangeError}
+            onFromChange={(value) => {
+              setClosedFrom(value)
+              setPage(1)
+            }}
+            onToChange={(value) => {
+              setClosedTo(value)
+              setPage(1)
+            }}
+          />
         </FilterCard>
       </div>
 
       {list.isLoading ? <LoadingState /> : null}
-      {list.isError ? (
-        <ErrorState message={list.error instanceof Error ? list.error.message : 'Error al cargar Tracking'} />
-      ) : null}
+      {listErrorMessage ? <ErrorState message={listErrorMessage} /> : null}
 
       {!list.isLoading && !list.isError ? (
         rows.length === 0 ? (
           <EmptyState
-            title="Sin trackings"
-            description={hasFilters ? 'Prueba limpiar los filtros.' : 'Aún no hay registros de Tracking General.'}
+            icon={<ClipboardList className="h-8 w-8" aria-hidden />}
+            title={hasFilters ? 'Sin resultados' : 'Todavía no existen casos en Tracking General'}
+            description={
+              hasFilters
+                ? 'No se encontraron resultados con los filtros seleccionados.'
+                : 'Los casos aparecerán automáticamente cuando un operador registre la primera gestión de una incidencia.'
+            }
+            action={
+              hasFilters ? (
+                <Button type="button" size="sm" variant="secondary" onClick={clearFilters}>
+                  <RotateCcw className="h-3.5 w-3.5" aria-hidden />
+                  Limpiar filtros
+                </Button>
+              ) : null
+            }
           />
         ) : (
           <>
-            <DataTableFrame>
-              <table className="min-w-[1100px] w-full text-left text-sm">
-                <thead className="sticky top-0 z-10 bg-slate-50 text-xs font-semibold tracking-wide text-slate-500 uppercase">
+            <DataTableContainer>
+              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 720 }}>
+                <colgroup>
+                  <col className="w-[4.5rem]" />
+                  <col className="w-[12rem]" />
+                  <col className="w-[4.5rem]" />
+                  <col className="w-[5.5rem]" />
+                  <col />
+                  <col className="w-[6.5rem]" />
+                  <col className="w-[6rem]" />
+                  <col className="w-[10rem]" />
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[6.5rem]" />
+                  <col className="w-[6rem]" />
+                  <col className="w-[3.5rem]" />
+                </colgroup>
+                <thead className={theadClassName}>
                   <tr>
-                    <th className="px-3 py-2.5">N°</th>
-                    <th className="px-3 py-2.5">Ticket</th>
-                    <th className="px-3 py-2.5">TSS</th>
-                    <th className="px-3 py-2.5">CID</th>
-                    <th className="px-3 py-2.5">Descripción</th>
-                    <th className="px-3 py-2.5">Apertura</th>
-                    <th className="px-3 py-2.5">Aperturado por</th>
-                    <th className="px-3 py-2.5">Último seguimiento</th>
-                    <th className="px-3 py-2.5">Estado</th>
-                    <th className="px-3 py-2.5">Cierre</th>
-                    <th className="px-3 py-2.5">Cerrado por</th>
-                    <th className="px-3 py-2.5">Acción</th>
+                    <th className={thClassName}>N°</th>
+                    <th className={thClassName}>Ticket</th>
+                    <th className={thClassName}>TSS</th>
+                    <th className={thClassName}>CID</th>
+                    <th className={thClassName}>Descripción</th>
+                    <th className={thClassName}>Apertura</th>
+                    <th className={`${thClassName} hidden md:table-cell`}>Apert. por</th>
+                    <th className={`${thClassName} hidden xl:table-cell`}>Últ. seguimiento</th>
+                    <th className={thClassName}>Estado</th>
+                    <th className={`${thClassName} hidden lg:table-cell`}>Cierre</th>
+                    <th className={`${thClassName} hidden lg:table-cell`}>Cerr. por</th>
+                    <th className={`${thClassName} text-right`}>Acción</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-100">
+                <tbody>
                   {rows.map((row) => (
-                    <tr key={row.id} className="bg-white hover:bg-slate-50/80">
-                      <td className="px-3 py-2.5 font-semibold tabular-nums text-slate-900">
+                    <tr key={row.id} className={trClassName}>
+                      <td className={`${tdClassName} font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
                         {row.incident_number ?? row.id}
                       </td>
-                      <td className="px-3 py-2.5 text-slate-700">{row.ticket || '—'}</td>
-                      <td className="px-3 py-2.5 tabular-nums text-slate-700">{row.tss_snapshot || '—'}</td>
-                      <td className="px-3 py-2.5 font-medium tabular-nums text-slate-900">
+                      <td className={tdClassName}>
+                        <TicketCell ticket={row.report_ticket || row.ticket} />
+                      </td>
+                      <td className={`${tdClassName} tabular-nums`}>{row.tss_snapshot || '—'}</td>
+                      <td className={`${tdClassName} font-medium tabular-nums text-slate-900 dark:text-slate-100`}>
                         {row.cid_snapshot || '—'}
                       </td>
-                      <td className="max-w-[14rem] px-3 py-2.5">
-                        <p className="truncate text-slate-800" title={row.description ?? undefined}>
+                      <td className={tdClassName}>
+                        <Truncate title={row.description} className="font-medium text-slate-800 dark:text-slate-100">
                           {row.description || '—'}
-                        </p>
+                        </Truncate>
                         {row.school_name ? (
-                          <p className="truncate text-xs text-slate-500" title={row.school_name}>
+                          <Truncate title={row.school_name} className="text-xs text-slate-500">
                             {row.school_name}
-                          </p>
+                          </Truncate>
                         ) : null}
                       </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-700">
-                        {row.opened_at_display || '—'}
+                      <td className={tdClassName}>
+                        <DateTimeCell value={row.opened_at_display} />
                       </td>
-                      <td className="px-3 py-2.5 text-slate-700">{row.opened_by_name || '—'}</td>
-                      <td className="max-w-[12rem] px-3 py-2.5 text-slate-600">
-                        <p className="line-clamp-2 text-xs" title={row.last_update_preview ?? undefined}>
+                      <td className={`${tdClassName} hidden md:table-cell`}>
+                        <ShortName name={row.opened_by_name} />
+                      </td>
+                      <td className={`${tdClassName} hidden xl:table-cell`}>
+                        <Truncate lines={2} title={row.last_update_preview} className="text-xs text-slate-600">
                           {row.last_update_preview || '—'}
-                        </p>
+                        </Truncate>
                       </td>
-                      <td className="px-3 py-2.5">
+                      <td className={tdClassName}>
                         <Badge tone={trackingStatusTone(row.status)}>{row.status_label || row.status || '—'}</Badge>
                       </td>
-                      <td className="px-3 py-2.5 whitespace-nowrap text-slate-700">
-                        {row.closed_at_display || '—'}
+                      <td className={`${tdClassName} hidden lg:table-cell`}>
+                        <DateTimeCell value={row.closed_at_display} />
                       </td>
-                      <td className="px-3 py-2.5 text-slate-700">{row.closed_by_name || '—'}</td>
-                      <td className="px-3 py-2.5">
+                      <td className={`${tdClassName} hidden lg:table-cell`}>
+                        <ShortName name={row.closed_by_name} />
+                      </td>
+                      <td className={`${tdClassName} text-right`}>
                         <Link
                           to={`/tracking/${row.id}`}
-                          className="text-sm font-semibold text-violet-700 hover:text-violet-900 hover:underline"
+                          title={row.status === 'CLOSED' ? 'Ver detalle' : 'Ver / gestionar Tracking'}
+                          aria-label={row.status === 'CLOSED' ? 'Ver detalle' : 'Ver o gestionar Tracking'}
+                          className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-slate-200 text-violet-700 hover:bg-violet-50 dark:border-slate-700 dark:hover:bg-violet-950/40"
                         >
-                          {row.status === 'CLOSED' ? 'Ver detalle' : 'Ver / Gestionar'}
+                          <Eye className="h-4 w-4" aria-hidden />
                         </Link>
                       </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </DataTableFrame>
+            </DataTableContainer>
 
             {meta ? (
               <PaginationBar

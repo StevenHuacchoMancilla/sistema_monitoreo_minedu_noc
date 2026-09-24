@@ -28,10 +28,13 @@ export type TrackingActivityItem = {
 
 export type TrackingDetail = {
   id: number
+  public_id?: string | null
   incident_number: number | null
   incident_id: number | null
   school_id: number
   ticket: string | null
+  case_code?: string | null
+  report_ticket?: string | null
   tss_snapshot: string | null
   cid_snapshot: string | null
   description: string | null
@@ -87,8 +90,11 @@ export type TrackingDetail = {
 
 export type TrackingListRow = {
   id: number
+  public_id?: string | null
   incident_number: number | null
   ticket: string | null
+  case_code?: string | null
+  report_ticket?: string | null
   tss_snapshot: string | null
   cid_snapshot: string | null
   description: string | null

@@ -93,7 +93,9 @@ class TrackingImportServiceTest extends TestCase
         $closed = TrackingRecord::query()->where('incident_number', 1)->first();
         $this->assertNotNull($closed);
         $this->assertSame(TrackingStatus::Closed, $closed->status);
-        $this->assertNull($closed->ticket);
+        $this->assertNotEmpty($closed->public_id);
+        $this->assertNotEmpty($closed->case_code);
+        $this->assertStringContainsString('_C', (string) $closed->report_ticket);
         $this->assertSame('Alvaro', $closed->opened_by_legacy_name);
         $this->assertNotNull($closed->closed_by_user_id);
         $this->assertSame('2026-09-05', $closed->opened_at?->toDateString());
@@ -102,7 +104,7 @@ class TrackingImportServiceTest extends TestCase
         $open = TrackingRecord::query()->where('incident_number', 2)->first();
         $this->assertNotNull($open);
         $this->assertSame(TrackingStatus::InProgress, $open->status);
-        $this->assertSame('INC39_258402', $open->ticket);
+        $this->assertMatchesRegularExpression('/^INC39_258402_A\d{14}_COPEN_/', (string) $open->report_ticket);
         $this->assertSame('Elias', $open->opened_by_legacy_name);
         $this->assertNull($open->closed_at);
 

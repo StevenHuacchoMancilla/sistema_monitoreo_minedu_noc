@@ -13,6 +13,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField } from '../../../components/ui/FormControls'
 import { inputClassName } from '../../../lib/uiTokens'
 import type { RecoveryReviewAction } from '../types/recoveries'
+import { formatDateTime } from '../../../lib/datetime'
 
 type Props = {
   incidentId: number
@@ -147,7 +148,7 @@ export function RecoveryReviewPanel({
 
       {reviewedAt && !requiresReview ? (
         <p className="mb-3 text-xs text-slate-600">
-          Revisado: {new Date(reviewedAt).toLocaleString('es-PE')}
+          Revisado: {formatDateTime(reviewedAt)}
         </p>
       ) : null}
 

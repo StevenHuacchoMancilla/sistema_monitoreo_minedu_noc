@@ -65,7 +65,13 @@ return [
     |
     */
 
-    'timezone' => 'UTC',
+    'timezone' => env('APP_TIMEZONE', 'UTC'),
+
+    /*
+    | Zona horaria operativa (Hoy/Ayer, mismo día, tickets, textos). La persistencia
+    | se mantiene en app.timezone (UTC); esta solo se usa para presentar y acotar días.
+    */
+    'display_timezone' => env('APP_DISPLAY_TIMEZONE', 'America/Lima'),
 
     /*
     |--------------------------------------------------------------------------

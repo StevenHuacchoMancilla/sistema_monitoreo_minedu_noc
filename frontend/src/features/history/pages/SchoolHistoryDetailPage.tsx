@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useQuery } from '@tanstack/react-query'
 import {
   ArrowLeft,
   CircleCheck,
@@ -16,13 +16,18 @@ import { PageHeader } from '../../../components/ui/PageHeader'
 import { SectionCard } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
-import {
-  ClassificationBadge,
-  FollowupBadge,
-  PrtgStatusBadge,
-} from '../../../components/monitoring/StatusBadges'
+import { CaseStatusBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
 import { Badge } from '../../../components/ui/SoftBadge'
-import { DataTableFrame } from '../../../components/ui/DataTableFrame'
+import {
+  DataTableContainer,
+  IsoDateTimeCell,
+  Truncate,
+  tableClassName,
+  tdClassName,
+  thClassName,
+  theadClassName,
+  trClassName,
+} from '../../../components/ui/DataTableFrame'
 import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, Input, Select } from '../../../components/ui/FormControls'
 import { MetricCard } from '../../../components/ui/MetricCard'
@@ -30,8 +35,14 @@ import { PaginationBar } from '../../../components/ui/PaginationBar'
 import { useManualSync } from '../../dashboard/hooks/useDashboard'
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
 import { techBadgeClass } from '../../../lib/uiTokens'
-import { fetchSchoolHistoryIncidents, fetchSchoolHistoryOverview } from '../api/historyApi'
-import { IncidentHistoryDrawer } from '../components/IncidentHistoryDrawer'
+import { formatRelativeDateTime } from '../../../lib/datetime'
+import { trackingStatusTone } from '../../tracking/lib/trackingStatus'
+import {
+  fetchSchoolHistoryIncidents,
+  fetchSchoolHistoryOverview,
+  incidentCaseFilePath,
+} from '../api/historyApi'
+import type { SchoolHistoryIncidentRow } from '../types/history'
 
 export function SchoolHistoryDetailPage() {
   const { schoolId } = useParams()
@@ -42,11 +53,9 @@ export function SchoolHistoryDetailPage() {
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
   const [status, setStatus] = useState('ALL')
-  const [classification, setClassification] = useState('')
   const [scope, setScope] = useState('')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
-  const [detailId, setDetailId] = useState<number | null>(null)
 
   const overview = useQuery({
     queryKey: ['history', 'school', id, 'overview'],
@@ -63,7 +72,6 @@ export function SchoolHistoryDetailPage() {
       dateFrom,
       dateTo,
       status,
-      classification,
       scope,
       page,
       perPage,
@@ -73,12 +81,12 @@ export function SchoolHistoryDetailPage() {
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         status: status === 'ALL' ? undefined : status,
-        classification: classification || undefined,
         scope: scope || undefined,
         page,
         per_page: perPage,
       }),
     enabled: Number.isFinite(id) && id > 0,
+    placeholderData: keepPreviousData,
   })
 
   const school = overview.data?.school
@@ -102,7 +110,6 @@ export function SchoolHistoryDetailPage() {
     setDateFrom('')
     setDateTo('')
     setStatus('ALL')
-    setClassification('')
     setScope('')
     setPage(1)
   }
@@ -118,7 +125,7 @@ export function SchoolHistoryDetailPage() {
       <div className="mb-3">
         <Link
           to="/history/schools"
-          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition hover:text-slate-900"
+          className="inline-flex items-center gap-1.5 text-sm font-medium text-slate-500 transition hover:text-slate-900 dark:hover:text-slate-100"
         >
           <ArrowLeft className="h-4 w-4" aria-hidden />
           Historial por colegio
@@ -208,16 +215,12 @@ export function SchoolHistoryDetailPage() {
             />
             <MetricCard
               label="Última caída"
-              value={statistics.ultima_caida ? new Date(statistics.ultima_caida).toLocaleString('es-PE') : '—'}
+              value={formatRelativeDateTime(statistics.ultima_caida)}
               icon={<History className="h-4 w-4" />}
             />
             <MetricCard
               label="Última recuperación"
-              value={
-                statistics.ultima_recuperacion
-                  ? new Date(statistics.ultima_recuperacion).toLocaleString('es-PE')
-                  : '—'
-              }
+              value={formatRelativeDateTime(statistics.ultima_recuperacion)}
               icon={<CircleCheck className="h-4 w-4" />}
               tone="success"
             />
@@ -281,23 +284,8 @@ export function SchoolHistoryDetailPage() {
                   }}
                 >
                   <option value="ALL">Todos</option>
-                  <option value="RECOVERED">Recuperados</option>
-                  <option value="ACTIVE">Activos</option>
-                </Select>
-              </FormField>
-              <FormField label="Clasificación">
-                <Select
-                  value={classification}
-                  onChange={(e) => {
-                    setClassification(e.target.value)
-                    setPage(1)
-                  }}
-                >
-                  <option value="">Todas</option>
-                  <option value="NEW_OUTAGE">Nueva caída</option>
-                  <option value="CONTACT_CONFIRMED">Contacto confirmado</option>
-                  <option value="NO_RESPONSE">Sin respuesta</option>
-                  <option value="COMPLAINT">Queja</option>
+                  <option value="RECOVERED">Recuperadas</option>
+                  <option value="ACTIVE">Siguen caídas</option>
                 </Select>
               </FormField>
               <FormField label="PEXT / PINT">
@@ -317,8 +305,9 @@ export function SchoolHistoryDetailPage() {
           </div>
 
           <SectionCard title="Incidencias históricas">
-            <p className="mb-3 text-xs text-slate-500">
-              Paginación server-side. El detalle (PRTG, gestiones y timeline) se carga al abrir Ver detalle.
+            <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
+              Cada incidencia abre su expediente completo: gestiones, seguimientos de Tracking, motivos,
+              responsables y cierre.
             </p>
             {incidents.isLoading ? <LoadingState /> : null}
             {incidents.isError ? (
@@ -331,67 +320,114 @@ export function SchoolHistoryDetailPage() {
             ) : null}
             {rows.length > 0 ? (
               <>
-                <DataTableFrame>
-                  <table className="min-w-[980px] w-full text-left text-sm">
-                    <thead className="text-xs uppercase text-slate-500">
+                <DataTableContainer>
+                  <table className={`${tableClassName} table-fixed`} style={{ minWidth: 1000 }}>
+                    <thead className={theadClassName}>
                       <tr>
-                        <th className="px-2 py-2">Reincidencia</th>
-                        <th className="px-2 py-2">Fecha caída</th>
-                        <th className="px-2 py-2">Recuperación</th>
-                        <th className="px-2 py-2">Duración</th>
-                        <th className="px-2 py-2">Clasificación</th>
-                        <th className="px-2 py-2">PEXT/PINT</th>
-                        <th className="px-2 py-2">Seguimiento</th>
-                        <th className="px-2 py-2 text-right">Acción</th>
+                        <th className={`${thClassName} w-[3.75rem]`}>N°</th>
+                        <th className={`${thClassName} w-[6.5rem]`}>
+                          <span className="block">Caída</span>
+                          <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
+                        </th>
+                        <th className={`${thClassName} w-[7rem]`}>
+                          <span className="block">Recuperación</span>
+                          <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
+                        </th>
+                        <th className={`${thClassName} w-[5.5rem]`}>Duración</th>
+                        <th className={`${thClassName} w-[10.5rem]`}>Estado actual</th>
+                        <th className={`${thClassName} w-[6.5rem]`}>Gestión</th>
+                        <th className={`${thClassName} w-[8rem]`}>Tracking</th>
+                        <th className={thClassName}>Último seguimiento</th>
+                        <th className={`${thClassName} hidden lg:table-cell w-[8rem]`}>Cerrado por</th>
+                        <th className={`${thClassName} sticky right-0 z-10 w-[4.5rem] bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}>
+                          Ver
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
                       {rows.map((row) => (
-                        <tr key={row.id} className="border-t border-slate-200/80">
-                          <td className="px-2 py-2 text-xs font-medium text-slate-500">
-                            {row.reincidencia?.label ?? `#${row.id}`}
+                        <tr key={row.id} className={`${trClassName} group`}>
+                          <td className={tdClassName} title={row.reincidencia.label ?? undefined}>
+                            <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+                              {row.reincidencia.numero ?? '—'}
+                            </span>
+                            <span className="text-[11px] tabular-nums text-slate-400">/{row.reincidencia.total}</span>
                           </td>
-                          <td className="whitespace-nowrap px-2 py-2">
-                            {row.started_at ? new Date(row.started_at).toLocaleString('es-PE') : '—'}
+                          <td className={tdClassName}>
+                            <IsoDateTimeCell value={row.started_at} />
                           </td>
-                          <td className="whitespace-nowrap px-2 py-2">
+                          <td className={tdClassName}>
                             {row.recovered_at ? (
-                              <span className="inline-flex flex-col gap-0.5">
-                                <span>{new Date(row.recovered_at).toLocaleString('es-PE')}</span>
-                                {row.same_day ? (
-                                  <Badge tone="success">Recuperado el mismo día</Badge>
-                                ) : null}
-                              </span>
+                              <IsoDateTimeCell
+                                value={row.recovered_at}
+                                hint={row.same_day ? <span className="text-emerald-600 dark:text-emerald-400">· mismo día</span> : null}
+                              />
                             ) : (
-                              <span className="font-semibold text-red-700">Activa</span>
+                              <span className="font-semibold text-red-700 dark:text-red-400">Sigue caída</span>
                             )}
                           </td>
-                          <td className="px-2 py-2 text-slate-600">{row.duration ?? '—'}</td>
-                          <td className="px-2 py-2">
-                            <ClassificationBadge classification={row.management_classification} />
+                          <td className={`${tdClassName} whitespace-nowrap tabular-nums`}>{row.duration ?? '—'}</td>
+                          <td className={tdClassName}>
+                            <CaseStatusBadge status={row.case_status} />
                           </td>
-                          <td className="px-2 py-2 font-medium text-slate-700">
-                            {row.management_scope ?? '—'}
+                          <td className={tdClassName}>
+                            {row.managements_count > 0 ? (
+                              <span className="font-medium">
+                                {row.managements_count} gestión{row.managements_count === 1 ? '' : 'es'}
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">Sin gestión</span>
+                            )}
+                            {row.management_scope ? (
+                              <span className="block text-[11px] text-slate-500">{row.management_scope}</span>
+                            ) : null}
                           </td>
-                          <td className="px-2 py-2">
-                            <FollowupBadge status={row.followup_status ?? null} />
+                          <td className={tdClassName}>
+                            {row.tracking ? (
+                              <span className="flex min-w-0 flex-col items-start gap-0.5">
+                                <Truncate className="font-medium tabular-nums" title={row.tracking.ticket}>
+                                  {row.tracking.ticket ?? 'Sin ticket'}
+                                </Truncate>
+                                <Badge tone={trackingStatusTone(row.tracking.status)}>
+                                  {row.tracking.status_label ?? row.tracking.status}
+                                </Badge>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
                           </td>
-                          <td className="px-2 py-2 text-right">
-                            <Button
-                              type="button"
-                              size="sm"
-                              variant="ghost"
-                              onClick={() => setDetailId(row.id)}
+                          <td className={tdClassName}>
+                            <LastFollowup row={row} />
+                          </td>
+                          <td className={`${tdClassName} hidden lg:table-cell`}>
+                            {row.tracking?.closed_at ? (
+                              <span className="block min-w-0">
+                                <Truncate className="font-medium" title={row.tracking.closed_by_name}>
+                                  {row.tracking.closed_by_name ?? '—'}
+                                </Truncate>
+                                <span className="block text-[11px] tabular-nums text-slate-500">
+                                  {formatRelativeDateTime(row.tracking.closed_at)}
+                                </span>
+                              </span>
+                            ) : (
+                              <span className="text-slate-400">—</span>
+                            )}
+                          </td>
+                          <td className="sticky right-0 z-10 bg-white px-2.5 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
+                            <Link
+                              to={incidentCaseFilePath(row.id)}
+                              title="Ver historial completo de la incidencia"
+                              aria-label={`Ver incidencia ${row.id}`}
+                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-blue-700 transition hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/40"
                             >
-                              <Eye className="h-3.5 w-3.5" aria-hidden />
-                              Ver detalle
-                            </Button>
+                              <Eye className="h-4 w-4" aria-hidden />
+                            </Link>
                           </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
-                </DataTableFrame>
+                </DataTableContainer>
                 {meta ? (
                   <PaginationBar
                     page={meta.current_page}
@@ -412,18 +448,39 @@ export function SchoolHistoryDetailPage() {
         </>
       ) : null}
 
-      {detailId != null ? (
-        <IncidentHistoryDrawer incidentId={detailId} onClose={() => setDetailId(null)} />
-      ) : null}
     </AppLayout>
   )
 }
 
+function LastFollowup({ row }: { row: SchoolHistoryIncidentRow }) {
+  const last = row.tracking?.last_update
+  if (last) {
+    return (
+      <span className="block min-w-0">
+        <Truncate lines={2} title={last.body} className="text-slate-700 dark:text-slate-300">
+          {last.body || '—'}
+        </Truncate>
+        <span className="block truncate text-[11px] text-slate-500">
+          {last.actor} · {formatRelativeDateTime(last.at)}
+        </span>
+      </span>
+    )
+  }
+  if (row.cause) {
+    return (
+      <Truncate lines={2} title={row.cause} className="text-slate-600 dark:text-slate-400">
+        {row.cause}
+      </Truncate>
+    )
+  }
+  return <span className="text-slate-400">{row.followup_label ?? '—'}</span>
+}
+
 function StatLine({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-lg bg-slate-50 px-3 py-2">
-      <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">{label}</p>
-      <p className="mt-0.5 text-sm font-semibold text-slate-900">{value}</p>
+    <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-800/60">
+      <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</p>
+      <p className="mt-0.5 text-sm font-semibold text-slate-900 dark:text-slate-100">{value}</p>
     </div>
   )
 }

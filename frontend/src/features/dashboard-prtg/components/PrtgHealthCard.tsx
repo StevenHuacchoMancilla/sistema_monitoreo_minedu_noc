@@ -2,6 +2,7 @@ import { Link } from 'react-router-dom'
 import { SectionCard } from '../../../components/ui/Card'
 import { HealthDot, MetricRow } from '../../../components/ui/KpiCard'
 import type { PrtgDashboard } from '../types/prtgDashboard'
+import { formatTime } from '../../../lib/datetime'
 
 export function PrtgHealthCard({ data }: { data: PrtgDashboard }) {
   const sync = data.sync
@@ -14,7 +15,7 @@ export function PrtgHealthCard({ data }: { data: PrtgDashboard }) {
         <MetricRow label="Scope activo" value={data.monitoring.source_scope ?? data.inventory?.source_scope ?? '—'} />
         <MetricRow
           label="Última sincronización"
-          value={sync?.last_sync ? new Date(sync.last_sync).toLocaleTimeString('es-PE') : '—'}
+          value={sync?.last_sync ? formatTime(sync.last_sync) : '—'}
         />
         <MetricRow label="Colegios procesados" value={sync?.processed ?? 0} />
         <MetricRow label="Warnings" value={sync?.warnings ?? 0} tone={(sync?.warnings ?? 0) > 0 ? 'warn' : 'default'} />

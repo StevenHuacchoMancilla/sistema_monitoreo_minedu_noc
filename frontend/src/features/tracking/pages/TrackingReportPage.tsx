@@ -178,7 +178,7 @@ export function TrackingReportPage() {
               type="date"
               value={openedFrom}
               onChange={(e) => setOpenedFrom(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             />
           </FormField>
           <FormField label="Apertura hasta">
@@ -186,7 +186,7 @@ export function TrackingReportPage() {
               type="date"
               value={openedTo}
               onChange={(e) => setOpenedTo(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             />
           </FormField>
           <FormField label="Cierre desde">
@@ -194,7 +194,7 @@ export function TrackingReportPage() {
               type="date"
               value={closedFrom}
               onChange={(e) => setClosedFrom(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             />
           </FormField>
           <FormField label="Cierre hasta">
@@ -202,14 +202,14 @@ export function TrackingReportPage() {
               type="date"
               value={closedTo}
               onChange={(e) => setClosedTo(e.target.value)}
-              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20"
+              className="h-10 w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 outline-none focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-100"
             />
           </FormField>
         </FilterCard>
       </div>
 
       {meta ? (
-        <p className="mb-3 text-xs text-slate-500">
+        <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
           Mostrando {meta.returned} de {meta.total} registro{meta.total === 1 ? '' : 's'}
           {meta.truncated ? ` (límite ${meta.limit}; afina filtros)` : ''}
           . Filas verdes = cerrados (solo visual).

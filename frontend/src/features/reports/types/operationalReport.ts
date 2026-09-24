@@ -90,8 +90,8 @@ export function formatOutageDisplay(row: Pick<ReportRow, 'outage_at' | 'caida'>)
     const d = new Date(row.outage_at)
     if (!Number.isNaN(d.getTime())) {
       return {
-        date: d.toLocaleDateString('es-PE', { day: '2-digit', month: '2-digit', year: 'numeric' }),
-        time: d.toLocaleTimeString('es-PE', { hour: '2-digit', minute: '2-digit', hour12: false }),
+        date: d.toLocaleDateString('es-PE', { timeZone: 'America/Lima', day: '2-digit', month: '2-digit', year: 'numeric' }),
+        time: d.toLocaleTimeString('es-PE', { timeZone: 'America/Lima', hour: '2-digit', minute: '2-digit', hour12: false }),
       }
     }
   }

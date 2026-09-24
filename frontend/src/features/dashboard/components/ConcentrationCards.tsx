@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import { SectionCard } from '../../../components/ui/Card'
 import { EmptyState } from '../../../components/ui/States'
 import type { Concentration } from '../../../types/api'
+import { formatDateTime } from '../../../lib/datetime'
 
 function ZoneCard({ item }: { item: Concentration }) {
   const pct = item.porcentaje_caidos ?? 0
@@ -47,7 +48,7 @@ function ZoneCard({ item }: { item: Concentration }) {
 
       {item.oldest_started_at ? (
         <p className="mt-3 text-[11px] text-noc-muted">
-          Más antigua: {new Date(item.oldest_started_at).toLocaleString()}
+          Más antigua: {formatDateTime(item.oldest_started_at)}
         </p>
       ) : null}
 

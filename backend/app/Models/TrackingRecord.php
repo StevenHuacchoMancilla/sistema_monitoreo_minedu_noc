@@ -122,11 +122,14 @@ class TrackingRecord extends Model
 
         return [
             'id' => $this->id,
+            'public_id' => $this->public_id,
             'incident_number' => $this->incident_number,
             'incident_id' => $this->incident_id,
             'school_id' => $this->school_id,
             'network_assignment_id' => $this->network_assignment_id,
-            'ticket' => $this->ticket,
+            'ticket' => $this->report_ticket ?? $this->ticket,
+            'case_code' => $this->case_code,
+            'report_ticket' => $this->report_ticket ?? $this->ticket,
             'tss_snapshot' => $this->tss_snapshot,
             'cid_snapshot' => $this->cid_snapshot,
             'description' => $this->description,

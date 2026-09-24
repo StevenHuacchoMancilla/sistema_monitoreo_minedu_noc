@@ -37,7 +37,7 @@ export function Badge({ value, label }: { value?: string | null; label?: string 
   const key = (value ?? 'UNKNOWN').toUpperCase()
   const cls = variants[key] ?? 'bg-slate-100 text-slate-700'
   return (
-    <span className={`inline-flex max-w-full truncate rounded-full px-2.5 py-0.5 text-xs font-semibold ${cls}`}>
+    <span className={`inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${cls}`}>
       {label ?? FOLLOWUP_LABELS[key] ?? value ?? '—'}
     </span>
   )

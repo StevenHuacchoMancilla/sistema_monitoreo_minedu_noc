@@ -1,4 +1,4 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { endpoints } from '../../../api/endpoints'
 import type { Concentration, DashboardSummary, OutageRow } from '../../../types/api'
 
@@ -17,6 +17,7 @@ export function useOutages(search = '') {
     queryKey: ['dashboard', 'outages', search],
     queryFn: () => endpoints.outages(search),
     refetchInterval: 15_000,
+    placeholderData: keepPreviousData,
   })
 }
 

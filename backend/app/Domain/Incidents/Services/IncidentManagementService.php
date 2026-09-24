@@ -2,6 +2,7 @@
 
 namespace App\Domain\Incidents\Services;
 
+use App\Domain\Tracking\Services\TrackingFromManagementService;
 use App\Enums\AuditModule;
 use App\Enums\AuditSource;
 use App\Enums\FollowupStatus;
@@ -17,10 +18,13 @@ use InvalidArgumentException;
 
 class IncidentManagementService
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(
+        private readonly AuditLogger $audit,
+        private readonly TrackingFromManagementService $trackingFromManagement,
+    ) {}
 
     /**
-     * Registra una gestión operativa y actualiza el estado actual de la incidencia.
+     * Registra una gestión operativa, actualiza la incidencia y sincroniza Tracking General.
      *
      * @param  array{
      *   classification: string,
@@ -32,12 +36,27 @@ class IncidentManagementService
      *   contact_attempted_at?: ?string,
      *   created_by?: ?int
      * }  $payload
+     * @return array{
+     *   management: IncidentManagement,
+     *   tracking: array{
+     *     created: bool,
+     *     tracking_id: int,
+     *     ticket_code: ?string,
+     *     status: string,
+     *     incident_number: ?int
+     *   }|null
+     * }
      */
-    public function apply(Incident $incident, array $payload): IncidentManagement
+    public function apply(Incident $incident, array $payload): array
     {
         $classification = ManagementClassification::from((string) $payload['classification']);
         if ($classification === ManagementClassification::Unclassified) {
             throw new InvalidArgumentException('UNCLASSIFIED no es una clasificación operable.');
+        }
+
+        $userId = isset($payload['created_by']) ? (int) $payload['created_by'] : 0;
+        if ($userId < 1) {
+            throw new InvalidArgumentException('Se requiere un usuario autenticado para registrar la gestión.');
         }
 
         $scope = null;
@@ -56,7 +75,7 @@ class IncidentManagementService
             }
         }
 
-        return DB::transaction(function () use ($incident, $payload, $classification, $scope, $contact) {
+        return DB::transaction(function () use ($incident, $payload, $classification, $scope, $contact, $userId) {
             $before = [
                 'management_classification' => $incident->management_classification?->value,
                 'management_scope' => $incident->management_scope?->value,
@@ -77,7 +96,7 @@ class IncidentManagementService
                 'contact_phone_snapshot' => $contact?->phone,
                 'contact_role_snapshot' => $contact?->role,
                 'contact_attempted_at' => $payload['contact_attempted_at'] ?? now(),
-                'created_by' => $payload['created_by'] ?? null,
+                'created_by' => $userId,
             ]);
 
             $followup = match ($classification) {
@@ -109,9 +128,19 @@ class IncidentManagementService
                     $scope ? ' · '.$scope->value : '',
                     ! empty($payload['detail']) ? ' · '.$payload['detail'] : ''
                 ),
-                'user_id' => $payload['created_by'] ?? null,
+                'user_id' => $userId,
                 'created_at' => now(),
             ]);
+
+            $trackingSync = null;
+            if ($incident->school_id) {
+                $trackingSync = $this->trackingFromManagement->syncFromManagement($incident, $userId, [
+                    'classification' => $classification->value,
+                    'scope' => $scope?->value,
+                    'detail' => $payload['detail'] ?? null,
+                    'observation' => $payload['observation'] ?? null,
+                ]);
+            }
 
             $this->audit->record(
                 $incident,
@@ -124,12 +153,18 @@ class IncidentManagementService
                     'detail_text' => $incident->detail_text,
                     'followup_status' => $followup->value,
                     'management_id' => $management->id,
+                    'tracking_id' => $trackingSync['tracking_id'] ?? null,
+                    'tracking_created' => $trackingSync['created'] ?? false,
                 ],
                 AuditModule::Incidents,
-                AuditSource::Api
+                AuditSource::Api,
+                $userId
             );
 
-            return $management->fresh();
+            return [
+                'management' => $management->fresh() ?? $management,
+                'tracking' => $trackingSync,
+            ];
         });
     }
 }

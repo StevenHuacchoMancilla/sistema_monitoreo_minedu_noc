@@ -7,6 +7,7 @@ import { Button } from '../../../components/ui/Button'
 import { FormField, Input } from '../../../components/ui/FormControls'
 import { inputClassName } from '../../../lib/uiTokens'
 import type { FieldDispatch, FieldDispatchAction, IncidentDetail } from '../../../types/api'
+import { formatDateTime } from '../../../lib/datetime'
 
 type Props = {
   incidentId: number
@@ -186,7 +187,7 @@ export function FieldDispatchPanel({
             <li key={item.id} className="flex flex-wrap gap-x-2">
               <span className="font-semibold">{item.status_label}</span>
               <span className="tabular-nums text-slate-400">
-                {item.updated_at ? new Date(item.updated_at).toLocaleString('es-PE') : ''}
+                {item.updated_at ? formatDateTime(item.updated_at) : ''}
               </span>
               {item.cancellation_reason ? <span>· {item.cancellation_reason}</span> : null}
             </li>

@@ -112,7 +112,14 @@ export type OutageRow = {
   estado_prtg: string | null
   estado_prtg_text: string | null
   duracion: string | null
+  duration_seconds?: number | null
   started_at: string | null
+  tracking?: {
+    id: number
+    status: string | null
+    status_label: string | null
+    ticket: string | null
+  } | null
   followup_status: string | null
   management_classification?: string | null
   management_classification_label?: string | null
@@ -232,11 +239,22 @@ export type IncidentDetail = {
   active_tracking?: {
     id: number
     incident_number: number | null
+    public_id?: string | null
+    case_code?: string | null
+    ticket?: string | null
+    report_ticket?: string | null
     status: string | null
     status_label: string | null
     opened_at: string | null
     opened_by_name: string | null
     description: string | null
+  } | null
+  tracking_sync?: {
+    created: boolean
+    tracking_id: number
+    ticket_code: string | null
+    status: string
+    incident_number: number | null
   } | null
   field_dispatch?: FieldDispatch | null
   field_dispatches?: FieldDispatch[]

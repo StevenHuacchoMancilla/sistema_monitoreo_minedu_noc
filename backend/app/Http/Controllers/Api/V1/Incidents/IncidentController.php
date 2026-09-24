@@ -129,9 +129,7 @@ class IncidentController extends Controller
                 'followup_status' => $incident->followup_status?->value,
                 'followup_label' => $incident->followup_status?->label(),
                 'activa' => $incident->recovered_at === null,
-                'same_day' => $incident->started_at && $incident->recovered_at
-                    ? $incident->started_at->toDateString() === $incident->recovered_at->toDateString()
-                    : false,
+                'same_day' => \App\Support\OperationalTime::sameLocalDay($incident->started_at, $incident->recovered_at),
                 'recovered_while_managing' => (bool) $incident->recovered_while_managing,
                 'recovery_review_status' => $incident->recovery_review_status?->value
                     ?? $incident->recovery_review_status,
@@ -158,6 +156,10 @@ class IncidentController extends Controller
                 ? [
                     'id' => $active->id,
                     'incident_number' => $active->incident_number,
+                    'public_id' => $active->public_id,
+                    'case_code' => $active->case_code,
+                    'ticket' => $active->report_ticket ?? $active->ticket,
+                    'report_ticket' => $active->report_ticket ?? $active->ticket,
                     'status' => $active->status instanceof \App\Enums\TrackingStatus
                         ? $active->status->value
                         : (string) $active->status,
@@ -353,15 +355,24 @@ class IncidentController extends Controller
             $data['scope'] = null;
         }
 
+        $userId = $request->user()?->id;
+        if (! $userId) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+        $data['created_by'] = (int) $userId;
+
         try {
-            $this->managements->apply($incident, $data);
+            $applied = $this->managements->apply($incident, $data);
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return response()->json(
-            $this->show($incident->fresh())->getData(true)
-        );
+        $payload = $this->show($incident->fresh())->getData(true);
+        if (is_array($payload)) {
+            $payload['tracking_sync'] = $applied['tracking'];
+        }
+
+        return response()->json($payload);
     }
 
     public function update(Request $request, Incident $incident): JsonResponse

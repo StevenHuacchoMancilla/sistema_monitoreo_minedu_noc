@@ -181,7 +181,7 @@ class TrackingRecordModelTest extends TestCase
         ]);
     }
 
-    public function test_closed_tracking_allows_new_open_for_same_incident(): void
+    public function test_closed_tracking_still_blocks_second_row_for_same_incident(): void
     {
         ['school' => $school, 'assignment' => $assignment, 'incident' => $incident, 'opener' => $opener] = $this->seedContext();
 
@@ -201,7 +201,9 @@ class TrackingRecordModelTest extends TestCase
             'lock_version' => 1,
         ]);
 
-        $second = TrackingRecord::query()->create([
+        $this->expectException(QueryException::class);
+
+        TrackingRecord::query()->create([
             'incident_number' => 21,
             'incident_id' => $incident->id,
             'school_id' => $school->id,
@@ -214,9 +216,6 @@ class TrackingRecordModelTest extends TestCase
             'opened_by_user_id' => $opener->id,
             'lock_version' => 1,
         ]);
-
-        $this->assertTrue($second->isOpen());
-        $this->assertSame(1, TrackingRecord::query()->openForIncident($incident->id)->count());
     }
 
     public function test_lock_version_bumps(): void

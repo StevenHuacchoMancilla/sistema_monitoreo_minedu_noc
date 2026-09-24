@@ -55,7 +55,7 @@ class DashboardService
         $enGestion = Incident::query()->active()->whereIn('followup_status', FollowupStatus::managingValues())->count();
         $recoveredToday = Incident::query()
             ->whereNotNull('recovered_at')
-            ->whereDate('recovered_at', today())
+            ->whereBetween('recovered_at', [\App\Support\OperationalTime::dayStart(), \App\Support\OperationalTime::dayEnd()])
             ->count();
         $pendingReviews = Incident::query()
             ->whereNotNull('recovered_at')
@@ -169,8 +169,11 @@ class DashboardService
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function activeOutages(?string $search = null): Collection
+    public function activeOutages(?string $search = null, ?string $sort = null, ?string $direction = null): Collection
     {
+        $sort = in_array($sort, ['started_at', 'id'], true) ? $sort : 'started_at';
+        $direction = strtolower((string) $direction) === 'asc' ? 'asc' : 'desc';
+
         $query = Incident::query()
             ->active()
             ->whereHas('sensor', fn ($sensor) => $sensor->where('normalized_status', MonitoringStatus::Caido))
@@ -178,8 +181,12 @@ class DashboardService
                 'school.contacts',
                 'networkAssignment',
                 'sensor',
+                'trackingRecords' => fn ($q) => $q
+                    ->select(['id', 'incident_id', 'status', 'report_ticket', 'ticket'])
+                    ->orderByDesc('id'),
             ])
-            ->orderByDesc('started_at');
+            ->orderBy($sort, $direction)
+            ->orderBy('id', $direction);
 
         if ($search) {
             $term = '%'.mb_strtolower($search).'%';
@@ -237,6 +244,7 @@ class DashboardService
 
             $reincidenteCount = (int) ($reincidenteCounts[$incident->network_assignment_id] ?? 1);
             $location = PrtgOperationalLocation::apiFields($assignment, $school);
+            $tracking = $incident->trackingRecords->first();
 
             return [
                 'incident_id' => $incident->id,
@@ -251,7 +259,16 @@ class DashboardService
                 'estado_prtg' => $sensor?->normalized_status?->value ?? $incident->current_status,
                 'estado_prtg_text' => $sensor?->status_text,
                 'duracion' => $incident->started_at?->diffForHumans(now(), true),
+                'duration_seconds' => $incident->started_at
+                    ? max(0, now()->getTimestamp() - $incident->started_at->getTimestamp())
+                    : null,
                 'started_at' => $incident->started_at?->toIso8601String(),
+                'tracking' => $tracking ? [
+                    'id' => $tracking->id,
+                    'status' => $tracking->status?->value,
+                    'status_label' => $tracking->status?->label(),
+                    'ticket' => $tracking->report_ticket ?? $tracking->ticket,
+                ] : null,
                 'followup_status' => $incident->followup_status?->value,
                 'management_classification' => $incident->management_classification?->value,
                 'management_classification_label' => $incident->management_classification?->label(),
