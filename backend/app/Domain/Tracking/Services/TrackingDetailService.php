@@ -12,6 +12,7 @@ use App\Models\PrtgSensor;
 use App\Models\TrackingRecord;
 use App\Models\TrackingUpdate;
 use App\Services\AuditLogger;
+use App\Support\OperationalTime;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\ValidationException;
 
@@ -250,6 +251,8 @@ class TrackingDetailService
         $isDateOnly = $precision === 'DATE'
             || $precision === \App\Enums\DatePrecision::Date;
 
-        return $isDateOnly ? $at->format('d/m/Y') : $at->format('d/m/Y H:i');
+        return $isDateOnly
+            ? OperationalTime::format($at, 'd/m/Y')
+            : OperationalTime::format($at, 'd/m/Y H:i');
     }
 }

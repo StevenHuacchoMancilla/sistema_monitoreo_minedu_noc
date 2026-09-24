@@ -16,7 +16,9 @@ import {
   Settings,
   TriangleAlert,
 } from 'lucide-react'
-import { usePrtgDashboard } from '../features/dashboard-prtg/hooks/usePrtgDashboard'
+import { useDashboardSummary } from '../features/dashboard/hooks/useDashboard'
+import { usePermissions } from '../features/auth/hooks/usePermissions'
+import { P, type Permission } from '../features/auth/permissions'
 import { useSidebar } from './AppLayout'
 
 type NavItem = {
@@ -27,21 +29,22 @@ type NavItem = {
   tone?: 'danger' | 'warn' | 'info' | 'muted' | 'success'
   icon: LucideIcon
   accent?: 'prtg' | 'cloudnet'
+  permission: Permission
 }
 
 const NAV: NavItem[] = [
-  { to: '/dashboard/prtg', label: 'Resumen PRTG', end: true, icon: LayoutDashboard, accent: 'prtg' },
-  { to: '/dashboard/cloudnet', label: 'Resumen Cloudnet', end: true, icon: Cloud, accent: 'cloudnet' },
-  { to: '/incidents/active', label: 'Caídas activas', badgeKey: 'caidas_activas', tone: 'danger', icon: TriangleAlert },
-  { to: '/incidents/pending', label: 'Pendientes de contacto', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone },
-  { to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity },
-  { to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck },
-  { to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map },
-  { to: '/history/schools', label: 'Historial por colegio', icon: History },
-  { to: '/tracking', label: 'Tracking General', icon: ClipboardList },
-  { to: '/schools', label: 'Locales educativos', icon: GraduationCap },
-  { to: '/reports/operational', label: 'Vista de reporte', icon: FileSpreadsheet },
-  { to: '/admin', label: 'Administración', icon: Settings },
+  { to: '/dashboard/prtg', label: 'Resumen PRTG', end: true, icon: LayoutDashboard, accent: 'prtg', permission: P.dashboardPrtg },
+  { to: '/dashboard/cloudnet', label: 'Resumen Cloudnet', end: true, icon: Cloud, accent: 'cloudnet', permission: P.dashboardCloudnet },
+  { to: '/incidents/active', label: 'Caídas activas', badgeKey: 'caidas_activas', tone: 'danger', icon: TriangleAlert, permission: P.incidentsView },
+  { to: '/incidents/pending', label: 'Pendientes de contacto', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone, permission: P.incidentsView },
+  { to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
+  { to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck, permission: P.recoveriesView },
+  { to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map, permission: P.incidentsView },
+  { to: '/history/schools', label: 'Historial por colegio', icon: History, permission: P.historyView },
+  { to: '/tracking', label: 'Tracking General', icon: ClipboardList, permission: P.trackingView },
+  { to: '/schools', label: 'Locales educativos', icon: GraduationCap, permission: P.schoolsView },
+  { to: '/reports/operational', label: 'Vista de reporte', icon: FileSpreadsheet, permission: P.reportsView },
+  { to: '/admin', label: 'Administración', icon: Settings, permission: P.adminView },
 ]
 
 const toneClass: Record<NonNullable<NavItem['tone']>, string> = {
@@ -59,10 +62,12 @@ export function Sidebar({
   onNavigate?: () => void
   forceExpanded?: boolean
 }) {
-  const summary = usePrtgDashboard()
+  const summary = useDashboardSummary()
   const nav = summary.data?.nav
+  const { can } = usePermissions()
   const { collapsed, toggle } = useSidebar()
   const isCollapsed = forceExpanded ? false : collapsed
+  const items = NAV.filter((item) => can(item.permission))
 
   return (
     <aside className="flex h-full min-h-screen flex-col border-r border-slate-800 bg-slate-950 text-slate-300">
@@ -85,7 +90,7 @@ export function Sidebar({
           </p>
         ) : null}
         <nav className="space-y-1">
-          {NAV.map((item) => {
+          {items.map((item) => {
             const Icon = item.icon
             const count = item.badgeKey ? nav?.[item.badgeKey] : undefined
             const pendingReviews =

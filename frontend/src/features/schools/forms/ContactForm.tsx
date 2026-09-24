@@ -9,11 +9,13 @@ export function ContactForm({
   saving,
   onSubmit,
   onDeactivate,
+  readOnly = false,
 }: {
   initial: ContactPayload & { id?: number }
   saving?: boolean
   onSubmit: (data: ContactPayload) => void
   onDeactivate?: () => void
+  readOnly?: boolean
 }) {
   const [form, setForm] = useState<ContactPayload>({
     position: initial.position,
@@ -28,6 +30,7 @@ export function ContactForm({
       className="space-y-3 rounded-xl border border-noc-border/70 bg-[#f5f5f7]/50 p-3"
       onSubmit={(e) => {
         e.preventDefault()
+        if (readOnly) return
         onSubmit({
           ...form,
           phone: form.phone == null ? null : String(form.phone),
@@ -40,6 +43,7 @@ export function ContactForm({
           <select
             className={`${inputClass} mt-1`}
             value={form.position}
+            disabled={readOnly}
             onChange={(e) => setForm((f) => ({ ...f, position: Number(e.target.value) }))}
           >
             <option value={1}>1</option>
@@ -52,6 +56,8 @@ export function ContactForm({
           <input
             className={`${inputClass} mt-1`}
             value={form.phone ?? ''}
+            readOnly={readOnly}
+            disabled={readOnly}
             onChange={(e) => setForm((f) => ({ ...f, phone: e.target.value }))}
             inputMode="tel"
           />
@@ -61,6 +67,8 @@ export function ContactForm({
           <input
             className={`${inputClass} mt-1`}
             value={form.name ?? ''}
+            readOnly={readOnly}
+            disabled={readOnly}
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
         </label>
@@ -69,28 +77,32 @@ export function ContactForm({
           <input
             className={`${inputClass} mt-1`}
             value={form.role ?? ''}
+            readOnly={readOnly}
+            disabled={readOnly}
             onChange={(e) => setForm((f) => ({ ...f, role: e.target.value }))}
           />
         </label>
       </div>
-      <div className="flex flex-wrap gap-2">
-        <button
-          type="submit"
-          disabled={saving}
-          className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-        >
-          {saving ? 'Guardando…' : initial.id ? 'Actualizar contacto' : 'Crear contacto'}
-        </button>
-        {onDeactivate ? (
+      {!readOnly ? (
+        <div className="flex flex-wrap gap-2">
           <button
-            type="button"
-            onClick={onDeactivate}
-            className="rounded-xl border border-noc-border px-3 py-1.5 text-xs font-semibold text-noc-muted hover:text-noc-danger"
+            type="submit"
+            disabled={saving}
+            className="rounded-xl bg-blue-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
           >
-            Desactivar
+            {saving ? 'Guardando…' : initial.id ? 'Actualizar contacto' : 'Crear contacto'}
           </button>
-        ) : null}
-      </div>
+          {onDeactivate ? (
+            <button
+              type="button"
+              onClick={onDeactivate}
+              className="rounded-xl border border-noc-border px-3 py-1.5 text-xs font-semibold text-noc-muted hover:text-noc-danger"
+            >
+              Desactivar
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </form>
   )
 }

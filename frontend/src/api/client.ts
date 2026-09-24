@@ -16,6 +16,7 @@ export type AuthUser = {
   last_login_at: string | null
   can_write: boolean
   is_admin: boolean
+  permissions: string[]
 }
 
 export class ApiError extends Error {
@@ -80,11 +81,13 @@ async function request<T>(path: string, init?: RequestOptions): Promise<T> {
       ? await response.json().catch(() => null)
       : await response.text().catch(() => null)
 
-    if (!response.ok) {
+            if (!response.ok) {
       const message =
-        typeof body === 'object' && body && 'message' in body && typeof (body as { message: unknown }).message === 'string'
-          ? (body as { message: string }).message
-          : `API ${response.status}`
+        response.status === 403
+          ? 'No tienes permisos para realizar esta acción.'
+          : typeof body === 'object' && body && 'message' in body && typeof (body as { message: unknown }).message === 'string'
+            ? (body as { message: string }).message
+            : `API ${response.status}`
       throw new ApiError(response.status, message, body)
     }
 

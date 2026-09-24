@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, FileCheck2, FileSpreadsheet, RefreshCw } from 'lucide-react'
+import { Download, FileCheck2, FileSpreadsheet, ImageDown, RefreshCw } from 'lucide-react'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { Button } from '../../../components/ui/Button'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
@@ -12,6 +12,7 @@ import { endpoints } from '../../../api/endpoints'
 import { IncidentManageModal } from '../../incidents/components/IncidentManageModal'
 import { PrtgLocationFilterFields } from '../../locations/components/PrtgLocationFilterFields'
 import { ReportDataTable } from '../components/ReportDataTable'
+import { downloadFinalReportPng } from '../lib/downloadFinalReportPng'
 
 function ReportLegend() {
   const items = [
@@ -40,10 +41,24 @@ function ClosingPreviewPanel() {
     queryKey: ['reports', 'closing-preview'],
     queryFn: endpoints.closingPreview,
   })
+  const [exportingPng, setExportingPng] = useState(false)
+  const [pngError, setPngError] = useState<string | null>(null)
 
   if (preview.isLoading) return <LoadingState />
   if (preview.isError) return <ErrorState message="No se pudo cargar la vista previa" />
   if (!preview.data) return null
+
+  const onDownloadPng = async () => {
+    setPngError(null)
+    setExportingPng(true)
+    try {
+      await downloadFinalReportPng(preview.data.rows)
+    } catch (err) {
+      setPngError(err instanceof Error ? err.message : 'No se pudo generar la imagen.')
+    } finally {
+      setExportingPng(false)
+    }
+  }
 
   return (
     <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
@@ -60,16 +75,28 @@ function ClosingPreviewPanel() {
             <div className="mt-2">
               <Badge tone="danger">{preview.data.total.toLocaleString('es-PE')} registro(s) a exportar</Badge>
             </div>
+            {pngError ? <p className="mt-2 text-sm text-red-600">{pngError}</p> : null}
           </div>
         </div>
         {preview.data.total > 0 ? (
-          <a
-            href={endpoints.closingXlsxUrl()}
-            className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
-          >
-            <Download className="h-4 w-4" aria-hidden />
-            Descargar XLSX
-          </a>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => void onDownloadPng()}
+              disabled={exportingPng}
+              className="inline-flex h-10 items-center gap-2 rounded-lg border border-slate-200 bg-white px-4 text-sm font-semibold text-slate-800 shadow-sm hover:bg-slate-50 disabled:opacity-60 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:hover:bg-slate-800"
+            >
+              <ImageDown className="h-4 w-4" aria-hidden />
+              {exportingPng ? 'Generando…' : 'Descargar imagen'}
+            </button>
+            <a
+              href={endpoints.closingXlsxUrl()}
+              className="inline-flex h-10 items-center gap-2 rounded-lg bg-blue-600 px-4 text-sm font-semibold text-white shadow-sm hover:bg-blue-700"
+            >
+              <Download className="h-4 w-4" aria-hidden />
+              Descargar XLSX
+            </a>
+          </div>
         ) : null}
       </div>
 

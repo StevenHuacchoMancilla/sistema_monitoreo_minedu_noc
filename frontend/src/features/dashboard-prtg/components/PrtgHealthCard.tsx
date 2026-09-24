@@ -85,6 +85,8 @@ export function PrtgStatusDistribution({ data }: { data: PrtgDashboard }) {
 
 export function PrtgCoverageCard({ data }: { data: PrtgDashboard }) {
   const c = data.coverage
+  const withoutPing = c.without_ping ?? c.unassociated
+  const samples = c.without_ping_samples ?? []
   return (
     <SectionCard
       title="Cobertura PRTG"
@@ -96,8 +98,13 @@ export function PrtgCoverageCard({ data }: { data: PrtgDashboard }) {
       }
     >
       <MetricRow label="Locales con CID válido" value={c.valid_cid} />
-      <MetricRow label="Locales asociados a PRTG" value={c.associated} tone="ok" />
-      <MetricRow label="Sin asociación" value={c.unassociated} tone="warn" />
+      <MetricRow label="Elegibles de monitoreo" value={c.eligible ?? c.valid_cid} />
+      <MetricRow label="Con sensor Ping" value={c.with_ping ?? c.associated} tone="ok" />
+      <MetricRow
+        label="Sin sensor Ping"
+        value={withoutPing}
+        tone={withoutPing > 0 ? 'warn' : 'default'}
+      />
       <MetricRow label="CIDs duplicados detectados" value={c.duplicate_cids} tone={c.duplicate_cids > 0 ? 'danger' : 'default'} />
       <MetricRow
         label="Sensores Ping duplicados"
@@ -105,6 +112,38 @@ export function PrtgCoverageCard({ data }: { data: PrtgDashboard }) {
         tone={c.duplicate_ping_sensors > 0 ? 'danger' : 'default'}
       />
       <MetricRow label="Advertencias de sincronización" value={c.sync_warnings} tone={c.sync_warnings > 0 ? 'warn' : 'default'} />
+      {samples.length > 0 ? (
+        <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+          <p className="mb-2 text-[11px] font-semibold tracking-wide text-slate-500 uppercase">
+            Colegios sin Ping ({samples.length}
+            {withoutPing > samples.length ? ` de ${withoutPing}` : ''})
+          </p>
+          <ul className="space-y-1.5">
+            {samples.map((row) => (
+              <li
+                key={`${row.cid ?? 'x'}-${row.codigo_local ?? ''}`}
+                className="rounded-lg bg-amber-50/80 px-2.5 py-1.5 text-[12px] text-amber-950 dark:bg-amber-950/30 dark:text-amber-100"
+              >
+                <span className="font-semibold tabular-nums">CID {row.cid ?? '—'}</span>
+                <span className="text-amber-800/80 dark:text-amber-200/80"> · </span>
+                <span className="font-medium">{row.local_educativo ?? '—'}</span>
+                {row.codigo_local ? (
+                  <span className="block truncate text-[11px] text-amber-800/70 dark:text-amber-200/70">
+                    Código {row.codigo_local}
+                    {row.provincia || row.distrito
+                      ? ` · ${[row.provincia, row.distrito].filter(Boolean).join(' / ')}`
+                      : ''}
+                  </span>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+          <p className="mt-2 text-[11px] text-slate-500">
+            El dispositivo existe en PRTG pero no tiene sensor Ping asociado. Crear/vincular Ping en PRTG y
+            resincronizar.
+          </p>
+        </div>
+      ) : null}
     </SectionCard>
   )
 }

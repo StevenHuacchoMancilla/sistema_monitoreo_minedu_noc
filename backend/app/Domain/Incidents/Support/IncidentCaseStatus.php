@@ -34,7 +34,18 @@ final class IncidentCaseStatus
         }
 
         if ($tracking !== null) {
-            return ['code' => 'RECOVERED_TRACKING_OPEN', 'label' => 'Recuperado · Tracking abierto', 'tone' => 'info'];
+            $label = 'Recuperado · Tracking abierto';
+            $managing = $followup !== null
+                && in_array($followup->value, FollowupStatus::managingValues(), true);
+            if ($managing) {
+                $label .= ' · '.$followup->label();
+            }
+
+            return [
+                'code' => 'RECOVERED_TRACKING_OPEN',
+                'label' => $label,
+                'tone' => $managing ? 'warning' : 'info',
+            ];
         }
 
         return ['code' => 'RECOVERED', 'label' => 'Recuperado', 'tone' => 'success'];

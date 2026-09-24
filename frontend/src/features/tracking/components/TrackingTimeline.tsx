@@ -1,6 +1,6 @@
 import type { TrackingUpdate } from '../types/tracking'
 import { initials } from '../lib/format'
-import { formatDateTime } from '../../../lib/datetime'
+import { formatDateTime24 } from '../../../lib/datetime'
 
 export function TrackingTimeline({ updates }: { updates: TrackingUpdate[] }) {
   if (updates.length === 0) {
@@ -37,7 +37,7 @@ export function TrackingTimeline({ updates }: { updates: TrackingUpdate[] }) {
               <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                 <time className="text-xs font-semibold tabular-nums text-slate-500 dark:text-slate-400">
                   {item.occurred_at
-                    ? formatDateTime(item.occurred_at)
+                    ? formatDateTime24(item.occurred_at)
                     : item.occurred_on
                       ? item.occurred_on.slice(0, 10).split('-').reverse().join('/')
                       : '—'}

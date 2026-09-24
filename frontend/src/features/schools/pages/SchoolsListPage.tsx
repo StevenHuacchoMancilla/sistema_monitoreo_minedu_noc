@@ -28,6 +28,8 @@ import { Badge } from '../../../components/ui/SoftBadge'
 import { TableSkeleton } from '../../../components/ui/TableSkeleton'
 import { DataTableContainer, Truncate, tableClassName, tdClassName, thClassName, theadClassName, trClassName } from '../../../components/ui/DataTableFrame'
 import { endpoints } from '../../../api/endpoints'
+import { usePermissions } from '../../auth/hooks/usePermissions'
+import { P } from '../../auth/permissions'
 import { techBadgeClass } from '../../../lib/uiTokens'
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
 import type { SchoolGeneralPayload } from '../types/school'
@@ -81,6 +83,9 @@ export function SchoolsListPage() {
     },
   })
 
+  const { can } = usePermissions()
+  const canManage = can(P.schoolsManage)
+
   const provinces = list.data?.filters?.provincias ?? []
   const districts = list.data?.filters?.distritos ?? []
   const technologies = list.data?.filters?.tecnologias ?? []
@@ -113,10 +118,12 @@ export function SchoolsListPage() {
             </p>
           }
           actions={
-            <Button type="button" variant="primary" onClick={() => setShowCreate((v) => !v)}>
-              <Plus className="h-4 w-4" aria-hidden />
-              Nuevo local
-            </Button>
+            canManage ? (
+              <Button type="button" variant="primary" onClick={() => setShowCreate((v) => !v)}>
+                <Plus className="h-4 w-4" aria-hidden />
+                Nuevo local
+              </Button>
+            ) : undefined
           }
         />
 
@@ -222,7 +229,7 @@ export function SchoolsListPage() {
           </FormField>
         </FilterCard>
 
-        {showCreate ? (
+        {showCreate && canManage ? (
           <section className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
             <h2 className="mb-4 text-lg font-semibold text-slate-900 dark:text-slate-50">Crear local educativo</h2>
             <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -398,11 +405,13 @@ export function SchoolsListPage() {
                           <IconButton label="Ver ficha maestra" onClick={() => navigate(`/schools/${row.id}`)}>
                             <Eye className="h-4 w-4" />
                           </IconButton>
-                          <Link to={`/schools/${row.id}`} aria-label="Editar">
-                            <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
-                              <Pencil className="h-4 w-4" />
-                            </span>
-                          </Link>
+                          {canManage ? (
+                            <Link to={`/schools/${row.id}`} aria-label="Editar">
+                              <span className="inline-flex h-9 w-9 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-600 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-900 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800">
+                                <Pencil className="h-4 w-4" />
+                              </span>
+                            </Link>
+                          ) : null}
                         </div>
                       </td>
                     </tr>

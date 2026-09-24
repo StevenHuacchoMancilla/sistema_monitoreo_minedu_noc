@@ -15,7 +15,11 @@ import { TrackingListPage } from '../features/tracking/pages/TrackingListPage'
 import { TrackingDetailPage } from '../features/tracking/pages/TrackingDetailPage'
 import { TrackingReportPage } from '../features/tracking/pages/TrackingReportPage'
 import { LoginPage } from '../features/auth/pages/LoginPage'
+import { ProfilePage } from '../features/auth/pages/ProfilePage'
 import { RequireAuth } from '../features/auth/components/RequireAuth'
+import { RequirePermission } from '../features/auth/components/RequirePermission'
+import { useAuth } from '../features/auth/context/AuthContext'
+import { homePathForPermissions, P } from '../features/auth/permissions'
 
 const MANAGING = new Set([
   'EN_GESTION',
@@ -25,6 +29,11 @@ const MANAGING = new Set([
   'TECNICO_EN_CAMPO',
 ])
 
+function HomeRedirect() {
+  const { user } = useAuth()
+  return <Navigate to={homePathForPermissions(user?.permissions)} replace />
+}
+
 export function AppRouter() {
   return (
     <BrowserRouter>
@@ -32,49 +41,77 @@ export function AppRouter() {
         <Route path="/login" element={<LoginPage />} />
 
         <Route element={<RequireAuth />}>
-          <Route path="/" element={<Navigate to="/dashboard/prtg" replace />} />
-          <Route path="/dashboard/prtg" element={<PrtgDashboardPage />} />
-          <Route path="/dashboard/cloudnet" element={<CloudnetDashboardPage />} />
-          <Route path="/incidents/active" element={<ActiveIncidentsPage />} />
-          <Route
-            path="/incidents/pending"
-            element={
-              <ActiveIncidentsPage
-                title="Pendientes de contacto"
-                filter={(row) =>
-                  row.followup_status === 'PENDIENTE_CONTACTO' ||
-                  row.management_classification === 'NEW_OUTAGE' ||
-                  row.management_classification === 'NO_RESPONSE'
-                }
-                presetFollowup="PENDIENTE_CONTACTO"
-              />
-            }
-          />
-          <Route
-            path="/incidents/managing"
-            element={
-              <ActiveIncidentsPage
-                title="En gestión"
-                filter={(row) => MANAGING.has(row.followup_status ?? '')}
-              />
-            }
-          />
-          <Route path="/recoveries" element={<RecoveriesPage />} />
-          <Route path="/incidents/recovered" element={<Navigate to="/recoveries" replace />} />
-          <Route path="/history" element={<Navigate to="/history/schools" replace />} />
-          <Route path="/history/schools" element={<SchoolHistoryIndexPage />} />
-          <Route path="/history/schools/:schoolId" element={<SchoolHistoryDetailPage />} />
-          <Route path="/history/incidents/:incidentId" element={<IncidentCaseFilePage />} />
-          <Route path="/tracking" element={<TrackingListPage />} />
-          <Route path="/tracking/report" element={<TrackingReportPage />} />
-          <Route path="/tracking/:id" element={<TrackingDetailPage />} />
-          <Route path="/concentrations" element={<ConcentrationsPage />} />
-          <Route path="/schools" element={<SchoolsListPage />} />
-          <Route path="/schools/:schoolId" element={<SchoolDetailPage />} />
-          <Route path="/reports" element={<Navigate to="/reports/operational" replace />} />
-          <Route path="/reports/operational" element={<OperationalReportPage />} />
-          <Route path="/admin" element={<AdminPage />} />
-          <Route path="*" element={<Navigate to="/dashboard/prtg" replace />} />
+          <Route path="/" element={<HomeRedirect />} />
+          <Route path="/profile" element={<ProfilePage />} />
+
+          <Route element={<RequirePermission permission={P.dashboardPrtg} />}>
+            <Route path="/dashboard/prtg" element={<PrtgDashboardPage />} />
+          </Route>
+          <Route element={<RequirePermission permission={P.dashboardCloudnet} />}>
+            <Route path="/dashboard/cloudnet" element={<CloudnetDashboardPage />} />
+          </Route>
+
+          <Route element={<RequirePermission permission={P.incidentsView} />}>
+            <Route path="/incidents/active" element={<ActiveIncidentsPage />} />
+            <Route
+              path="/incidents/pending"
+              element={
+                <ActiveIncidentsPage
+                  title="Pendientes de contacto"
+                  filter={(row) =>
+                    row.followup_status === 'PENDIENTE_CONTACTO' ||
+                    row.management_classification === 'NEW_OUTAGE' ||
+                    row.management_classification === 'NO_RESPONSE'
+                  }
+                  presetFollowup="PENDIENTE_CONTACTO"
+                />
+              }
+            />
+            <Route
+              path="/incidents/managing"
+              element={
+                <ActiveIncidentsPage
+                  title="En gestión"
+                  filter={(row) => MANAGING.has(row.followup_status ?? '')}
+                />
+              }
+            />
+            <Route path="/concentrations" element={<ConcentrationsPage />} />
+          </Route>
+
+          <Route element={<RequirePermission permission={P.recoveriesView} />}>
+            <Route path="/recoveries" element={<RecoveriesPage />} />
+            <Route path="/incidents/recovered" element={<Navigate to="/recoveries" replace />} />
+          </Route>
+
+          <Route element={<RequirePermission permission={P.historyView} />}>
+            <Route path="/history" element={<Navigate to="/history/schools" replace />} />
+            <Route path="/history/schools" element={<SchoolHistoryIndexPage />} />
+            <Route path="/history/schools/:schoolId" element={<SchoolHistoryDetailPage />} />
+            <Route path="/history/incidents/:incidentId" element={<IncidentCaseFilePage />} />
+          </Route>
+
+          <Route element={<RequirePermission permission={P.trackingView} />}>
+            <Route path="/tracking" element={<TrackingListPage />} />
+            <Route path="/tracking/report" element={<TrackingReportPage />} />
+            <Route path="/tracking/:id" element={<TrackingDetailPage />} />
+          </Route>
+
+          <Route element={<RequirePermission permission={P.schoolsView} />}>
+            <Route path="/schools" element={<SchoolsListPage />} />
+            <Route path="/schools/:schoolId" element={<SchoolDetailPage />} />
+          </Route>
+
+          <Route element={<RequirePermission permission={P.reportsView} />}>
+            <Route path="/reports" element={<Navigate to="/reports/operational" replace />} />
+            <Route path="/reports/operational" element={<OperationalReportPage />} />
+          </Route>
+
+          <Route element={<RequirePermission permission={P.adminView} />}>
+            <Route path="/admin" element={<AdminPage />} />
+          </Route>
+
+          <Route path="*" element={<HomeRedirect />} />
         </Route>
       </Routes>
     </BrowserRouter>

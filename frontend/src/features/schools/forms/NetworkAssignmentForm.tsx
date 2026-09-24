@@ -24,11 +24,13 @@ export function NetworkAssignmentForm({
   saving,
   mode,
   onSubmit,
+  readOnly = false,
 }: {
   initial: NetworkAssignmentPayload
   saving?: boolean
   mode: 'correct' | 'reassign'
   onSubmit: (data: NetworkAssignmentPayload) => void
+  readOnly?: boolean
 }) {
   const [form, setForm] = useState<NetworkAssignmentPayload>(initial)
 
@@ -37,39 +39,49 @@ export function NetworkAssignmentForm({
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault()
+        if (readOnly) return
         onSubmit(form)
       }}
     >
-      <p className="text-xs text-noc-muted">
-        {mode === 'correct'
-          ? 'Corrección tipográfica / técnica (audita el mismo assignment).'
-          : 'Reasignación histórica: cierra el CID actual y crea uno nuevo.'}
-      </p>
+      {!readOnly ? (
+        <p className="text-xs text-noc-muted">
+          {mode === 'correct'
+            ? 'Corrección tipográfica / técnica (audita el mismo assignment).'
+            : 'Reasignación histórica: cierra el CID actual y crea uno nuevo.'}
+        </p>
+      ) : null}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {FIELDS.map(({ key, label }) => (
           <label key={key} className="text-xs font-semibold text-noc-muted">
             {label}
             <input
-              className={`${inputClass} mt-1`}
+              className={`${inputClass} mt-1 ${readOnly ? 'cursor-not-allowed bg-slate-50' : ''}`}
               value={(form[key] as string | null | undefined) ?? ''}
-              onChange={(e) => setForm((f) => ({ ...f, [key]: e.target.value }))}
+              readOnly={readOnly}
+              disabled={readOnly}
+              onChange={(e) => {
+                if (readOnly) return
+                setForm((f) => ({ ...f, [key]: e.target.value }))
+              }}
             />
           </label>
         ))}
       </div>
-      <button
-        type="submit"
-        disabled={saving || (mode === 'reassign' && !form.cid)}
-        className={`rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
-          mode === 'reassign' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
-        }`}
-      >
-        {saving
-          ? 'Guardando…'
-          : mode === 'reassign'
-            ? 'Cambiar asignación CID'
-            : 'Corregir asignación'}
-      </button>
+      {!readOnly ? (
+        <button
+          type="submit"
+          disabled={saving || (mode === 'reassign' && !form.cid)}
+          className={`rounded-xl px-4 py-2 text-sm font-semibold text-white disabled:opacity-50 ${
+            mode === 'reassign' ? 'bg-amber-600 hover:bg-amber-700' : 'bg-blue-600 hover:bg-blue-700'
+          }`}
+        >
+          {saving
+            ? 'Guardando…'
+            : mode === 'reassign'
+              ? 'Cambiar asignación CID'
+              : 'Corregir asignación'}
+        </button>
+      ) : null}
     </form>
   )
 }

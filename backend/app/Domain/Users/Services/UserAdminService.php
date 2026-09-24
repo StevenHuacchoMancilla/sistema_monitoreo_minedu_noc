@@ -215,6 +215,7 @@ class UserAdminService
             'last_login_at' => $user->last_login_at?->toIso8601String(),
             'can_write' => $role?->canWrite() ?? false,
             'is_admin' => $role?->isAdmin() ?? false,
+            'permissions' => $role?->permissions() ?? [],
             'created_at' => $user->created_at?->toIso8601String(),
             'updated_at' => $user->updated_at?->toIso8601String(),
         ];

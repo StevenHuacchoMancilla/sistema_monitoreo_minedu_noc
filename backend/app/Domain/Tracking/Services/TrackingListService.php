@@ -219,6 +219,21 @@ class TrackingListService
     }
 
     /**
+     * Actores mínimos para filtros (id/legacy + display_name). Sin emails/roles.
+     *
+     * @return array{opened_by: list<array{value: string, label: string}>, closed_by: list<array{value: string, label: string}>}
+     */
+    public function actors(): array
+    {
+        $opts = $this->filterOptions();
+
+        return [
+            'opened_by' => $opts['opened_by'],
+            'closed_by' => $opts['closed_by'],
+        ];
+    }
+
+    /**
      * @return array{statuses: list<array{value: string, label: string}>, opened_by: list<array{value: string, label: string}>, closed_by: list<array{value: string, label: string}>}
      */
     private function filterOptions(): array
@@ -273,11 +288,10 @@ class TrackingListService
             return null;
         }
 
-        $local = $at->copy()->timezone(TrackingDateBounds::timezone());
         $isDateOnly = $precision === 'DATE' || $precision === \App\Enums\DatePrecision::Date;
 
         return $isDateOnly
-            ? $local->format('d/m/Y')
-            : $local->format('d/m/Y H:i');
+            ? OperationalTime::format($at, 'd/m/Y')
+            : OperationalTime::format($at, 'd/m/Y H:i');
     }
 }

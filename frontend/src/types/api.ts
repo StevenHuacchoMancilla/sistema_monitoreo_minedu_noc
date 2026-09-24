@@ -56,6 +56,7 @@ export type DashboardSummary = {
     en_gestion: number
     concentraciones: number
     recuperados: number
+    pending_reviews?: number
   }
   active_incidents_preview: OutageRow[]
   oldest_incidents_preview?: OutageRow[]

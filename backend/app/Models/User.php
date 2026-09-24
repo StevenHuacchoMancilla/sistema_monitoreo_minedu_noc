@@ -43,4 +43,17 @@ class User extends Authenticatable
     {
         return $this->role instanceof UserRole && $this->role->isAdmin();
     }
+
+    /**
+     * @return list<string>
+     */
+    public function permissions(): array
+    {
+        return $this->role instanceof UserRole ? $this->role->permissions() : [];
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        return $this->role instanceof UserRole && $this->role->hasPermission($permission);
+    }
 }

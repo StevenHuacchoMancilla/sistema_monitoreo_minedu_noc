@@ -121,6 +121,7 @@ class AuthController extends Controller
             'last_login_at' => $user->last_login_at?->toIso8601String(),
             'can_write' => $role->canWrite(),
             'is_admin' => $role->isAdmin(),
+            'permissions' => $role->permissions(),
         ];
     }
 

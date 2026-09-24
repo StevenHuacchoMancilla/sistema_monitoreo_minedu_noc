@@ -379,20 +379,20 @@ export function TrackingListPage() {
         ) : (
           <>
             <DataTableContainer>
-              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 720 }}>
+              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 1100 }}>
                 <colgroup>
-                  <col className="w-[4.5rem]" />
-                  <col className="w-[12rem]" />
-                  <col className="w-[4.5rem]" />
-                  <col className="w-[5.5rem]" />
-                  <col />
-                  <col className="w-[6.5rem]" />
+                  <col className="w-[3.5rem]" />
+                  <col className="w-[11rem]" />
+                  <col className="w-[4rem]" />
+                  <col className="w-[5rem]" />
+                  <col style={{ width: '12rem' }} />
+                  <col className="w-[7rem]" />
                   <col className="w-[6rem]" />
                   <col className="w-[10rem]" />
-                  <col className="w-[8.5rem]" />
-                  <col className="w-[6.5rem]" />
+                  <col className="w-[8rem]" />
+                  <col className="w-[7rem]" />
                   <col className="w-[6rem]" />
-                  <col className="w-[3.5rem]" />
+                  <col className="w-[3.25rem]" />
                 </colgroup>
                 <thead className={theadClassName}>
                   <tr>

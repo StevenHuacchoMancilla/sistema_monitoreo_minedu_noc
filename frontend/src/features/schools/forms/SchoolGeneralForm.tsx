@@ -22,10 +22,12 @@ export function SchoolGeneralForm({
   initial,
   saving,
   onSubmit,
+  readOnly = false,
 }: {
   initial: SchoolGeneralPayload
   saving?: boolean
   onSubmit: (data: SchoolGeneralPayload) => void
+  readOnly?: boolean
 }) {
   const [form, setForm] = useState<SchoolGeneralPayload>(initial)
 
@@ -34,6 +36,7 @@ export function SchoolGeneralForm({
       className="space-y-3"
       onSubmit={(e) => {
         e.preventDefault()
+        if (readOnly) return
         onSubmit(form)
       }}
     >
@@ -42,9 +45,12 @@ export function SchoolGeneralForm({
           <label key={key} className="text-xs font-semibold text-noc-muted">
             {label}
             <input
-              className={`${inputClass} mt-1`}
+              className={`${inputClass} mt-1 ${readOnly ? 'cursor-not-allowed bg-slate-50 dark:bg-slate-800' : ''}`}
               value={form[key] == null ? '' : String(form[key])}
+              readOnly={readOnly}
+              disabled={readOnly}
               onChange={(e) => {
+                if (readOnly) return
                 const raw = e.target.value
                 setForm((f) => ({
                   ...f,
@@ -55,13 +61,15 @@ export function SchoolGeneralForm({
           </label>
         ))}
       </div>
-      <button
-        type="submit"
-        disabled={saving}
-        className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
-      >
-        {saving ? 'Guardando…' : 'Guardar datos generales'}
-      </button>
+      {!readOnly ? (
+        <button
+          type="submit"
+          disabled={saving}
+          className="rounded-xl bg-blue-600 px-4 py-2 text-sm font-semibold text-white hover:bg-blue-700 disabled:opacity-50"
+        >
+          {saving ? 'Guardando…' : 'Guardar datos generales'}
+        </button>
+      ) : null}
     </form>
   )
 }

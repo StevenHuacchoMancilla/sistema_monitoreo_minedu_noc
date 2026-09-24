@@ -131,9 +131,20 @@ export type PrtgDashboard = {
     valid_cid: number
     associated: number
     unassociated: number
+    eligible?: number
+    with_ping?: number
+    without_ping?: number
     duplicate_cids: number
     duplicate_ping_sensors: number
     sync_warnings: number
+    without_ping_samples?: Array<{
+      cid: string | null
+      local_educativo: string | null
+      codigo_local: string | null
+      provincia: string | null
+      distrito: string | null
+      device: string | null
+    }>
   }
   monitoring: {
     associated_devices: number

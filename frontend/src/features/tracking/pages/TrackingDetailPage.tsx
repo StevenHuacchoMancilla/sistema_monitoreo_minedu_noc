@@ -89,7 +89,9 @@ export function TrackingDetailPage() {
   }
 
   const data = detail.data?.data
-  const canWrite = Boolean(user?.can_write)
+  const canWrite = Boolean(user?.permissions?.includes('tracking.manage'))
+  const canClose = Boolean(user?.permissions?.includes('tracking.close'))
+  const canReopen = Boolean(user?.permissions?.includes('tracking.reopen'))
 
   const prtgTone = useMemo(() => {
     const s = data?.prtg?.normalized_status
@@ -221,6 +223,8 @@ export function TrackingDetailPage() {
               <TrackingLifecyclePanel
                 tracking={data}
                 canWrite={canWrite}
+                canClose={canClose}
+                canReopen={canReopen}
                 busy={lifecycle.isPending}
                 onClose={(payload) => applyLifecycle({ type: 'close', payload })}
                 onReopen={(payload) => applyLifecycle({ type: 'reopen', payload })}

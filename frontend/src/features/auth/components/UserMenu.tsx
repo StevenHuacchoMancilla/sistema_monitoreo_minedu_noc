@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from 'react'
-import { ChevronDown, LogOut, User } from 'lucide-react'
+import { ChevronDown, KeyRound, LogOut, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
+import { ThemeToggle } from '../../theme/ThemeToggle'
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -33,6 +34,11 @@ export function UserMenu() {
     navigate('/login', { replace: true })
   }
 
+  const go = (path: string) => {
+    setOpen(false)
+    navigate(path)
+  }
+
   return (
     <div className="relative" ref={rootRef}>
       <button
@@ -57,9 +63,9 @@ export function UserMenu() {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-1.5 w-52 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+          className="absolute right-0 z-50 mt-1.5 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
         >
-          <div className="border-b border-slate-100 px-3 py-2 sm:hidden dark:border-slate-800">
+          <div className="border-b border-slate-100 px-3 py-2 dark:border-slate-800">
             <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{user.name}</p>
             <p className="truncate text-xs text-slate-500 dark:text-slate-400">{user.role_label}</p>
           </div>
@@ -67,11 +73,25 @@ export function UserMenu() {
             type="button"
             role="menuitem"
             className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
-            onClick={() => setOpen(false)}
+            onClick={() => go('/profile')}
           >
-            <User className="h-4 w-4 text-slate-400" aria-hidden />
-            Mi cuenta
+            <UserRound className="h-4 w-4 text-slate-400" aria-hidden />
+            Mi perfil
           </button>
+          <button
+            type="button"
+            role="menuitem"
+            className="flex w-full items-center gap-2 px-3 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800"
+            onClick={() => go('/profile#password')}
+          >
+            <KeyRound className="h-4 w-4 text-slate-400" aria-hidden />
+            Cambiar contraseña
+          </button>
+          <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200">
+            <span>Tema</span>
+            <ThemeToggle />
+          </div>
+          <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
           <button
             type="button"
             role="menuitem"

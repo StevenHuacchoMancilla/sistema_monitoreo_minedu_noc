@@ -374,26 +374,39 @@ export function RecoveriesPage() {
         {rows.length > 0 ? (
           <>
             <DataTableContainer className={list.isPlaceholderData ? 'opacity-70 transition-opacity' : ''}>
-              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 1040 }}>
+              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 1280 }}>
+                <colgroup>
+                  <col className="w-[4.75rem]" />
+                  <col className="w-[14rem]" />
+                  <col className="w-[6.5rem]" />
+                  <col className="w-[7rem]" />
+                  <col className="w-[5.25rem]" />
+                  <col className="w-[8rem]" />
+                  <col className="w-[9rem]" />
+                  <col className="w-[9.5rem]" />
+                  <col className="w-[8rem]" />
+                  <col className="w-[7.5rem]" />
+                  <col className="w-[5.25rem]" />
+                </colgroup>
                 <thead className={theadClassName}>
                   <tr>
-                    <th className={`${thClassName} w-[4.75rem]`}>CID</th>
-                    <th className={`${thClassName} w-[15rem]`}>Local educativo</th>
-                    <th className={`${thClassName} w-[6.5rem]`}>
+                    <th className={thClassName}>CID</th>
+                    <th className={thClassName}>Local educativo</th>
+                    <th className={thClassName}>
                       <span className="block">Caída</span>
                       <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
                     </th>
-                    <th className={`${thClassName} w-[7rem]`}>
+                    <th className={thClassName}>
                       <span className="block">Recuperación</span>
                       <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
                     </th>
-                    <th className={`${thClassName} w-[5.5rem]`}>Duración</th>
-                    <th className={`${thClassName} w-[8.5rem]`}>Gestión</th>
-                    <th className={`${thClassName} w-[8rem]`}>Tracking</th>
-                    <th className={`${thClassName} w-[10rem]`}>Estado</th>
+                    <th className={thClassName}>Duración</th>
+                    <th className={thClassName}>Gestión</th>
+                    <th className={thClassName}>Tracking</th>
+                    <th className={thClassName}>Estado</th>
                     <th className={`${thClassName} hidden xl:table-cell`}>Alertas</th>
-                    <th className={`${thClassName} hidden 2xl:table-cell w-[8rem]`}>Provincia</th>
-                    <th className={`${thClassName} sticky right-0 z-10 w-[5.5rem] bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}>
+                    <th className={`${thClassName} hidden lg:table-cell`}>Provincia</th>
+                    <th className={`${thClassName} sticky right-0 z-10 bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}>
                       Acción
                     </th>
                   </tr>
@@ -470,25 +483,32 @@ function RecoveryRow({ row }: { row: RecoveredRow }) {
           </Badge>
         ) : null}
       </td>
-      <td className={`${tdClassName} whitespace-nowrap tabular-nums`}>
-        {formatDuration(row.duration_seconds)}
+      <td className={`${tdClassName} tabular-nums`}>
+        <span className="block truncate whitespace-nowrap">{formatDuration(row.duration_seconds)}</span>
       </td>
       <td className={tdClassName}>
-        {showOutcome ? (
-          <ContactOutcomeBadge
-            classification={row.management_classification}
-            label={row.management_classification_label}
-          />
-        ) : row.managements_count > 0 ? (
-          <span className="font-medium">
-            {row.managements_count} gestión{row.managements_count === 1 ? '' : 'es'}
-          </span>
-        ) : (
-          <span className="text-slate-400">Sin gestión</span>
-        )}
-        {row.management_scope ? (
-          <span className="block text-[11px] text-slate-500">{row.management_scope}</span>
-        ) : null}
+        <div className="flex min-w-0 flex-col items-start gap-0.5">
+          {showOutcome ? (
+            <ContactOutcomeBadge
+              classification={row.management_classification}
+              label={row.management_classification_label}
+            />
+          ) : row.managements_count > 0 ? (
+            <span className="truncate font-medium">
+              {row.managements_count} gestión{row.managements_count === 1 ? '' : 'es'}
+            </span>
+          ) : (
+            <span className="text-slate-400">Sin gestión</span>
+          )}
+          {row.management_scope ? (
+            <span className="block truncate text-[11px] text-slate-500">{row.management_scope}</span>
+          ) : null}
+          {row.recovered_during_management ? (
+            <Badge tone="warning" className="!text-[10px]" title="PRTG recuperó mientras seguía en gestión operativa">
+              Durante gestión
+            </Badge>
+          ) : null}
+        </div>
       </td>
       <td className={tdClassName}>
         {row.tracking ? (
@@ -496,7 +516,7 @@ function RecoveryRow({ row }: { row: RecoveredRow }) {
             <Truncate className="font-medium tabular-nums" title={row.tracking.ticket}>
               {row.tracking.ticket ?? 'Sin ticket'}
             </Truncate>
-            <Badge tone={trackingStatusTone(row.tracking.status)}>
+            <Badge tone={trackingStatusTone(row.tracking.status)} className="max-w-full !text-[10px]">
               {row.tracking.status_label ?? row.tracking.status}
             </Badge>
           </span>
@@ -508,24 +528,40 @@ function RecoveryRow({ row }: { row: RecoveredRow }) {
         <CaseStatusBadge status={row.case_status} />
       </td>
       <td className={`${tdClassName} hidden xl:table-cell`}>
-        <div className="flex flex-wrap gap-1">
-          {row.requires_review ? <Badge tone="warning">Revisar gestión</Badge> : null}
-          {row.had_field_tech && row.requires_review ? <Badge tone="danger">Personal movilizado</Badge> : null}
-          {row.active_field_dispatch ? <Badge tone="cyan">Desplazamiento activo</Badge> : null}
-          {row.recovery_review_status === 'ACKNOWLEDGED' ? <Badge tone="success">Confirmada</Badge> : null}
-          {row.recovery_review_status === 'CONTINUE_MONITORING' ? <Badge tone="info">Seguimiento</Badge> : null}
+        <div className="flex min-w-0 flex-col items-start gap-0.5">
+          {row.requires_review ? <Badge tone="warning" className="max-w-full !text-[10px]">Revisar gestión</Badge> : null}
+          {row.had_field_tech && row.requires_review ? (
+            <Badge tone="danger" className="max-w-full !text-[10px]">
+              Personal movilizado
+            </Badge>
+          ) : null}
+          {row.active_field_dispatch ? (
+            <Badge tone="cyan" className="max-w-full !text-[10px]">
+              Desplazamiento activo
+            </Badge>
+          ) : null}
+          {row.recovery_review_status === 'ACKNOWLEDGED' ? (
+            <Badge tone="success" className="max-w-full !text-[10px]">
+              Confirmada
+            </Badge>
+          ) : null}
+          {row.recovery_review_status === 'CONTINUE_MONITORING' ? (
+            <Badge tone="info" className="max-w-full !text-[10px]">
+              Seguimiento
+            </Badge>
+          ) : null}
           {!row.requires_review && !row.active_field_dispatch && !row.recovery_review_status ? (
             <span className="text-slate-400">—</span>
           ) : null}
         </div>
       </td>
-      <td className={`${tdClassName} hidden 2xl:table-cell text-slate-500`}>
+      <td className={`${tdClassName} hidden lg:table-cell text-slate-500`}>
         <div className="flex min-w-0 flex-col gap-1">
           <Truncate title={row.provincia}>{row.provincia ?? '—'}</Truncate>
           <LocationMismatchBadge info={row} compact />
         </div>
       </td>
-      <td className="sticky right-0 z-10 bg-white px-2 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
+      <td className="sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
         <div className="inline-flex gap-0.5">
           <RowIconLink
             to={incidentCaseFilePath(row.id)}

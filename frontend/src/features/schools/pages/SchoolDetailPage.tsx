@@ -24,6 +24,8 @@ import { ContactForm } from '../forms/ContactForm'
 import type { NetworkAssignmentPayload, SchoolGeneralPayload } from '../types/school'
 import { techBadgeClass } from '../../../lib/uiTokens'
 import { formatDateTime } from '../../../lib/datetime'
+import { usePermissions } from '../../auth/hooks/usePermissions'
+import { P } from '../../auth/permissions'
 
 const TABS = [
   'GENERAL',
@@ -48,6 +50,8 @@ export function SchoolDetailPage() {
   const [tab, setTab] = useState<Tab>('GENERAL')
   const [reassignMode, setReassignMode] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const { can } = usePermissions()
+  const canManage = can(P.schoolsManage)
 
   const detail = useQuery({
     queryKey: ['schools', id],
@@ -169,9 +173,11 @@ export function SchoolDetailPage() {
                     <History className="h-3.5 w-3.5" aria-hidden />
                     Ver historial operativo
                   </Button>
-                  <Button type="button" onClick={() => toggleActive.mutate()} loading={toggleActive.isPending}>
-                    {school.active ? 'Desactivar local' : 'Reactivar local'}
-                  </Button>
+                  {canManage ? (
+                    <Button type="button" onClick={() => toggleActive.mutate()} loading={toggleActive.isPending}>
+                      {school.active ? 'Desactivar local' : 'Reactivar local'}
+                    </Button>
+                  ) : null}
                 </div>
               ) : null
             }
@@ -219,6 +225,7 @@ export function SchoolDetailPage() {
                   nivel_iiee: school.nivel_iiee ?? '',
                 }}
                 saving={saveGeneral.isPending}
+                readOnly={!canManage}
                 onSubmit={(data) => saveGeneral.mutate(data)}
               />
             </SectionCard>
@@ -228,13 +235,15 @@ export function SchoolDetailPage() {
             <SectionCard
               title="Asignación de red"
               action={
-                <button
-                  type="button"
-                  className="text-xs font-semibold text-amber-700 hover:underline"
-                  onClick={() => setReassignMode((v) => !v)}
-                >
-                  {reassignMode ? 'Cancelar reasignación' : 'Cambiar asignación CID'}
-                </button>
+                canManage ? (
+                  <button
+                    type="button"
+                    className="text-xs font-semibold text-amber-700 hover:underline"
+                    onClick={() => setReassignMode((v) => !v)}
+                  >
+                    {reassignMode ? 'Cancelar reasignación' : 'Cambiar asignación CID'}
+                  </button>
+                ) : undefined
               }
             >
               {assignment || reassignMode ? (
@@ -256,6 +265,7 @@ export function SchoolDetailPage() {
                     vlan_uplink: assignment?.vlan_uplink ?? '',
                   }}
                   saving={saveAssignment.isPending || reassign.isPending}
+                  readOnly={!canManage}
                   onSubmit={(data) => {
                     if (reassignMode) {
                       if (!data.cid) return
@@ -300,11 +310,12 @@ export function SchoolDetailPage() {
                         validation_status: c.validation_status,
                       }}
                       saving={saveContact.isPending}
+                      readOnly={!canManage}
                       onSubmit={(data) => saveContact.mutate({ id: c.id, data })}
-                      onDeactivate={() => deactivateContact.mutate(c.id)}
+                      onDeactivate={canManage ? () => deactivateContact.mutate(c.id) : undefined}
                     />
                   ))}
-                  {contacts.length < 3 ? (
+                  {canManage && contacts.length < 3 ? (
                     <ContactForm
                       initial={{ position: (contacts.length + 1) as 1 | 2 | 3, name: '', role: '', phone: '' }}
                       saving={saveContact.isPending}

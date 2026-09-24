@@ -4,12 +4,13 @@ import { Activity } from 'lucide-react'
 import { ApiError } from '../../../api/client'
 import { Button } from '../../../components/ui/Button'
 import { useAuth } from '../context/AuthContext'
+import { homePathForPermissions } from '../permissions'
 
 export function LoginPage() {
   const { user, loading, login } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
-  const from = (location.state as { from?: string } | null)?.from ?? '/dashboard/prtg'
+  const fromState = (location.state as { from?: string } | null)?.from
 
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -17,7 +18,9 @@ export function LoginPage() {
   const [submitting, setSubmitting] = useState(false)
 
   if (!loading && user) {
-    return <Navigate to={from} replace />
+    const dest =
+      fromState && fromState !== '/login' ? fromState : homePathForPermissions(user.permissions)
+    return <Navigate to={dest} replace />
   }
 
   const onSubmit = async (e: FormEvent) => {
@@ -25,8 +28,10 @@ export function LoginPage() {
     setError(null)
     setSubmitting(true)
     try {
-      await login(email.trim(), password)
-      navigate(from, { replace: true })
+      const logged = await login(email.trim(), password)
+      const dest =
+        fromState && fromState !== '/login' ? fromState : homePathForPermissions(logged.permissions)
+      navigate(dest, { replace: true })
     } catch (err) {
       if (err instanceof ApiError) {
         const body = err.body as { errors?: { email?: string[] }; message?: string } | null

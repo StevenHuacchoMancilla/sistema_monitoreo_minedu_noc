@@ -51,6 +51,19 @@ export function formatDateTime(value: string | number | Date | null | undefined)
   return d ? `${dateFormatter.format(d)} ${timeFormatter.format(d)}` : '—'
 }
 
+/** 23/09/2026 18:07 (24h, America/Lima) */
+export function formatDateTime24(value: string | number | Date | null | undefined): string {
+  const d = toDate(value)
+  if (!d) return '—'
+  const time = new Intl.DateTimeFormat('es-PE', {
+    timeZone: TIME_ZONE,
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  }).format(d)
+  return `${dateFormatter.format(d)} ${time}`
+}
+
 /** Día calendario en America/Lima como YYYY-MM-DD (comparable como string). */
 export function limaDateKey(value: string | number | Date | null | undefined): string | null {
   const d = toDate(value)

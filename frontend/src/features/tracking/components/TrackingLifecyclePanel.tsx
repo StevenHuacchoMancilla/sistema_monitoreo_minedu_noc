@@ -9,6 +9,8 @@ const noteClass =
 export function TrackingLifecyclePanel({
   tracking,
   canWrite,
+  canClose = canWrite,
+  canReopen = canWrite,
   busy,
   onClose,
   onReopen,
@@ -16,6 +18,8 @@ export function TrackingLifecyclePanel({
 }: {
   tracking: TrackingDetail
   canWrite: boolean
+  canClose?: boolean
+  canReopen?: boolean
   busy?: boolean
   onClose: (payload: { lock_version: number; closing_note?: string }) => Promise<void>
   onReopen: (payload: { lock_version: number; note?: string }) => Promise<void>
@@ -25,7 +29,7 @@ export function TrackingLifecyclePanel({
   const [error, setError] = useState<string | null>(null)
   const [confirmClose, setConfirmClose] = useState(false)
 
-  if (!canWrite) {
+  if (!canWrite && !canClose && !canReopen) {
     return null
   }
 
@@ -41,6 +45,7 @@ export function TrackingLifecyclePanel({
   }
 
   if (tracking.can_reopen) {
+    if (!canReopen) return null
     return (
       <section className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-800 dark:bg-slate-900/60">
         <div className="flex flex-wrap items-start justify-between gap-3">
@@ -92,7 +97,7 @@ export function TrackingLifecyclePanel({
     )
   }
 
-  if (!tracking.can_close) {
+  if (!tracking.can_close || !canClose) {
     return null
   }
 

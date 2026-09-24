@@ -158,9 +158,13 @@ class PrtgDashboardService
                 'valid_cid' => $validCid,
                 'associated' => $monitored,
                 'unassociated' => $withoutPrtg,
+                'eligible' => $eligible,
+                'with_ping' => $withPing,
+                'without_ping' => $withoutPrtg,
                 'duplicate_cids' => $duplicateCids,
                 'duplicate_ping_sensors' => $duplicatePings,
                 'sync_warnings' => (int) ($sync['warning_count'] ?? 0),
+                'without_ping_samples' => $this->assignmentsWithoutPing(8),
             ],
             'monitoring' => [
                 'associated_devices' => $monitored,
@@ -507,6 +511,35 @@ class PrtgDashboardService
                 'samples' => (int) $row->samples,
             ];
         }, $rows);
+    }
+
+    /**
+     * Asignaciones elegibles sin sensor Ping (brecha de cobertura PRTG).
+     *
+     * @return list<array{cid: ?string, local_educativo: ?string, codigo_local: ?string, provincia: ?string, distrito: ?string, device: ?string}>
+     */
+    private function assignmentsWithoutPing(int $limit = 8): array
+    {
+        return NetworkAssignment::query()
+            ->where('is_active', true)
+            ->where('monitoring_eligible', true)
+            ->whereDoesntHave('sensors', function ($q) {
+                $q->whereRaw('LOWER(name) = ?', ['ping']);
+            })
+            ->with('school:id,local_educativo,codigo_local')
+            ->orderBy('cid')
+            ->limit($limit)
+            ->get(['id', 'cid', 'school_id', 'prtg_province', 'prtg_district', 'prtg_device_name'])
+            ->map(fn (NetworkAssignment $row) => [
+                'cid' => $row->cid,
+                'local_educativo' => $row->school?->local_educativo,
+                'codigo_local' => $row->school?->codigo_local,
+                'provincia' => $row->prtg_province,
+                'distrito' => $row->prtg_district,
+                'device' => $row->prtg_device_name,
+            ])
+            ->values()
+            ->all();
     }
 
     /**

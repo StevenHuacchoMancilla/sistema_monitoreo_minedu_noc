@@ -71,6 +71,16 @@ class TrackingController extends Controller
     }
 
     /**
+     * Opciones mínimas para filtros Aperturado/Cerrado por (sin datos administrativos).
+     */
+    public function actors(): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->list->actors(),
+        ]);
+    }
+
+    /**
      * Vista tipo Excel (10 columnas TRACKING GENERAL.xlsx).
      */
     public function report(Request $request): JsonResponse

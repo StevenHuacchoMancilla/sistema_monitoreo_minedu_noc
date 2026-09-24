@@ -41,7 +41,7 @@ export function ClassificationBadge({
             : 'slate'
   )
   return (
-    <span className={`inline-flex whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold ${CLASSIFICATION_BADGE_CLASS[key] ?? CLASSIFICATION_BADGE_CLASS.slate}`}>
+    <span className={`inline-flex max-w-full min-w-0 truncate rounded-full px-2 py-0.5 text-[10px] font-semibold ${CLASSIFICATION_BADGE_CLASS[key] ?? CLASSIFICATION_BADGE_CLASS.slate}`}>
       {label ?? CLASSIFICATION_LABELS[classification] ?? classification}
     </span>
   )
@@ -64,11 +64,37 @@ export function ContactOutcomeBadge({
 
 export type CaseStatus = { code: string; label: string; tone: StatusTone }
 
+/**
+ * Estado del caso: si el label trae segmentos " · ", se apilan chips cortos
+ * para no romper columnas table-fixed.
+ */
 export function CaseStatusBadge({ status }: { status?: CaseStatus | null }) {
   if (!status) return <span className="text-slate-400">—</span>
+  const parts = status.label
+    .split('·')
+    .map((p) => p.trim())
+    .filter(Boolean)
+  const tone = status.tone in statusTone ? status.tone : 'neutral'
+
+  if (parts.length <= 1) {
+    return (
+      <SoftBadge tone={tone} title={status.label} className="max-w-full">
+        {status.label}
+      </SoftBadge>
+    )
+  }
+
   return (
-    <SoftBadge tone={status.tone in statusTone ? status.tone : 'neutral'} title={status.label}>
-      {status.label}
-    </SoftBadge>
+    <span className="flex min-w-0 max-w-full flex-col items-start gap-0.5" title={status.label}>
+      {parts.map((part, i) => (
+        <SoftBadge
+          key={`${status.code}-${part}`}
+          tone={i === 0 ? tone : i === parts.length - 1 ? 'warning' : 'info'}
+          className="max-w-full !text-[10px]"
+        >
+          {part}
+        </SoftBadge>
+      ))}
+    </span>
   )
 }

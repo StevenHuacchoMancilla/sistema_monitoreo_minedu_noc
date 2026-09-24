@@ -105,7 +105,7 @@ export function ActiveIncidentsPage({
   const [manageId, setManageId] = useState<number | null>(null)
   const client = useQueryClient()
   const { user } = useAuth()
-  const canManage = user?.role === 'ADMIN' || user?.role === 'NOC_OPERATOR'
+  const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
   const now = useNow()
 
   useEffect(() => {
@@ -322,23 +322,35 @@ export function ActiveIncidentsPage({
         {rows.length > 0 ? (
           <>
             <DataTableContainer className={outages.isPlaceholderData ? 'opacity-70 transition-opacity' : ''}>
-              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 1080 }}>
+              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 1180 }}>
+                <colgroup>
+                  <col className="w-[5.5rem]" />
+                  <col className="w-[4.75rem]" />
+                  <col className="w-[14rem]" />
+                  <col className="w-[9rem]" />
+                  <col className="w-[6.5rem]" />
+                  <col className="w-[5.5rem]" />
+                  <col className="w-[10.5rem]" />
+                  <col className="w-[7rem]" />
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[4rem]" />
+                </colgroup>
                 <thead className={theadClassName}>
                   <tr>
-                    <th className={`${thClassName} w-[5.5rem]`}>Estado</th>
-                    <th className={`${thClassName} w-[4.75rem]`}>CID</th>
-                    <th className={`${thClassName} w-[15rem]`}>Local</th>
-                    <th className={`${thClassName} w-[9rem]`}>Ubicación</th>
-                    <th className={`${thClassName} w-[6.5rem]`}>
+                    <th className={thClassName}>Estado</th>
+                    <th className={thClassName}>CID</th>
+                    <th className={thClassName}>Local</th>
+                    <th className={thClassName}>Ubicación</th>
+                    <th className={thClassName}>
                       <span className="block">Caída</span>
                       <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
                     </th>
-                    <th className={`${thClassName} w-[6rem]`}>Duración</th>
-                    <th className={`${thClassName} w-[10.5rem]`}>Seguimiento</th>
-                    <th className={`${thClassName} w-[7.5rem]`}>Responsable</th>
-                    <th className={`${thClassName} w-[8rem]`}>Tracking</th>
+                    <th className={thClassName}>Duración</th>
+                    <th className={thClassName}>Seguimiento</th>
+                    <th className={thClassName}>Responsable</th>
+                    <th className={thClassName}>Tracking</th>
                     <th
-                      className={`${thClassName} sticky right-0 z-10 w-[4rem] bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}
+                      className={`${thClassName} sticky right-0 z-10 bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}
                     >
                       Acción
                     </th>
@@ -430,8 +442,8 @@ function OutageTableRow({
       <td className={tdClassName}>
         <IsoDateTimeCell value={row.started_at} />
       </td>
-      <td className={`${tdClassName} whitespace-nowrap font-semibold tabular-nums ${DURATION_CLASS[bucket]}`}>
-        {formatDuration(seconds)}
+      <td className={`${tdClassName} font-semibold tabular-nums ${DURATION_CLASS[bucket]}`}>
+        <span className="block truncate whitespace-nowrap">{formatDuration(seconds)}</span>
       </td>
       <td className={tdClassName}>
         <div className="flex min-w-0 flex-col items-start gap-1">
@@ -477,7 +489,7 @@ function OutageTableRow({
           <span className="text-slate-400">—</span>
         )}
       </td>
-      <td className="sticky right-0 z-10 bg-white px-2 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
+      <td className="sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
         <IconButton
           label={canManage ? 'Gestionar' : 'Ver detalle'}
           onClick={() => onManage(row.incident_id)}

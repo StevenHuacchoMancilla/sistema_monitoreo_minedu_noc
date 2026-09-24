@@ -2,6 +2,8 @@
 
 namespace App\Enums;
 
+use App\Domain\Auth\PermissionCatalog;
+
 enum UserRole: string
 {
     case Admin = 'ADMIN';
@@ -33,5 +35,18 @@ enum UserRole: string
     public function isAdmin(): bool
     {
         return $this === self::Admin;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public function permissions(): array
+    {
+        return PermissionCatalog::forRole($this);
+    }
+
+    public function hasPermission(string $permission): bool
+    {
+        return PermissionCatalog::roleHas($this, $permission);
     }
 }

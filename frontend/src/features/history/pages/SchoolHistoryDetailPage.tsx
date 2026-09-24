@@ -321,25 +321,37 @@ export function SchoolHistoryDetailPage() {
             {rows.length > 0 ? (
               <>
                 <DataTableContainer>
-                  <table className={`${tableClassName} table-fixed`} style={{ minWidth: 1000 }}>
+                  <table className={`${tableClassName} table-fixed`} style={{ minWidth: 1120 }}>
+                    <colgroup>
+                      <col className="w-[3.75rem]" />
+                      <col className="w-[6.5rem]" />
+                      <col className="w-[7rem]" />
+                      <col className="w-[5.5rem]" />
+                      <col className="w-[10.5rem]" />
+                      <col className="w-[6.5rem]" />
+                      <col className="w-[8.5rem]" />
+                      <col style={{ width: '10rem' }} />
+                      <col className="w-[8rem]" />
+                      <col className="w-[4.5rem]" />
+                    </colgroup>
                     <thead className={theadClassName}>
                       <tr>
-                        <th className={`${thClassName} w-[3.75rem]`}>N°</th>
-                        <th className={`${thClassName} w-[6.5rem]`}>
+                        <th className={thClassName}>N°</th>
+                        <th className={thClassName}>
                           <span className="block">Caída</span>
                           <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
                         </th>
-                        <th className={`${thClassName} w-[7rem]`}>
+                        <th className={thClassName}>
                           <span className="block">Recuperación</span>
                           <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
                         </th>
-                        <th className={`${thClassName} w-[5.5rem]`}>Duración</th>
-                        <th className={`${thClassName} w-[10.5rem]`}>Estado actual</th>
-                        <th className={`${thClassName} w-[6.5rem]`}>Gestión</th>
-                        <th className={`${thClassName} w-[8rem]`}>Tracking</th>
+                        <th className={thClassName}>Duración</th>
+                        <th className={thClassName}>Estado actual</th>
+                        <th className={thClassName}>Gestión</th>
+                        <th className={thClassName}>Tracking</th>
                         <th className={thClassName}>Último seguimiento</th>
-                        <th className={`${thClassName} hidden lg:table-cell w-[8rem]`}>Cerrado por</th>
-                        <th className={`${thClassName} sticky right-0 z-10 w-[4.5rem] bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}>
+                        <th className={`${thClassName} hidden lg:table-cell`}>Cerrado por</th>
+                        <th className={`${thClassName} sticky right-0 z-10 bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}>
                           Ver
                         </th>
                       </tr>

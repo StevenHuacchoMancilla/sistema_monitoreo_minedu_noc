@@ -6,6 +6,7 @@ use App\Enums\DatePrecision;
 use App\Enums\TrackingStatus;
 use App\Models\TrackingRecord;
 use App\Models\TrackingUpdate;
+use App\Support\OperationalTime;
 use Illuminate\Support\Carbon;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
@@ -211,11 +212,12 @@ class TrackingReportService
     private function updateDatePrefix(TrackingUpdate $update): string
     {
         if ($update->occurred_at instanceof Carbon) {
-            if ($update->occurred_at->format('H:i:s') !== '00:00:00') {
-                return $update->occurred_at->format('d/m/Y H:i');
+            $local = $update->occurred_at->copy()->timezone(OperationalTime::tz());
+            if ($local->format('H:i:s') !== '00:00:00') {
+                return (string) OperationalTime::format($update->occurred_at, 'd/m/Y H:i');
             }
 
-            return $update->occurred_at->format('d/m');
+            return (string) OperationalTime::format($update->occurred_at, 'd/m');
         }
 
         if ($update->occurred_on) {
@@ -227,7 +229,7 @@ class TrackingReportService
         }
 
         if ($update->created_at instanceof Carbon) {
-            return $update->created_at->format('d/m/Y H:i');
+            return (string) OperationalTime::format($update->created_at, 'd/m/Y H:i');
         }
 
         return '';
@@ -243,6 +245,9 @@ class TrackingReportService
             || $precision === DatePrecision::Date
             || ($precision instanceof DatePrecision && $precision === DatePrecision::Date);
 
-        return $isDateOnly ? $at->format('d/m/Y') : $at->format('d/m/Y H:i');
+        // Misma política que TrackingListService: persistencia UTC, presentación America/Lima.
+        return $isDateOnly
+            ? OperationalTime::format($at, 'd/m/Y')
+            : OperationalTime::format($at, 'd/m/Y H:i');
     }
 }

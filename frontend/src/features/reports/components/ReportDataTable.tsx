@@ -124,10 +124,10 @@ export function ReportDataTable({
                 >
                   {row.cid ?? '—'}
                 </td>
-                <td className={`${td} max-w-[240px] font-medium text-slate-900 dark:text-slate-100`}>
+                <td className={`${td} min-w-0 overflow-hidden font-medium text-slate-900 dark:text-slate-100`}>
                   <CellTruncate value={row.local_educativo} />
                 </td>
-                <td className={`${td} max-w-[320px] font-mono text-[11px] text-slate-600 dark:text-slate-400`}>
+                <td className={`${td} min-w-0 overflow-hidden font-mono text-[11px] text-slate-600 dark:text-slate-400`}>
                   <CellTruncate value={row.presentacion_nombre_prtg} />
                 </td>
                 <td className={`${td} whitespace-nowrap text-slate-800 dark:text-slate-200`} title="Inicio de caída reportado por PRTG">
@@ -152,7 +152,7 @@ export function ReportDataTable({
                     '—'
                   )}
                 </td>
-                <td className={`${td} max-w-[300px] text-slate-700 dark:text-slate-300`}>
+                <td className={`${td} min-w-0 overflow-hidden text-slate-700 dark:text-slate-300`}>
                   <span className="line-clamp-2" title={row.detalle ?? undefined}>
                     {row.detalle?.trim() ? row.detalle : '—'}
                   </span>
