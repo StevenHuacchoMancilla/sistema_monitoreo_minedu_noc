@@ -27,6 +27,10 @@ final class IncidentTimelineBuilder
             if ($type === 'MANAGEMENT') {
                 continue;
             }
+            // Ocultar ruido técnico de sync/alineación; conservar creación y recuperaciones PRTG.
+            if (self::isNoisySystemUpdate($update)) {
+                continue;
+            }
             $events[] = self::fromUpdate($update);
         }
 
@@ -127,5 +131,56 @@ final class IncidentTimelineBuilder
             'scope' => null,
             'classification' => null,
         ];
+    }
+
+    /**
+     * Eventos SYSTEM de sync/alineación confunden al operador.
+     * Se mantienen: "Incidencia creada", recuperaciones PRTG, revisiones y campo.
+     */
+    private static function isNoisySystemUpdate(IncidentUpdate $u): bool
+    {
+        $type = strtoupper((string) $u->type);
+        if (! in_array($type, ['SYSTEM', 'SYSTEM_NOTE'], true)) {
+            return false;
+        }
+
+        $observation = mb_strtolower((string) ($u->observation ?? ''));
+
+        // Recuperación técnica / operativa: útil.
+        if (
+            str_contains($observation, 'recuper')
+            || $u->status_after === 'RECUPERADO'
+            || $type === 'SYSTEM_RECOVERY'
+        ) {
+            return false;
+        }
+
+        // Creación de incidencia: útil.
+        if (str_contains($observation, 'incidencia creada') || str_contains($observation, 'creada')) {
+            return false;
+        }
+
+        // Ruido típico de sync tardío / alineación de started_at.
+        $noiseMarkers = [
+            'sync tard',
+            'downtimesince',
+            'uptimesince',
+            'alinead',
+            'started_at',
+            'lastcheck',
+            're-aline',
+            'realine',
+            'timezone',
+            'utc',
+        ];
+
+        foreach ($noiseMarkers as $marker) {
+            if (str_contains($observation, $marker)) {
+                return true;
+            }
+        }
+
+        // Cualquier otro SYSTEM genérico ("Evento del sistema") sin valor operativo.
+        return true;
     }
 }

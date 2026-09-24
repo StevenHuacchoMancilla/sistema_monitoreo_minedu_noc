@@ -1,5 +1,5 @@
 import { Activity, CalendarDays, MapPin } from 'lucide-react'
-import type { ReactNode } from 'react'
+import type { CSSProperties, ReactNode } from 'react'
 import { formatDateTime24, formatDate } from '../../../lib/datetime'
 import { formatOutageDisplay, type ReportRow } from '../types/operationalReport'
 
@@ -18,18 +18,19 @@ export const FINAL_REPORT_IMAGE_COLUMNS = [
   'CODIGO DE LOCAL',
 ] as const
 
+/** Anchos fijos (suma ≈ 2360 dentro del marco). */
 const COL_WIDTHS = [
-  '52px',
-  '88px',
-  '200px',
+  '48px',
+  '84px',
+  '210px',
+  '320px',
+  '108px',
+  '62px',
   '280px',
-  '110px',
-  '64px',
-  '260px',
-  '78px',
-  '140px',
+  '72px',
   '130px',
-  '110px',
+  '120px',
+  '100px',
 ] as const
 
 type Props = {
@@ -74,7 +75,6 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
           overflow: 'hidden',
         }}
       >
-        {/* Header */}
         <div
           style={{
             display: 'flex',
@@ -102,9 +102,7 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
               <Activity size={24} color="#fff" strokeWidth={2.25} />
             </div>
             <div>
-              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', color: '#F8FAFC' }}>
-                NOC LORETO
-              </div>
+              <div style={{ fontSize: 22, fontWeight: 800, letterSpacing: '-0.02em', color: '#F8FAFC' }}>NOC</div>
               <div style={{ fontSize: 13, fontWeight: 600, color: '#94A3B8', marginTop: 2 }}>
                 Monitoreo LLEE · MINEDU
               </div>
@@ -130,7 +128,6 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
           </div>
         </div>
 
-        {/* Title block */}
         <div style={{ textAlign: 'center', padding: '22px 32px 18px' }}>
           <div
             style={{
@@ -158,8 +155,7 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
             }}
           >
             <span>
-              Fecha de generación:{' '}
-              <strong style={{ color: '#F1F5F9' }}>{generatedLabel}</strong>
+              Fecha de generación: <strong style={{ color: '#F1F5F9' }}>{generatedLabel}</strong>
             </span>
             <span>
               Total registros:{' '}
@@ -168,7 +164,6 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
           </div>
         </div>
 
-        {/* Table */}
         <div style={{ padding: '0 20px 24px' }}>
           <table
             style={{
@@ -189,14 +184,15 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
                   <th
                     key={label}
                     style={{
-                      padding: '12px 8px',
+                      padding: '11px 8px',
                       fontSize: 10,
                       fontWeight: 800,
-                      letterSpacing: '0.06em',
+                      letterSpacing: '0.05em',
                       textTransform: 'uppercase',
                       color: '#F8FAFC',
                       textAlign: 'left',
                       verticalAlign: 'middle',
+                      overflow: 'hidden',
                       background:
                         i === 0
                           ? 'linear-gradient(135deg, #1D4ED8, #1E40AF)'
@@ -207,11 +203,6 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
                         i < FINAL_REPORT_IMAGE_COLUMNS.length - 1
                           ? '1px solid rgba(14, 165, 233, 0.25)'
                           : 'none',
-                      clipPath:
-                        i < FINAL_REPORT_IMAGE_COLUMNS.length - 1
-                          ? 'polygon(0 0, calc(100% - 8px) 0, 100% 50%, calc(100% - 8px) 100%, 0 100%)'
-                          : undefined,
-                      position: 'relative',
                     }}
                   >
                     {label}
@@ -224,6 +215,8 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
                 const outage = formatOutageDisplay(row)
                 const caidaText = outage.time ? `${outage.date} ${outage.time}` : outage.date
                 const zebra = idx % 2 === 0 ? 'rgba(15, 39, 66, 0.55)' : 'rgba(11, 27, 50, 0.85)'
+                const prtgName = cell(row.presentacion_nombre_prtg)
+                const detalle = cell(row.detalle)
 
                 return (
                   <tr key={row.incident_id}>
@@ -241,7 +234,6 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
                           color: '#E0F2FE',
                           fontSize: 11,
                           fontWeight: 800,
-                          boxShadow: '0 0 10px rgba(34, 211, 238, 0.2)',
                         }}
                       >
                         {cell(row.n)}
@@ -254,9 +246,27 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
                       {cell(row.local_educativo)}
                     </Td>
                     <Td bg={zebra} mono small>
-                      <span style={{ display: 'inline-flex', alignItems: 'flex-start', gap: 6 }}>
+                      <span
+                        style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          gap: 6,
+                          maxWidth: '100%',
+                          overflow: 'hidden',
+                        }}
+                      >
                         <MapPin size={12} color="#F87171" style={{ marginTop: 2, flexShrink: 0 }} />
-                        <span>{cell(row.presentacion_nombre_prtg)}</span>
+                        <span
+                          title={prtgName === '—' ? undefined : prtgName}
+                          style={{
+                            overflow: 'hidden',
+                            wordBreak: 'break-all',
+                            overflowWrap: 'anywhere',
+                            lineHeight: 1.4,
+                          }}
+                        >
+                          {prtgName}
+                        </span>
                       </span>
                     </Td>
                     <Td bg={zebra}>{caidaText}</Td>
@@ -283,7 +293,20 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
                         '—'
                       )}
                     </Td>
-                    <Td bg={zebra}>{cell(row.detalle)}</Td>
+                    <Td bg={zebra}>
+                      <span
+                        title={detalle === '—' ? undefined : detalle}
+                        style={{
+                          display: 'block',
+                          lineHeight: 1.45,
+                          whiteSpace: 'pre-wrap',
+                          wordBreak: 'break-word',
+                          overflowWrap: 'anywhere',
+                        }}
+                      >
+                        {detalle}
+                      </span>
+                    </Td>
                     <Td bg={zebra} strong center>
                       {cell(row.pext_pint)}
                     </Td>
@@ -299,7 +322,6 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
           </table>
         </div>
 
-        {/* Footer */}
         <div
           style={{
             display: 'flex',
@@ -312,7 +334,7 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
             fontWeight: 500,
           }}
         >
-          <span>NOC Loreto · Informe final · Contacto confirmado</span>
+          <span>NOC · Informe final · Contacto confirmado</span>
           <span>Generado {formatDate(generatedAt)} · Solo lectura operativa</span>
         </div>
       </div>
@@ -335,23 +357,21 @@ function Td({
   small?: boolean
   center?: boolean
 }) {
-  return (
-    <td
-      style={{
-        padding: '11px 8px',
-        background: bg,
-        borderBottom: '1px solid rgba(34, 211, 238, 0.12)',
-        verticalAlign: 'top',
-        fontSize: small ? 10.5 : 12,
-        lineHeight: 1.35,
-        color: '#E2E8F0',
-        fontWeight: strong ? 650 : 500,
-        fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : undefined,
-        textAlign: center ? 'center' : 'left',
-        wordBreak: 'break-word',
-      }}
-    >
-      {children}
-    </td>
-  )
+  const style: CSSProperties = {
+    padding: '11px 8px',
+    background: bg,
+    borderBottom: '1px solid rgba(34, 211, 238, 0.12)',
+    verticalAlign: 'top',
+    fontSize: small ? 10.5 : 12,
+    lineHeight: 1.4,
+    color: '#E2E8F0',
+    fontWeight: strong ? 650 : 500,
+    fontFamily: mono ? 'ui-monospace, SFMono-Regular, Menlo, monospace' : undefined,
+    textAlign: center ? 'center' : 'left',
+    overflow: 'hidden',
+    wordBreak: 'break-word',
+    overflowWrap: 'anywhere',
+  }
+
+  return <td style={style}>{children}</td>
 }
