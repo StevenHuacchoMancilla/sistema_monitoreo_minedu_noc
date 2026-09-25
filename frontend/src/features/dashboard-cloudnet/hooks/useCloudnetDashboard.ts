@@ -4,7 +4,7 @@ import type { CloudnetDashboard } from '../types/cloudnetDashboard'
 
 const KEY = ['dashboard', 'cloudnet'] as const
 
-export function useCloudnetDashboard(refetchInterval = 30_000) {
+export function useCloudnetDashboard(refetchInterval = 60_000) {
   return useQuery<CloudnetDashboard>({
     queryKey: KEY,
     queryFn: endpoints.dashboardCloudnet,

@@ -1,0 +1,27 @@
+# Render Blueprint (opcional). El Cron Job es crítico para sync estable en producción.
+# Sin schedule:run, solo el navegador dispara sync (más frágil).
+services:
+  - type: web
+    name: sistema-monitoreo-minedu-noc
+    runtime: docker
+    plan: starter
+    healthCheckPath: /up
+    envVars:
+      - key: PRTG_SYNC_ENABLED
+        value: "true"
+      - key: PRTG_SYNC_INTERVAL_SECONDS
+        value: "120"
+      - key: CLOUDNET_SYNC_ENABLED
+        value: "true"
+      - key: CLOUDNET_SYNC_INTERVAL_MINUTES
+        value: "5"
+
+  - type: cron
+    name: noc-schedule
+    runtime: docker
+    schedule: "* * * * *"
+    dockerCommand: php artisan schedule:run
+    envVars:
+      - fromService:
+          name: sistema-monitoreo-minedu-noc
+          type: web

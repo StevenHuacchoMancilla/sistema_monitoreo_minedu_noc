@@ -4,7 +4,7 @@ import type { PrtgDashboard } from '../types/prtgDashboard'
 
 const KEY = ['dashboard', 'prtg'] as const
 
-export function usePrtgDashboard(refetchInterval = 30_000) {
+export function usePrtgDashboard(refetchInterval = 60_000) {
   return useQuery<PrtgDashboard>({
     queryKey: KEY,
     queryFn: endpoints.dashboardPrtg,

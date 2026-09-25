@@ -4,7 +4,7 @@ import type { Concentration, DashboardSummary, OutageRow } from '../../../types/
 
 const SUMMARY_KEY = ['dashboard', 'summary'] as const
 
-export function useDashboardSummary(refetchInterval = 30_000) {
+export function useDashboardSummary(refetchInterval = 60_000) {
   return useQuery<DashboardSummary>({
     queryKey: SUMMARY_KEY,
     queryFn: endpoints.dashboardSummary,
@@ -16,7 +16,7 @@ export function useOutages(search = '') {
   return useQuery<{ data: OutageRow[] }>({
     queryKey: ['dashboard', 'outages', search],
     queryFn: () => endpoints.outages(search),
-    refetchInterval: 15_000,
+    refetchInterval: 45_000,
     placeholderData: keepPreviousData,
   })
 }
@@ -25,7 +25,7 @@ export function useConcentrations() {
   return useQuery<{ data: Concentration[] }>({
     queryKey: ['dashboard', 'concentrations'],
     queryFn: endpoints.concentrations,
-    refetchInterval: 30_000,
+    refetchInterval: 60_000,
   })
 }
 

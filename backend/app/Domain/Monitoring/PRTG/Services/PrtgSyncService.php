@@ -4,6 +4,7 @@ namespace App\Domain\Monitoring\PRTG\Services;
 
 use App\Domain\Incidents\Services\IncidentService;
 use App\Domain\Monitoring\PRTG\Support\PrtgTimestamps;
+use App\Domain\Monitoring\Support\SyncCoordinator;
 use App\Enums\CidStatus;
 use App\Enums\MonitoringStatus;
 use App\Enums\SyncIssueSeverity;
@@ -28,61 +29,62 @@ class PrtgSyncService
      */
     public function sync(): array
     {
-        $run = SyncRun::query()->create([
-            'source' => 'PRTG',
-            'started_at' => now(),
-            'status' => SyncRunStatus::Success,
-        ]);
-
-        SyncRun::query()
-            ->where('source', 'PRTG')
-            ->whereNull('finished_at')
-            ->where('id', '!=', $run->id)
-            ->update([
-                'status' => SyncRunStatus::Failed,
-                'finished_at' => now(),
-                'metadata' => ['error' => 'sync_interrupted'],
-            ]);
-
-        try {
-            $summary = $this->runSync($run);
-            $summary['closed_operativo'] = $this->incidentService->closeOperativeIncidents();
-        } catch (Throwable $exception) {
-            Log::error('PRTG sync failed', ['message' => $exception->getMessage()]);
-            $run->update([
-                'status' => SyncRunStatus::Failed,
-                'finished_at' => now(),
-                'error_count' => $run->error_count + 1,
-                'metadata' => ['error' => $exception->getMessage()],
-            ]);
-            $code = str_contains($exception->getMessage(), 'PRTG_ALLOWED_ROOT_NOT_FOUND')
-                ? 'PRTG_ALLOWED_ROOT_NOT_FOUND'
-                : 'PRTG_SYNC_FAILED';
-            $this->issue($run, SyncIssueSeverity::Error, $code, null, null, $exception->getMessage(), []);
-
-            throw $exception;
+        $lock = SyncCoordinator::acquire('PRTG', 300);
+        if (! $lock) {
+            return SyncCoordinator::skippedResponse();
         }
 
-        $fresh = $run->fresh();
-        $status = ($fresh->error_count > 0 || $fresh->warning_count > 0)
-            ? SyncRunStatus::SuccessWithWarnings
-            : SyncRunStatus::Success;
+        try {
+            SyncCoordinator::closeStaleRuns('PRTG', 10);
 
-        $run->update([
-            'status' => $status,
-            'finished_at' => now(),
-            'received_count' => $summary['received_count'],
-            'processed_count' => $summary['processed_count'],
-            'created_count' => $summary['created_count'],
-            'updated_count' => $summary['updated_count'],
-            'ignored_count' => $summary['ignored_count'],
-            'metadata' => $summary,
-        ]);
+            $run = SyncRun::query()->create([
+                'source' => 'PRTG',
+                'started_at' => now(),
+                'status' => SyncRunStatus::Success,
+            ]);
 
-        return array_merge($summary, [
-            'sync_run_id' => $run->id,
-            'status' => $status->value,
-        ]);
+            try {
+                $summary = $this->runSync($run);
+                $summary['closed_operativo'] = $this->incidentService->closeOperativeIncidents();
+            } catch (Throwable $exception) {
+                Log::error('PRTG sync failed', ['message' => $exception->getMessage()]);
+                $run->update([
+                    'status' => SyncRunStatus::Failed,
+                    'finished_at' => now(),
+                    'error_count' => $run->error_count + 1,
+                    'metadata' => ['error' => $exception->getMessage()],
+                ]);
+                $code = str_contains($exception->getMessage(), 'PRTG_ALLOWED_ROOT_NOT_FOUND')
+                    ? 'PRTG_ALLOWED_ROOT_NOT_FOUND'
+                    : 'PRTG_SYNC_FAILED';
+                $this->issue($run, SyncIssueSeverity::Error, $code, null, null, $exception->getMessage(), []);
+
+                throw $exception;
+            }
+
+            $fresh = $run->fresh();
+            $status = ($fresh->error_count > 0 || $fresh->warning_count > 0)
+                ? SyncRunStatus::SuccessWithWarnings
+                : SyncRunStatus::Success;
+
+            $run->update([
+                'status' => $status,
+                'finished_at' => now(),
+                'received_count' => $summary['received_count'],
+                'processed_count' => $summary['processed_count'],
+                'created_count' => $summary['created_count'],
+                'updated_count' => $summary['updated_count'],
+                'ignored_count' => $summary['ignored_count'],
+                'metadata' => $summary,
+            ]);
+
+            return array_merge($summary, [
+                'sync_run_id' => $run->id,
+                'status' => $status->value,
+            ]);
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

@@ -133,6 +133,9 @@ export function SyncStatusBadge({
   if (normalized === 'SUCCESS') {
     label = 'Sincronizado'
     className = 'bg-green-50 text-noc-success dark:bg-emerald-950/50'
+  } else if (normalized === 'IN_PROGRESS') {
+    label = 'Sincronizando…'
+    className = 'bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300'
   } else if (normalized.includes('WARN')) {
     const n = warningCount && warningCount > 0 ? ` (${warningCount})` : ''
     label = `Datos OK · advertencias de calidad${n}`

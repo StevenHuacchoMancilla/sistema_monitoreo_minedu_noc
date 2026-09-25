@@ -6,6 +6,7 @@ use App\Enums\CidStatus;
 use App\Enums\FollowupStatus;
 use App\Enums\MonitoringStatus;
 use App\Enums\RecoveryReviewStatus;
+use App\Domain\Monitoring\Support\SyncCoordinator;
 use App\Models\Incident;
 use App\Models\NetworkAssignment;
 use App\Models\PrtgSensor;
@@ -547,27 +548,6 @@ class PrtgDashboardService
      */
     private function lastSyncRun(string $source): ?array
     {
-        $run = SyncRun::query()
-            ->where('source', $source)
-            ->whereNotNull('finished_at')
-            ->orderByDesc('id')
-            ->first();
-
-        if (! $run) {
-            return null;
-        }
-
-        return [
-            'run_id' => (int) $run->id,
-            'status' => $run->status?->value ?? (string) $run->status,
-            'last_sync' => $run->finished_at?->toIso8601String(),
-            'finished_at' => $run->finished_at?->toIso8601String(),
-            'processed' => (int) $run->processed_count,
-            'processed_count' => (int) $run->processed_count,
-            'warnings' => (int) $run->warning_count,
-            'warning_count' => (int) $run->warning_count,
-            'errors' => (int) $run->error_count,
-            'error_count' => (int) $run->error_count,
-        ];
+        return SyncCoordinator::lastFinishedRun($source);
     }
 }

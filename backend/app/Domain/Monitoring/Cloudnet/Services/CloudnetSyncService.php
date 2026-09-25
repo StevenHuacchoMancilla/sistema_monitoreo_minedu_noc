@@ -2,6 +2,7 @@
 
 namespace App\Domain\Monitoring\Cloudnet\Services;
 
+use App\Domain\Monitoring\Support\SyncCoordinator;
 use App\Enums\CidStatus;
 use App\Enums\SyncIssueSeverity;
 use App\Enums\SyncRunStatus;
@@ -25,55 +26,56 @@ class CloudnetSyncService
      */
     public function sync(): array
     {
-        $run = SyncRun::query()->create([
-            'source' => 'CLOUDNET',
-            'started_at' => now(),
-            'status' => SyncRunStatus::Success,
-        ]);
-
-        SyncRun::query()
-            ->where('source', 'CLOUDNET')
-            ->whereNull('finished_at')
-            ->where('id', '!=', $run->id)
-            ->update([
-                'status' => SyncRunStatus::Failed,
-                'finished_at' => now(),
-                'metadata' => ['error' => 'sync_interrupted'],
-            ]);
-
-        try {
-            $summary = $this->runSync($run);
-        } catch (Throwable $exception) {
-            Log::error('Cloudnet sync failed', ['message' => $exception->getMessage()]);
-            $run->update([
-                'status' => SyncRunStatus::Failed,
-                'finished_at' => now(),
-                'error_count' => $run->error_count + 1,
-                'metadata' => ['error' => $exception->getMessage()],
-            ]);
-            throw $exception;
+        $lock = SyncCoordinator::acquire('CLOUDNET', 600);
+        if (! $lock) {
+            return SyncCoordinator::skippedResponse();
         }
 
-        $fresh = $run->fresh();
-        $status = ($fresh->error_count > 0 || $fresh->warning_count > 0)
-            ? SyncRunStatus::SuccessWithWarnings
-            : SyncRunStatus::Success;
+        try {
+            SyncCoordinator::closeStaleRuns('CLOUDNET', 15);
 
-        $run->update([
-            'status' => $status,
-            'finished_at' => now(),
-            'received_count' => $summary['received_count'],
-            'processed_count' => $summary['processed_count'],
-            'created_count' => $summary['created_count'],
-            'updated_count' => $summary['updated_count'],
-            'ignored_count' => $summary['ignored_count'],
-            'metadata' => $summary,
-        ]);
+            $run = SyncRun::query()->create([
+                'source' => 'CLOUDNET',
+                'started_at' => now(),
+                'status' => SyncRunStatus::Success,
+            ]);
 
-        return array_merge($summary, [
-            'sync_run_id' => $run->id,
-            'status' => $status->value,
-        ]);
+            try {
+                $summary = $this->runSync($run);
+            } catch (Throwable $exception) {
+                Log::error('Cloudnet sync failed', ['message' => $exception->getMessage()]);
+                $run->update([
+                    'status' => SyncRunStatus::Failed,
+                    'finished_at' => now(),
+                    'error_count' => $run->error_count + 1,
+                    'metadata' => ['error' => $exception->getMessage()],
+                ]);
+                throw $exception;
+            }
+
+            $fresh = $run->fresh();
+            $status = ($fresh->error_count > 0 || $fresh->warning_count > 0)
+                ? SyncRunStatus::SuccessWithWarnings
+                : SyncRunStatus::Success;
+
+            $run->update([
+                'status' => $status,
+                'finished_at' => now(),
+                'received_count' => $summary['received_count'],
+                'processed_count' => $summary['processed_count'],
+                'created_count' => $summary['created_count'],
+                'updated_count' => $summary['updated_count'],
+                'ignored_count' => $summary['ignored_count'],
+                'metadata' => $summary,
+            ]);
+
+            return array_merge($summary, [
+                'sync_run_id' => $run->id,
+                'status' => $status->value,
+            ]);
+        } finally {
+            $lock->release();
+        }
     }
 
     /**

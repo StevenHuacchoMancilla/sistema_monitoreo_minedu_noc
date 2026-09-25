@@ -9,9 +9,13 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 if (config('prtg.sync_enabled')) {
+    // Default 120s: evita solapes con syncs que tardan ~30–90s.
+    $seconds = max(60, (int) config('prtg.sync_interval_seconds', 120));
+    $minutes = max(1, (int) ceil($seconds / 60));
+
     Schedule::command('prtg:sync')
-        ->everyMinute()
-        ->withoutOverlapping(2);
+        ->cron("*/{$minutes} * * * *")
+        ->withoutOverlapping(5);
 }
 
 if (config('cloudnet.sync_enabled')) {

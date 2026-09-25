@@ -3,6 +3,7 @@
 namespace App\Domain\Dashboard\Services;
 
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
+use App\Domain\Monitoring\Support\SyncCoordinator;
 use App\Enums\CidStatus;
 use App\Enums\ContactMatchStatus;
 use App\Enums\FollowupStatus;
@@ -15,7 +16,6 @@ use App\Models\NetworkAssignment;
 use App\Models\PrtgSensor;
 use App\Models\School;
 use App\Models\SchoolContact;
-use App\Models\SyncRun;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -494,22 +494,18 @@ class DashboardService
      */
     private function lastSyncRun(string $source): ?array
     {
-        $run = SyncRun::query()
-            ->where('source', $source)
-            ->whereNotNull('finished_at')
-            ->orderByDesc('id')
-            ->first();
-
+        $run = SyncCoordinator::lastFinishedRun($source);
         if (! $run) {
             return null;
         }
 
+        // Forma compacta que consume el dashboard principal.
         return [
-            'status' => $run->status?->value ?? $run->status,
-            'finished_at' => $run->finished_at?->toIso8601String(),
-            'warning_count' => (int) $run->warning_count,
-            'error_count' => (int) $run->error_count,
-            'processed_count' => (int) $run->processed_count,
+            'status' => $run['status'],
+            'finished_at' => $run['finished_at'],
+            'warning_count' => $run['warning_count'],
+            'error_count' => $run['error_count'],
+            'processed_count' => $run['processed_count'],
         ];
     }
 
