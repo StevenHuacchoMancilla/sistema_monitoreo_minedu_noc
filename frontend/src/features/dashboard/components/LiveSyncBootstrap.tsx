@@ -1,11 +1,11 @@
 import { useAuth } from '../../auth/context/AuthContext'
 import { useLiveMonitoringSync } from '../hooks/useLiveMonitoringSync'
 
-/** Arranca sync PRTG/Cloudnet en vivo solo con sesión autenticada. */
+/** Arranca sync PRTG/Cloudnet en vivo (estilo monitoring:watch) con sesión autenticada. */
 export function LiveSyncBootstrap() {
   const { user, loading } = useAuth()
   useLiveMonitoringSync({
-    prtgMs: 60_000,
+    prtgMs: 30_000,
     cloudnetMs: 300_000,
     enabled: !loading && user !== null,
   })

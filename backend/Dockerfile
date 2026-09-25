@@ -16,6 +16,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && sed -ri -e 's!/var/www/html!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/sites-available/*.conf \
     && sed -ri -e 's!/var/www/!${APACHE_DOCUMENT_ROOT}!g' /etc/apache2/apache2.conf /etc/apache2/conf-available/*.conf \
     && curl -sS https://getcomposer.org/installer | php -- --install-dir=/usr/local/bin --filename=composer \
+    && printf '%s\n' \
+        'max_execution_time=300' \
+        'max_input_time=300' \
+        'memory_limit=512M' \
+        > /usr/local/etc/php/conf.d/zz-noc-sync.ini \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /var/www/html

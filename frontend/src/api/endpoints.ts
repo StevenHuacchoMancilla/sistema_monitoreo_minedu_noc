@@ -90,8 +90,8 @@ export const endpoints = {
   closingXlsxUrl: () => `${API_URL}/reports/closing.xlsx`,
   generalReportXlsxUrl: (params: Record<string, string | undefined | null> = {}) =>
     `${API_URL}/reports/general.xlsx${toQuery(params)}`,
-  syncPrtg: () => apiPost<Record<string, unknown>>('/sync/prtg', undefined, { timeoutMs: 120_000 }),
-  syncCloudnet: () => apiPost<Record<string, unknown>>('/sync/cloudnet', undefined, { timeoutMs: 120_000 }),
+  syncPrtg: () => apiPost<Record<string, unknown>>('/sync/prtg', undefined, { timeoutMs: 30_000 }),
+  syncCloudnet: () => apiPost<Record<string, unknown>>('/sync/cloudnet', undefined, { timeoutMs: 30_000 }),
   prtgProvinces: () =>
     apiGet<{
       data: Array<{ name: string; district_count: number; assignment_count: number }>

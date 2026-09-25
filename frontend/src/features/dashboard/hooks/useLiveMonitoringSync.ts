@@ -3,7 +3,7 @@ import { useQueryClient } from '@tanstack/react-query'
 import { endpoints } from '../../../api/endpoints'
 
 const TAB_LOCK_KEY = 'noc:live-sync-leader'
-const TAB_LOCK_TTL_MS = 90_000
+const TAB_LOCK_TTL_MS = 45_000
 
 const tabId =
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -38,9 +38,14 @@ function renewTabLeadership(): void {
   }
 }
 
+function sleep(ms: number): Promise<void> {
+  return new Promise((resolve) => window.setTimeout(resolve, ms))
+}
+
 /**
- * Mantiene PRTG/Cloudnet al día sin martillar la API.
- * Solo una pestaña del navegador dispara sync; el resto solo refresca datos.
+ * Equivalente web a `php artisan monitoring:watch` (sin Cron de pago).
+ * Solo una pestaña dispara sync; el servidor responde al instante y termina
+ * el trabajo en background (evita timeout del proxy Vercel).
  */
 export function useLiveMonitoringSync(options?: {
   prtgMs?: number
@@ -48,8 +53,8 @@ export function useLiveMonitoringSync(options?: {
   enabled?: boolean
 }) {
   const client = useQueryClient()
-  // 60s PRTG / 5 min Cloudnet. Candado server + leadership de pestaña evitan solapes.
-  const prtgMs = options?.prtgMs ?? 60_000
+  // Igual que monitoring:watch en local: PRTG ~30s, Cloudnet ~5 min.
+  const prtgMs = options?.prtgMs ?? 30_000
   const cloudnetMs = options?.cloudnetMs ?? 300_000
   const enabled = options?.enabled ?? true
   const prtgBusy = useRef(false)
@@ -73,7 +78,10 @@ export function useLiveMonitoringSync(options?: {
       renewTabLeadership()
       prtgBusy.current = true
       try {
+        // Respuesta rápida (QUEUED); el sync sigue en Render.
         await endpoints.syncPrtg()
+        // Dar tiempo a que el server avance y refrescar KPIs.
+        await sleep(8_000)
         if (!cancelled) await invalidate()
       } catch {
         // silencioso: el próximo ciclo reintentará
@@ -89,6 +97,7 @@ export function useLiveMonitoringSync(options?: {
       cloudBusy.current = true
       try {
         await endpoints.syncCloudnet()
+        await sleep(5_000)
         if (!cancelled) await invalidate()
       } catch {
         // silencioso
@@ -97,28 +106,40 @@ export function useLiveMonitoringSync(options?: {
       }
     }
 
-    // Primera sync tras montar (no bloquea UI)
-    const boot = window.setTimeout(() => {
-      void syncPrtg()
-    }, 3_000)
+    // Bucle tipo watch: espera el intervalo DESPUÉS de cada disparo (no setInterval fijo).
+    const runPrtgLoop = async () => {
+      await sleep(1_500)
+      while (!cancelled) {
+        await syncPrtg()
+        if (cancelled) break
+        await sleep(prtgMs)
+      }
+    }
 
-    const prtgTimer = window.setInterval(() => {
-      void syncPrtg()
-    }, prtgMs)
+    const runCloudLoop = async () => {
+      await sleep(20_000)
+      while (!cancelled) {
+        await syncCloudnet()
+        if (cancelled) break
+        await sleep(cloudnetMs)
+      }
+    }
 
-    const cloudTimer = window.setInterval(() => {
-      void syncCloudnet()
-    }, cloudnetMs)
+    // Refresco de datos aunque otra pestaña sea la líder.
+    const refreshTimer = window.setInterval(() => {
+      void invalidate()
+    }, 20_000)
 
     const heartbeat = window.setInterval(() => {
       if (tryClaimTabLeadership()) renewTabLeadership()
-    }, 30_000)
+    }, 15_000)
+
+    void runPrtgLoop()
+    void runCloudLoop()
 
     return () => {
       cancelled = true
-      window.clearTimeout(boot)
-      window.clearInterval(prtgTimer)
-      window.clearInterval(cloudTimer)
+      window.clearInterval(refreshTimer)
       window.clearInterval(heartbeat)
     }
   }, [client, prtgMs, cloudnetMs, enabled])

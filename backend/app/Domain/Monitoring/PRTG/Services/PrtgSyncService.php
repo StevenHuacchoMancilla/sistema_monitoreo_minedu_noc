@@ -29,6 +29,11 @@ class PrtgSyncService
      */
     public function sync(): array
     {
+        ignore_user_abort(true);
+        if (function_exists('set_time_limit')) {
+            set_time_limit(300);
+        }
+
         $lock = SyncCoordinator::acquire('PRTG', 300);
         if (! $lock) {
             return SyncCoordinator::skippedResponse();
