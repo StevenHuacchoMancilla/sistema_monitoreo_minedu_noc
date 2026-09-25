@@ -16,6 +16,9 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
+        // Render / reverse proxies: HTTPS y scheme correctos detrás del load balancer.
+        $middleware->trustProxies(at: '*');
+
         $middleware->statefulApi();
 
         $middleware->alias([
