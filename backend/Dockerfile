@@ -1,5 +1,5 @@
-# Laravel API for Render (PHP 8.3 + Apache)
-FROM php:8.3-apache-bookworm
+# Laravel API for Render (PHP 8.4 + Apache) — Laravel 13 / Symfony 8 requieren >= 8.4.1
+FROM php:8.4-apache-bookworm
 
 ENV APACHE_DOCUMENT_ROOT=/var/www/html/public \
     COMPOSER_ALLOW_SUPERUSER=1 \
