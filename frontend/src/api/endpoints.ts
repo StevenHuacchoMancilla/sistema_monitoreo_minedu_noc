@@ -13,6 +13,7 @@ import type {
   ManagementPayload,
   OperationalReportResponse,
 } from '../features/reports/types/operationalReport'
+import type { GeneralReportResponse } from '../features/reports/types/generalReport'
 import type {
   ContactPayload,
   NetworkAssignmentPayload,
@@ -83,8 +84,12 @@ export const endpoints = {
   ) => apiPost<IncidentDetail>(`/incidents/${id}/recovery-review`, body),
   operationalReport: (params: Record<string, string | undefined | null> = {}) =>
     apiGet<OperationalReportResponse>(`/reports/operational${toQuery(params)}`),
+  generalReport: (params: Record<string, string | undefined | null> = {}) =>
+    apiGet<GeneralReportResponse>(`/reports/general${toQuery(params)}`),
   closingPreview: () => apiGet<ClosingPreviewResponse>('/reports/closing-preview'),
   closingXlsxUrl: () => `${API_URL}/reports/closing.xlsx`,
+  generalReportXlsxUrl: (params: Record<string, string | undefined | null> = {}) =>
+    `${API_URL}/reports/general.xlsx${toQuery(params)}`,
   syncPrtg: () => apiPost<Record<string, unknown>>('/sync/prtg', undefined, { timeoutMs: 120_000 }),
   syncCloudnet: () => apiPost<Record<string, unknown>>('/sync/cloudnet', undefined, { timeoutMs: 120_000 }),
   prtgProvinces: () =>

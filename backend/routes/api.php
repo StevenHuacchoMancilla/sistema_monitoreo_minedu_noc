@@ -71,11 +71,13 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     Route::middleware('permission:'.PermissionCatalog::REPORTS_VIEW)->group(function () {
         Route::get('/reports/operational', [ReportController::class, 'operational']);
+        Route::get('/reports/general', [ReportController::class, 'general']);
         Route::get('/reports/closing-preview', [ReportController::class, 'closingPreview']);
     });
 
     Route::middleware('permission:'.PermissionCatalog::REPORTS_EXPORT)->group(function () {
         Route::get('/reports/closing.xlsx', [ReportController::class, 'closingXlsx']);
+        Route::get('/reports/general.xlsx', [ReportController::class, 'generalXlsx']);
     });
 
     Route::middleware('permission:'.PermissionCatalog::TRACKING_VIEW)->group(function () {

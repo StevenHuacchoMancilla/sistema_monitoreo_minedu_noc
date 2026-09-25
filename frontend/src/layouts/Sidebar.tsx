@@ -6,6 +6,7 @@ import {
   ClipboardList,
   Cloud,
   FileSpreadsheet,
+  Files,
   GraduationCap,
   History,
   LayoutDashboard,
@@ -44,6 +45,7 @@ const NAV: NavItem[] = [
   { to: '/tracking', label: 'Tracking General', icon: ClipboardList, permission: P.trackingView },
   { to: '/schools', label: 'Locales educativos', icon: GraduationCap, permission: P.schoolsView },
   { to: '/reports/operational', label: 'Vista de reporte', icon: FileSpreadsheet, permission: P.reportsView },
+  { to: '/reports/general', label: 'Reporte general', icon: Files, permission: P.reportsView },
   { to: '/admin', label: 'Administración', icon: Settings, permission: P.adminView },
 ]
 
