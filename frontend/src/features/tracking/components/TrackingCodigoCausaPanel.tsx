@@ -83,7 +83,7 @@ export function TrackingCodigoCausaPanel({
           action={
             canWrite ? (
               <VoiceDictationButton
-                onTranscript={(t) => setCausaText((prev) => (prev ? `${prev} ${t}` : t))}
+                onFinalTranscript={(t: string) => setCausaText((prev) => (prev ? `${prev} ${t}` : t))}
               />
             ) : undefined
           }
