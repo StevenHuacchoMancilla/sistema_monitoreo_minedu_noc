@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api\V1\Incidents;
 
+use App\Enums\AffectedWanNode;
 use App\Enums\ContactConfirmedStatus;
 use App\Enums\ContactResult;
 use App\Enums\FollowupStatus;
@@ -19,6 +20,7 @@ use App\Http\Controllers\Controller;
 use App\Models\FieldDispatch;
 use App\Models\Incident;
 use App\Models\IncidentUpdate;
+use App\Models\NetworkAssignment;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -296,11 +298,12 @@ class IncidentController extends Controller
                 ])->values()->all(),
                 'management_classifications' => collect([
                     ManagementClassification::ContactConfirmed,
+                    ManagementClassification::LinkOutage,
                     ManagementClassification::NoResponse,
-                    ManagementClassification::Complaint,
                 ])->map(fn (ManagementClassification $s) => [
                     'value' => $s->value,
                     'label' => $s->label(),
+                    'hint' => $s->hint(),
                     'color_key' => $s->colorKey(),
                 ])->values()->all(),
                 'management_scopes' => collect(ManagementScope::cases())->map(fn (ManagementScope $s) => [
@@ -335,13 +338,69 @@ class IncidentController extends Controller
         ]);
     }
 
+    public function storeManualPartial(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'school_id' => ['nullable', 'integer', 'required_without_all:network_assignment_id,cid'],
+            'network_assignment_id' => ['nullable', 'integer', 'required_without_all:school_id,cid'],
+            'cid' => ['nullable', 'string', 'max:40', 'required_without_all:school_id,network_assignment_id'],
+            'affected_wan_node' => ['required', Rule::in(AffectedWanNode::values())],
+            'detail' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $userId = (int) ($request->user()?->id ?? 0);
+        if ($userId < 1) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        $assignment = null;
+        if (! empty($data['network_assignment_id'])) {
+            $assignment = NetworkAssignment::query()
+                ->whereKey((int) $data['network_assignment_id'])
+                ->where('is_active', true)
+                ->first();
+        } elseif (! empty($data['school_id'])) {
+            $assignment = NetworkAssignment::query()
+                ->where('school_id', (int) $data['school_id'])
+                ->where('is_active', true)
+                ->orderByDesc('id')
+                ->first();
+        } else {
+            $cid = preg_replace('/\D+/', '', (string) $data['cid']) ?: (string) $data['cid'];
+            $assignment = NetworkAssignment::query()
+                ->where('is_active', true)
+                ->where(function ($q) use ($cid, $data) {
+                    $q->where('cid', $cid)->orWhere('cid', (string) $data['cid']);
+                })
+                ->orderByDesc('id')
+                ->first();
+        }
+
+        if ($assignment === null) {
+            return response()->json(['message' => 'No se encontró asignación de red activa para ese colegio/CID.'], 422);
+        }
+
+        try {
+            $incident = $this->incidents->openManualPartial(
+                $assignment,
+                AffectedWanNode::from((string) $data['affected_wan_node']),
+                $userId,
+                $data['detail'] ?? null,
+            );
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return $this->show($incident->fresh() ?? $incident);
+    }
+
     public function storeManagement(Request $request, Incident $incident): JsonResponse
     {
         $data = $request->validate([
             'classification' => ['required', Rule::in([
                 ManagementClassification::ContactConfirmed->value,
+                ManagementClassification::LinkOutage->value,
                 ManagementClassification::NoResponse->value,
-                ManagementClassification::Complaint->value,
             ])],
             'scope' => ['nullable', Rule::in(array_merge([''], ManagementScope::values()))],
             'outage_text' => ['nullable', 'string', 'max:2000'],

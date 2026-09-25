@@ -35,24 +35,28 @@ const RESULT_OPTIONS: Array<{
   label: string
   hint: string
   selected: string
+  radio: string
 }> = [
   {
     value: 'CONTACT_CONFIRMED',
-    label: 'Contacto confirmado',
-    hint: 'Se confirmó la situación con el local',
-    selected: 'border-red-300 bg-red-50 dark:border-red-800 dark:bg-red-950/40',
+    label: 'TIPO 1',
+    hint: 'Para reporte',
+    selected: 'border-red-600 bg-red-50 ring-2 ring-red-500/30 dark:border-red-500 dark:bg-red-950/50',
+    radio: 'text-red-600',
+  },
+  {
+    value: 'LINK_OUTAGE',
+    label: 'TIPO 2',
+    hint: 'Caída solo de un enlace en P2P',
+    selected: 'border-orange-500 bg-orange-50 ring-2 ring-orange-500/30 dark:border-orange-400 dark:bg-orange-950/40',
+    radio: 'text-orange-600',
   },
   {
     value: 'NO_RESPONSE',
-    label: 'En espera',
-    hint: 'Fluido eléctrico, sin respuesta, equipos apagados, etc.',
-    selected: 'border-orange-300 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40',
-  },
-  {
-    value: 'COMPLAINT',
-    label: 'Queja / reclamo',
-    hint: 'El local reportó una queja o reclamo',
-    selected: 'border-blue-300 bg-blue-50 dark:border-blue-800 dark:bg-blue-950/40',
+    label: 'TIPO 3',
+    hint: 'Equipos apagados, corte de energía, sin respuesta, etc.',
+    selected: 'border-yellow-500 bg-yellow-50 ring-2 ring-yellow-500/30 dark:border-yellow-400 dark:bg-yellow-950/30',
+    radio: 'text-yellow-600',
   },
 ]
 
@@ -130,7 +134,9 @@ export function IncidentManageModal({
     hydrated.current = true
     const g = detail.data.gestion
     const current = g.management_classification
-    setClassification(current === 'CONTACT_CONFIRMED' || current === 'NO_RESPONSE' || current === 'COMPLAINT' ? current : '')
+    setClassification(
+      current === 'CONTACT_CONFIRMED' || current === 'LINK_OUTAGE' || current === 'NO_RESPONSE' ? current : '',
+    )
     setScope((g.management_scope as '' | 'PEXT' | 'PINT') || '')
     setContactId(g.last_managed_contact_id ?? '')
     setDetailText(g.detail_text ?? '')
@@ -308,14 +314,14 @@ export function IncidentManageModal({
                     >
                       <input
                         type="radio"
-                        className="mt-0.5"
+                        className={`mt-0.5 ${opt.radio}`}
                         name={`${titleId}-result`}
                         checked={classification === opt.value}
                         onChange={() => setClassification(opt.value)}
                       />
                       <span className="min-w-0">
-                        <span className="block text-[13px] font-semibold text-slate-900 dark:text-slate-100">{opt.label}</span>
-                        <span className="block text-[11px] text-slate-500 dark:text-slate-400">{opt.hint}</span>
+                        <span className="block text-[13px] font-bold tracking-wide text-slate-900 dark:text-slate-100">{opt.label}</span>
+                        <span className="mt-0.5 block text-[11px] leading-snug text-slate-600 dark:text-slate-400">{opt.hint}</span>
                       </span>
                     </label>
                   ))}

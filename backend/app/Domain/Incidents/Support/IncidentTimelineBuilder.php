@@ -49,6 +49,7 @@ final class IncidentTimelineBuilder
         $classification = $m->classification?->value;
         $icon = match ($classification) {
             'CONTACT_CONFIRMED' => 'phone',
+            'LINK_OUTAGE' => 'network',
             'NO_RESPONSE' => 'phone_missed',
             'COMPLAINT' => 'message',
             default => 'wrench',

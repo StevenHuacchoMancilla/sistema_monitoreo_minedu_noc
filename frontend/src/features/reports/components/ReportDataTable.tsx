@@ -18,17 +18,17 @@ type Props = {
 }
 
 const ROW_DARK_CLASS: Record<string, string> = {
-  yellow: 'dark:bg-amber-950/35 dark:border-amber-600',
-  red: 'dark:bg-red-950/35 dark:border-red-600',
-  orange: 'dark:bg-orange-950/35 dark:border-orange-600',
+  yellow: 'dark:bg-yellow-950/45 dark:border-yellow-500',
+  red: 'dark:bg-red-950/50 dark:border-red-500',
+  orange: 'dark:bg-orange-950/45 dark:border-orange-500',
   blue: 'dark:bg-blue-950/35 dark:border-blue-600',
   slate: 'dark:bg-slate-800/80 dark:border-slate-600',
 }
 
 const STICKY_DARK: Record<string, string> = {
-  yellow: 'dark:bg-amber-950/50',
-  red: 'dark:bg-red-950/50',
-  orange: 'dark:bg-orange-950/50',
+  yellow: 'dark:bg-yellow-950/60',
+  red: 'dark:bg-red-950/60',
+  orange: 'dark:bg-orange-950/60',
   blue: 'dark:bg-blue-950/50',
   slate: 'dark:bg-slate-900',
 }
@@ -49,11 +49,11 @@ function stickyCellBg(row: ReportRow, rowTone: Props['rowTone']): string {
   const key = row.color_key ?? 'slate'
   const light =
     key === 'yellow'
-      ? 'bg-amber-50'
+      ? 'bg-yellow-100'
       : key === 'red'
-        ? 'bg-red-50'
+        ? 'bg-red-100'
         : key === 'orange'
-          ? 'bg-orange-50'
+          ? 'bg-orange-100'
           : key === 'blue'
             ? 'bg-blue-50'
             : 'bg-white dark:bg-slate-900'

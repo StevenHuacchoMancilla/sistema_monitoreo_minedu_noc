@@ -24,6 +24,7 @@ class OperationalAlertService
                 'school:id,local_educativo,codigo_local,provincia,distrito',
                 'networkAssignment:id,cid',
                 'fieldDispatches' => fn ($q) => $q->orderByDesc('id')->limit(5),
+                'activeTracking' => fn ($q) => $q->select(['id', 'incident_id', 'status'])->limit(1),
             ])
             ->whereNotNull('recovered_at')
             ->where(function ($q) {
@@ -89,6 +90,9 @@ class OperationalAlertService
                 : 'Requiere decisión operativa del NOC.',
         ]));
 
+        $trackingId = $incident->activeTracking->first()?->id
+            ?? $incident->trackingRecords()->notClosed()->orderByDesc('id')->value('id');
+
         return [
             'id' => 'recovery-'.$incident->id,
             'type' => $type,
@@ -106,7 +110,10 @@ class OperationalAlertService
             'field_dispatch_status' => $active?->status instanceof FieldDispatchStatus
                 ? $active->status->value
                 : ($active?->status),
-            'href' => '/history/incidents/'.$incident->id,
+            'tracking_id' => $trackingId ? (int) $trackingId : null,
+            'href' => $trackingId
+                ? '/tracking/'.$trackingId
+                : '/history/incidents/'.$incident->id,
         ];
     }
 }

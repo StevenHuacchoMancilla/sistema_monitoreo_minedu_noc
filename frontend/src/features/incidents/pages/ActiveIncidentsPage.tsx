@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { useSearchParams } from 'react-router-dom'
-import { Clock3, Eye, Hourglass, RefreshCw, Sparkles, SquarePen, TriangleAlert, Wrench } from 'lucide-react'
+import { Clock3, Eye, Hourglass, Network, RefreshCw, Sparkles, SquarePen, TriangleAlert, Wrench } from 'lucide-react'
 import { useAuth } from '../../auth/context/AuthContext'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
@@ -34,6 +34,7 @@ import { PrtgLocationFilterFields } from '../../locations/components/PrtgLocatio
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
 import { trackingStatusTone } from '../../tracking/lib/trackingStatus'
 import { IncidentManageModal } from '../components/IncidentManageModal'
+import { RegisterLinkOutageModal } from '../components/RegisterLinkOutageModal'
 import type { OutageRow } from '../../../types/api'
 
 const NEW_MINUTES = 15
@@ -103,6 +104,7 @@ export function ActiveIncidentsPage({
   const [toDate, setToDate] = useState('')
   const [duration, setDuration] = useState<DurationBucket>('')
   const [manageId, setManageId] = useState<number | null>(null)
+  const [linkOutageOpen, setLinkOutageOpen] = useState(false)
   const client = useQueryClient()
   const { user } = useAuth()
   const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
@@ -219,7 +221,7 @@ export function ActiveIncidentsPage({
             {kpis.total.toLocaleString('es-PE')} {kpis.total === 1 ? 'activa' : 'activas'}
           </Badge>
         }
-        description="Locales con Ping caído en PRTG. La duración se calcula desde el inicio real de la caída."
+        description="Ping CAÍDO en PRTG y caídas de un enlace (doble WAN) mientras el colegio sigue en línea. La duración se calcula desde el inicio de la incidencia."
         actions={
           <>
             <span
@@ -228,6 +230,12 @@ export function ActiveIncidentsPage({
             >
               Última sync PRTG: {lastPrtgSync ? formatTime(lastPrtgSync) : '—'}
             </span>
+            {canManage && title === 'Caídas activas' ? (
+              <Button size="sm" variant="secondary" onClick={() => setLinkOutageOpen(true)}>
+                <Network className="h-3.5 w-3.5" aria-hidden />
+                Caída de enlace
+              </Button>
+            ) : null}
             <Button size="sm" onClick={refresh} loading={outages.isFetching} aria-label="Refrescar caídas activas">
               {!outages.isFetching ? <RefreshCw className="h-3.5 w-3.5" aria-hidden /> : null}
               Refrescar
@@ -411,6 +419,15 @@ export function ActiveIncidentsPage({
           }}
         />
       ) : null}
+
+      <RegisterLinkOutageModal
+        open={linkOutageOpen}
+        onClose={() => setLinkOutageOpen(false)}
+        onCreated={(id) => {
+          setManageId(id)
+          refresh()
+        }}
+      />
     </AppLayout>
   )
 }
@@ -433,7 +450,14 @@ function OutageTableRow({
   return (
     <tr className={`${trClassName} group`}>
       <td className={tdClassName}>
-        <PrtgStatusBadge status={row.estado_prtg} />
+        <div className="flex min-w-0 flex-col items-start gap-1">
+          <PrtgStatusBadge status={row.estado_prtg} />
+          {row.is_link_outage ? (
+            <Badge tone="warning" className="!text-[10px]" title={row.affected_wan_node_label ?? undefined}>
+              Enlace {row.affected_wan_node ?? 'parcial'}
+            </Badge>
+          ) : null}
+        </div>
       </td>
       <td className={`${tdClassName} font-medium tabular-nums`}>{row.cid ?? '—'}</td>
       <td className={tdClassName}>

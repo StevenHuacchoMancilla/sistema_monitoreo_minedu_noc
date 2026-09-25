@@ -35,10 +35,10 @@ class OperationalReportService
             'rows' => $rows,
             'total' => count($rows),
             'legend' => [
-                ['key' => ManagementClassification::NewOutage->value, 'color' => 'yellow', 'label' => 'Nueva caída'],
-                ['key' => ManagementClassification::ContactConfirmed->value, 'color' => 'red', 'label' => 'Contacto confirmado'],
-                ['key' => ManagementClassification::NoResponse->value, 'color' => 'orange', 'label' => 'En espera'],
-                ['key' => ManagementClassification::Complaint->value, 'color' => 'blue', 'label' => 'Queja / reclamo'],
+                ['key' => ManagementClassification::ContactConfirmed->value, 'color' => 'red', 'label' => 'TIPO 1 · Para reporte'],
+                ['key' => ManagementClassification::LinkOutage->value, 'color' => 'orange', 'label' => 'TIPO 2 · Enlace P2P'],
+                ['key' => ManagementClassification::NoResponse->value, 'color' => 'yellow', 'label' => 'TIPO 3 · En espera / energía'],
+                ['key' => ManagementClassification::NewOutage->value, 'color' => 'slate', 'label' => 'Nueva caída (auto)'],
             ],
             'filters_applied' => $filters,
             'columns' => self::officialColumns(),
@@ -157,6 +157,14 @@ class OperationalReportService
             : null;
         $apiLocation = PrtgOperationalLocation::apiFields($assignment, $school);
 
+        $detail = $incident->detail_text;
+        if ($incident->isManualPartial() && $incident->affected_wan_node) {
+            $prefix = 'ENLACE '.$incident->affected_wan_node->value;
+            $detail = $detail
+                ? $prefix.' · '.$detail
+                : $prefix;
+        }
+
         return [
             'n' => $school?->current_sequence,
             'ordinal' => $ordinal,
@@ -169,7 +177,10 @@ class OperationalReportService
             'caida_source' => $outageAt ? 'started_at' : (filled($incident->outage_text) ? 'outage_text_legacy' : null),
             'tipo' => $tipo,
             'technology_type' => $tipo,
-            'detalle' => $incident->detail_text,
+            'detalle' => $detail,
+            'detection_source' => $incident->detection_source,
+            'affected_wan_node' => $incident->affected_wan_node?->value,
+            'is_link_outage' => $incident->isManualPartial(),
             'pext_pint' => $incident->management_scope?->value,
             'provincia' => $apiLocation['provincia'] ?? $snapshotProvince,
             'distrito' => $apiLocation['distrito'] ?? $snapshotDistrict,

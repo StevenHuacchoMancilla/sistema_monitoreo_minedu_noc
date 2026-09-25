@@ -122,12 +122,13 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::post('/schools/{school}/contacts/{contact}/deactivate', [SchoolController::class, 'deactivateContact']);
     });
 
-    Route::middleware('permission:'.PermissionCatalog::INCIDENTS_MANAGE)->group(function () {
-        Route::put('/incidents/{incident}', [IncidentController::class, 'update']);
-        Route::post('/incidents/{incident}/managements', [IncidentController::class, 'storeManagement']);
-        Route::post('/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);
-        Route::post('/incidents/{incident}/field-dispatches', [IncidentController::class, 'fieldDispatch']);
-    });
+        Route::middleware('permission:'.PermissionCatalog::INCIDENTS_MANAGE)->group(function () {
+            Route::post('/incidents/manual-partial', [IncidentController::class, 'storeManualPartial']);
+            Route::put('/incidents/{incident}', [IncidentController::class, 'update']);
+            Route::post('/incidents/{incident}/managements', [IncidentController::class, 'storeManagement']);
+            Route::post('/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);
+            Route::post('/incidents/{incident}/field-dispatches', [IncidentController::class, 'fieldDispatch']);
+        });
 
     Route::middleware('permission:'.PermissionCatalog::RECOVERIES_MANAGE)->group(function () {
         Route::post('/incidents/{incident}/recovery-review', [IncidentController::class, 'recoveryReview']);

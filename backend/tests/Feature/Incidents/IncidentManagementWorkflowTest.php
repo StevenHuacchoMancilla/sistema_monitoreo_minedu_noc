@@ -105,7 +105,7 @@ class IncidentManagementWorkflowTest extends TestCase
         $this->assertSame(1, $closing->json('total'));
     }
 
-    public function test_no_response_and_complaint_are_excluded_from_closing(): void
+    public function test_no_response_and_link_outage_are_excluded_from_closing(): void
     {
         $a = $this->seedIncident();
         $this->postJson("/api/incidents/{$a->id}/managements", [
@@ -116,9 +116,9 @@ class IncidentManagementWorkflowTest extends TestCase
 
         $b = $this->seedIncident();
         $this->postJson("/api/incidents/{$b->id}/managements", [
-            'classification' => ManagementClassification::Complaint->value,
-            'outage_text' => 'queja',
-            'detail' => 'internet lento',
+            'classification' => ManagementClassification::LinkOutage->value,
+            'outage_text' => 'enlace',
+            'detail' => 'Caída enlace P2P',
         ])->assertOk();
 
         $closing = $this->getJson('/api/reports/closing-preview');

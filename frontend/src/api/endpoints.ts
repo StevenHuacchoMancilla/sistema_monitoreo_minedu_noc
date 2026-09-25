@@ -62,6 +62,13 @@ export const endpoints = {
     apiPut<IncidentDetail>(`/incidents/${id}`, body),
   applyIncidentManagement: (id: number, body: ManagementPayload) =>
     apiPost<IncidentDetail>(`/incidents/${id}/managements`, body),
+  createManualPartial: (body: {
+    school_id?: number
+    network_assignment_id?: number
+    cid?: string
+    affected_wan_node: 'PRINCIPAL' | 'SECUNDARIO'
+    detail?: string
+  }) => apiPost<IncidentDetail>('/incidents/manual-partial', body),
   fieldDispatch: (
     id: number,
     body: {

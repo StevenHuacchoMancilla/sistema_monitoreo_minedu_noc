@@ -16,6 +16,8 @@ use App\Models\NetworkAssignment;
 use App\Models\PrtgSensor;
 use App\Models\School;
 use App\Models\SchoolContact;
+use App\Models\TrackingRecord;
+use App\Enums\TrackingStatus;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -66,6 +68,9 @@ class DashboardService
                             ->whereNull('recovery_review_status');
                     });
             })
+            ->count();
+        $trackingAbiertos = TrackingRecord::query()
+            ->whereIn('status', TrackingStatus::openValues())
             ->count();
         $recoveredTotal = Incident::query()->whereNotNull('recovered_at')->count();
         $eligible = NetworkAssignment::query()->where('is_active', true)->where('monitoring_eligible', true)->count();
@@ -146,6 +151,7 @@ class DashboardService
                 'concentraciones' => $concentrationCount,
                 'recuperados' => $recoveredToday,
                 'pending_reviews' => $pendingReviews,
+                'tracking_abiertos' => $trackingAbiertos,
             ],
             'active_incidents_preview' => $activePreview,
             'oldest_incidents_preview' => [],
@@ -176,7 +182,10 @@ class DashboardService
 
         $query = Incident::query()
             ->active()
-            ->whereHas('sensor', fn ($sensor) => $sensor->where('normalized_status', MonitoringStatus::Caido))
+            ->where(function ($q) {
+                $q->whereHas('sensor', fn ($sensor) => $sensor->where('normalized_status', MonitoringStatus::Caido))
+                    ->orWhere('detection_source', Incident::DETECTION_MANUAL_PARTIAL);
+            })
             ->with([
                 'school.contacts',
                 'networkAssignment',
@@ -256,8 +265,16 @@ class DashboardService
                 ...$location,
                 'tecnologia' => $assignment?->tecnologia_acceso,
                 'nodo_pop' => $assignment?->nodo_pop,
-                'estado_prtg' => $sensor?->normalized_status?->value ?? $incident->current_status,
-                'estado_prtg_text' => $sensor?->status_text,
+                'estado_prtg' => $incident->isManualPartial()
+                    ? MonitoringStatus::Parcial->value
+                    : ($sensor?->normalized_status?->value ?? $incident->current_status),
+                'estado_prtg_text' => $incident->isManualPartial()
+                    ? ('Enlace '.($incident->affected_wan_node?->value ?? 'PARCIAL'))
+                    : $sensor?->status_text,
+                'detection_source' => $incident->detection_source,
+                'affected_wan_node' => $incident->affected_wan_node?->value,
+                'affected_wan_node_label' => $incident->affected_wan_node?->label(),
+                'is_link_outage' => $incident->isManualPartial(),
                 'duracion' => $incident->started_at?->diffForHumans(now(), true),
                 'duration_seconds' => $incident->started_at
                     ? max(0, now()->getTimestamp() - $incident->started_at->getTimestamp())

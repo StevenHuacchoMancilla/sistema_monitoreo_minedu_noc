@@ -57,6 +57,7 @@ export type DashboardSummary = {
     concentraciones: number
     recuperados: number
     pending_reviews?: number
+    tracking_abiertos?: number
   }
   active_incidents_preview: OutageRow[]
   oldest_incidents_preview?: OutageRow[]
@@ -128,6 +129,10 @@ export type OutageRow = {
   outage_text?: string | null
   detail_text?: string | null
   management_scope?: string | null
+  detection_source?: string | null
+  affected_wan_node?: string | null
+  affected_wan_node_label?: string | null
+  is_link_outage?: boolean
   last_check: string | null
   contacto: string | null
   telefono: string | null

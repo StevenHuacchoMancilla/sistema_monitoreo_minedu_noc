@@ -191,9 +191,9 @@ export function OperationalReportPage() {
             >
               <option value="">Todos</option>
               <option value="NEW_OUTAGE">Nuevas</option>
-              <option value="CONTACT_CONFIRMED">Contacto confirmado</option>
-              <option value="NO_RESPONSE">En espera</option>
-              <option value="COMPLAINT">Quejas</option>
+              <option value="CONTACT_CONFIRMED">TIPO 1 · Para reporte</option>
+              <option value="LINK_OUTAGE">TIPO 2 · Enlace P2P</option>
+              <option value="NO_RESPONSE">TIPO 3 · En espera / energía</option>
             </Select>
           </FormField>
           <PrtgLocationFilterFields

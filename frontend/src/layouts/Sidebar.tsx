@@ -26,7 +26,7 @@ type NavItem = {
   to: string
   label: string
   end?: boolean
-  badgeKey?: 'caidas_activas' | 'pendientes_contacto' | 'en_gestion' | 'concentraciones' | 'recuperados'
+  badgeKey?: 'caidas_activas' | 'pendientes_contacto' | 'en_gestion' | 'concentraciones' | 'recuperados' | 'tracking_abiertos'
   tone?: 'danger' | 'warn' | 'info' | 'muted' | 'success'
   icon: LucideIcon
   accent?: 'prtg' | 'cloudnet'
@@ -42,7 +42,7 @@ const NAV: NavItem[] = [
   { to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck, permission: P.recoveriesView },
   { to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map, permission: P.incidentsView },
   { to: '/history/schools', label: 'Historial por colegio', icon: History, permission: P.historyView },
-  { to: '/tracking', label: 'Tracking General', icon: ClipboardList, permission: P.trackingView },
+  { to: '/tracking', label: 'Tracking General', badgeKey: 'tracking_abiertos', tone: 'warn', icon: ClipboardList, permission: P.trackingView },
   { to: '/schools', label: 'Locales educativos', icon: GraduationCap, permission: P.schoolsView },
   { to: '/reports/operational', label: 'Vista de reporte', icon: FileSpreadsheet, permission: P.reportsView },
   { to: '/reports/general', label: 'Reporte general', icon: Files, permission: P.reportsView },
@@ -108,7 +108,9 @@ export function Sidebar({
                       ? 'En gestión'
                       : item.badgeKey === 'concentraciones'
                         ? 'Concentraciones zonales'
-                        : undefined
+                        : item.badgeKey === 'tracking_abiertos'
+                          ? 'Tracking abiertos (pendientes de cierre)'
+                          : undefined
             const collapsedTitle =
               item.badgeKey === 'recuperados' && typeof count === 'number'
                 ? `${item.label} · ${count.toLocaleString('es-PE')} hoy`

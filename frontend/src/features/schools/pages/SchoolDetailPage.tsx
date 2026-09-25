@@ -21,6 +21,8 @@ import { LocationMismatchBadge } from '../../locations/components/LocationMismat
 import { SchoolGeneralForm } from '../forms/SchoolGeneralForm'
 import { NetworkAssignmentForm } from '../forms/NetworkAssignmentForm'
 import { ContactForm } from '../forms/ContactForm'
+import { IncidentManageModal } from '../../incidents/components/IncidentManageModal'
+import { RegisterLinkOutageModal } from '../../incidents/components/RegisterLinkOutageModal'
 import type { NetworkAssignmentPayload, SchoolGeneralPayload } from '../types/school'
 import { techBadgeClass } from '../../../lib/uiTokens'
 import { formatDateTime } from '../../../lib/datetime'
@@ -50,8 +52,11 @@ export function SchoolDetailPage() {
   const [tab, setTab] = useState<Tab>('GENERAL')
   const [reassignMode, setReassignMode] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
+  const [linkOutageOpen, setLinkOutageOpen] = useState(false)
+  const [manageId, setManageId] = useState<number | null>(null)
   const { can } = usePermissions()
   const canManage = can(P.schoolsManage)
+  const canManageIncidents = can(P.incidentsManage)
 
   const detail = useQuery({
     queryKey: ['schools', id],
@@ -375,7 +380,20 @@ export function SchoolDetailPage() {
           ) : null}
 
           {tab === 'INCIDENCIAS' ? (
-            <SectionCard title="Incidencia activa">
+            <SectionCard
+              title="Incidencia activa"
+              action={
+                canManageIncidents && !incident ? (
+                  <Button type="button" size="sm" variant="secondary" onClick={() => setLinkOutageOpen(true)}>
+                    Caída de enlace
+                  </Button>
+                ) : canManageIncidents && incident ? (
+                  <Button type="button" size="sm" onClick={() => setManageId(Number(incident.id))}>
+                    Gestionar
+                  </Button>
+                ) : null
+              }
+            >
               {incident ? (
                 <dl className="grid gap-3 text-sm sm:grid-cols-2">
                   <div>
@@ -386,9 +404,20 @@ export function SchoolDetailPage() {
                     <dt className="text-xs uppercase text-noc-muted">Desde</dt>
                     <dd>{incident.started_at ? formatDateTime(incident.started_at) : '—'}</dd>
                   </div>
+                  {incident.detection_source === 'MANUAL_PARTIAL' || incident.affected_wan_node ? (
+                    <div className="sm:col-span-2">
+                      <dt className="text-xs uppercase text-noc-muted">Tipo</dt>
+                      <dd>
+                        Caída de enlace {incident.affected_wan_node ?? 'parcial'}
+                        {incident.detail_text ? ` · ${incident.detail_text}` : ''}
+                      </dd>
+                    </div>
+                  ) : null}
                 </dl>
               ) : (
-                <p className="text-sm text-noc-muted">Sin incidencia activa</p>
+                <p className="text-sm text-noc-muted">
+                  Sin incidencia activa. Si un enlace P2P/doble WAN cayó pero el Ping sigue operativo, registra una caída de enlace.
+                </p>
               )}
             </SectionCard>
           ) : null}
@@ -457,6 +486,28 @@ export function SchoolDetailPage() {
         </>
       ) : null}
       </div>
+
+      <RegisterLinkOutageModal
+        open={linkOutageOpen}
+        schoolId={id}
+        schoolLabel={[school?.local_educativo, assignment?.cid ? `CID ${assignment.cid}` : null].filter(Boolean).join(' · ')}
+        onClose={() => setLinkOutageOpen(false)}
+        onCreated={(incidentId) => {
+          setManageId(incidentId)
+          void refresh()
+        }}
+      />
+
+      {manageId !== null ? (
+        <IncidentManageModal
+          incidentId={manageId}
+          initialTab="management"
+          onClose={() => {
+            setManageId(null)
+            void refresh()
+          }}
+        />
+      ) : null}
     </AppLayout>
   )
 }

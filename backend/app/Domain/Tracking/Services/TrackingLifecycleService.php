@@ -128,6 +128,17 @@ class TrackingLifecycleService
                 $userId
             );
 
+            // Caída parcial de enlace: al cerrar Tracking se cierra la incidencia (Ping suele seguir OPERATIVO).
+            if ($locked->incident_id) {
+                $incident = \App\Models\Incident::query()->find($locked->incident_id);
+                if ($incident && $incident->isManualPartial() && $incident->recovered_at === null) {
+                    app(\App\Domain\Incidents\Services\IncidentService::class)->applyTechnicalRecovery(
+                        $incident,
+                        'Cierre operativo: Tracking cerrado (caída parcial de enlace).',
+                    );
+                }
+            }
+
             return $this->detail->show($locked->fresh() ?? $locked);
         });
     }

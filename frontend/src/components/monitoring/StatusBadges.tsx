@@ -17,10 +17,21 @@ export function FollowupBadge({ status }: { status?: string | null }) {
 
 const CLASSIFICATION_LABELS: Record<string, string> = {
   NEW_OUTAGE: 'Nueva caída',
-  CONTACT_CONFIRMED: 'Contacto confirmado',
-  NO_RESPONSE: 'En espera',
+  CONTACT_CONFIRMED: 'TIPO 1',
+  LINK_OUTAGE: 'TIPO 2',
+  NO_RESPONSE: 'TIPO 3',
   COMPLAINT: 'Queja / reclamo',
   UNCLASSIFIED: 'Sin clasificar',
+}
+
+function colorKeyFor(classification: string, colorKey?: string | null): string {
+  if (colorKey) return colorKey
+  if (classification === 'CONTACT_CONFIRMED') return 'red'
+  if (classification === 'LINK_OUTAGE') return 'orange'
+  if (classification === 'NO_RESPONSE') return 'yellow'
+  if (classification === 'COMPLAINT') return 'blue'
+  if (classification === 'NEW_OUTAGE') return 'slate'
+  return 'slate'
 }
 
 export function ClassificationBadge({
@@ -33,15 +44,9 @@ export function ClassificationBadge({
   colorKey?: string | null
 }) {
   if (!classification) return null
-  const key = colorKey ?? (
-    classification === 'NEW_OUTAGE' ? 'yellow'
-      : classification === 'CONTACT_CONFIRMED' ? 'red'
-        : classification === 'NO_RESPONSE' ? 'orange'
-          : classification === 'COMPLAINT' ? 'blue'
-            : 'slate'
-  )
+  const key = colorKeyFor(classification, colorKey)
   return (
-    <span className={`inline-flex max-w-full min-w-0 truncate rounded-full px-2 py-0.5 text-[10px] font-semibold ${CLASSIFICATION_BADGE_CLASS[key] ?? CLASSIFICATION_BADGE_CLASS.slate}`}>
+    <span className={`inline-flex max-w-full min-w-0 truncate rounded-full px-2 py-0.5 text-[10px] font-bold ${CLASSIFICATION_BADGE_CLASS[key] ?? CLASSIFICATION_BADGE_CLASS.slate}`}>
       {label ?? CLASSIFICATION_LABELS[classification] ?? classification}
     </span>
   )

@@ -1,6 +1,7 @@
 export type ManagementClassification =
   | 'NEW_OUTAGE'
   | 'CONTACT_CONFIRMED'
+  | 'LINK_OUTAGE'
   | 'NO_RESPONSE'
   | 'COMPLAINT'
   | 'UNCLASSIFIED'
@@ -53,7 +54,7 @@ export type ClosingPreviewResponse = {
 }
 
 export type ManagementPayload = {
-  classification: Exclude<ManagementClassification, 'NEW_OUTAGE' | 'UNCLASSIFIED'>
+  classification: 'CONTACT_CONFIRMED' | 'LINK_OUTAGE' | 'NO_RESPONSE'
   scope?: ManagementScope | '' | null
   outage_text?: string | null
   detail?: string | null
@@ -62,18 +63,19 @@ export type ManagementPayload = {
   contact_attempted_at?: string | null
 }
 
+/** Filas del reporte: contraste alto entre TIPO 1 / 2 / 3. */
 export const CLASSIFICATION_ROW_CLASS: Record<string, string> = {
-  yellow: 'bg-amber-50 border-l-4 border-amber-400',
-  red: 'bg-red-50 border-l-4 border-red-500',
-  orange: 'bg-orange-50 border-l-4 border-orange-400',
+  red: 'bg-red-100/90 border-l-4 border-red-600',
+  orange: 'bg-orange-100/90 border-l-4 border-orange-500',
+  yellow: 'bg-yellow-100/90 border-l-4 border-yellow-500',
   blue: 'bg-blue-50 border-l-4 border-blue-500',
   slate: 'bg-slate-50 border-l-4 border-slate-300',
 }
 
 export const CLASSIFICATION_BADGE_CLASS: Record<string, string> = {
-  yellow: 'bg-amber-100 text-amber-900',
-  red: 'bg-red-100 text-red-800',
-  orange: 'bg-orange-100 text-orange-900',
+  red: 'bg-red-600 text-white ring-1 ring-red-700/30',
+  orange: 'bg-orange-500 text-white ring-1 ring-orange-700/30',
+  yellow: 'bg-yellow-400 text-yellow-950 ring-1 ring-yellow-600/40',
   blue: 'bg-blue-100 text-blue-800',
   slate: 'bg-slate-100 text-slate-700',
 }

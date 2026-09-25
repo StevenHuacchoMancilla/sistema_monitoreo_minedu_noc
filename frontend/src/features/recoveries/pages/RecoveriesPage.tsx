@@ -55,7 +55,7 @@ const PRESETS: Array<{ value: Preset; label: string }> = [
   { value: 'custom', label: 'Rango' },
 ]
 
-const CONTACT_OUTCOMES = new Set(['CONTACT_CONFIRMED', 'NO_RESPONSE', 'COMPLAINT'])
+const CONTACT_OUTCOMES = new Set(['CONTACT_CONFIRMED', 'LINK_OUTAGE', 'NO_RESPONSE', 'COMPLAINT'])
 
 /** 'YYYY-MM-DD' → 'DD/MM/YYYY' sin pasar por Date (evita corrimientos de zona). */
 function ymdToDmy(value: string | undefined): string {

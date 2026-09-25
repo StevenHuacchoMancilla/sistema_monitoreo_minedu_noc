@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\AffectedWanNode;
 use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
@@ -12,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class Incident extends Model
 {
+    public const DETECTION_MANUAL_PARTIAL = 'MANUAL_PARTIAL';
+
     protected $guarded = [];
 
     protected function casts(): array
@@ -26,11 +29,17 @@ class Incident extends Model
             'management_classification' => ManagementClassification::class,
             'management_scope' => ManagementScope::class,
             'recovery_review_status' => RecoveryReviewStatus::class,
+            'affected_wan_node' => AffectedWanNode::class,
             'recovered_while_managing' => 'boolean',
             'recovery_reviewed_at' => 'datetime',
             'school_snapshot' => 'array',
             'network_snapshot' => 'array',
         ];
+    }
+
+    public function isManualPartial(): bool
+    {
+        return $this->detection_source === self::DETECTION_MANUAL_PARTIAL;
     }
 
     public function school(): BelongsTo

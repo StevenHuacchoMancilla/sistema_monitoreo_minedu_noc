@@ -3,7 +3,9 @@
 namespace App\Domain\Incidents\Services;
 
 use App\Domain\Tracking\Services\TrackingPrtgHookService;
+use App\Enums\AffectedWanNode;
 use App\Enums\FollowupStatus;
+use App\Enums\ManagementClassification;
 use App\Enums\MonitoringStatus;
 use App\Enums\RecoveryReviewStatus;
 use App\Models\FieldDispatch;
@@ -16,6 +18,7 @@ use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Log;
+use InvalidArgumentException;
 
 class IncidentService
 {
@@ -64,6 +67,31 @@ class IncidentService
             ->first();
 
         if ($active) {
+            // Caída parcial manual + Ping total CAÍDO → escalar a caída total (ya no es solo un enlace).
+            if ($active->isManualPartial()) {
+                $beforeFollowup = $active->followup_status?->value;
+                $active->update([
+                    'detection_source' => 'REALTIME_SYNC',
+                    'affected_wan_node' => null,
+                    'current_status' => $sensor->normalized_status?->value ?? MonitoringStatus::Caido->value,
+                    'prtg_down_started_at' => $downSince !== null
+                        ? OperationalTime::toStorage($downSince)
+                        : $active->prtg_down_started_at,
+                ]);
+                IncidentUpdate::query()->create([
+                    'incident_id' => $active->id,
+                    'type' => 'SYSTEM',
+                    'status_before' => $beforeFollowup,
+                    'status_after' => $beforeFollowup,
+                    'observation' => 'Escalada: Ping total CAÍDO. La caída parcial de enlace pasa a incidencia PRTG completa.',
+                    'created_at' => now(),
+                ]);
+                $fresh = $active->fresh() ?? $active;
+                $this->trackingHooks->onIncidentTechnicallyDown($fresh);
+
+                return $fresh;
+            }
+
             $payload = [
                 'current_status' => $sensor->normalized_status?->value,
             ];
@@ -144,6 +172,11 @@ class IncidentService
             ->first();
 
         if (! $active) {
+            return;
+        }
+
+        // Caída parcial de un enlace: el Ping suele seguir OPERATIVO; no auto-cerrar.
+        if ($active->isManualPartial()) {
             return;
         }
 
@@ -417,11 +450,16 @@ class IncidentService
 
     /**
      * Cierra incidencias abiertas cuyo Ping ya volvió a OPERATIVO.
+     * No toca MANUAL_PARTIAL (colegio online con un enlace caído).
      */
     public function closeOperativeIncidents(): int
     {
         $open = Incident::query()
             ->active()
+            ->where(function ($q) {
+                $q->whereNull('detection_source')
+                    ->orWhere('detection_source', '!=', Incident::DETECTION_MANUAL_PARTIAL);
+            })
             ->with(['sensor', 'networkAssignment'])
             ->get();
 
@@ -438,5 +476,99 @@ class IncidentService
         }
 
         return $closed;
+    }
+
+    /**
+     * Registra caída de un solo enlace (doble WAN / P2P) mientras el Ping puede seguir OPERATIVO.
+     * No se auto-cierra por PRTG; se cierra al cerrar Tracking o al escalar a CAÍDO total.
+     */
+    public function openManualPartial(
+        NetworkAssignment $assignment,
+        AffectedWanNode $node,
+        int $userId,
+        ?string $detail = null,
+    ): Incident {
+        if ($userId < 1) {
+            throw new InvalidArgumentException('Se requiere un usuario autenticado.');
+        }
+
+        $assignment->loadMissing(['school', 'sensors']);
+
+        $sensor = $assignment->sensors
+            ->first(fn (PrtgSensor $s) => strcasecmp((string) $s->name, 'Ping') === 0)
+            ?? $assignment->sensors->first();
+
+        if ($sensor === null) {
+            throw new InvalidArgumentException('El colegio no tiene sensor Ping en PRTG para asociar la incidencia.');
+        }
+
+        if ($sensor->normalized_status === MonitoringStatus::Caido) {
+            throw new InvalidArgumentException(
+                'El Ping ya está CAÍDO en PRTG. Usa la cola de caídas activas (no hace falta caída parcial).'
+            );
+        }
+
+        $existing = Incident::query()
+            ->where('network_assignment_id', $assignment->id)
+            ->whereNull('recovered_at')
+            ->first();
+
+        if ($existing) {
+            throw new InvalidArgumentException(
+                $existing->isManualPartial()
+                    ? 'Ya hay una caída de enlace abierta para este colegio.'
+                    : 'Ya hay una incidencia activa (caída total). Continúa la gestión desde caídas activas.'
+            );
+        }
+
+        $school = $assignment->school;
+        $nodeLabel = $node->label();
+        $nodoName = $node === AffectedWanNode::Principal
+            ? ($assignment->nodo_acceso_a ?: 'N/A')
+            : ($assignment->nodo_acceso_b ?: 'N/A');
+        $wanIp = $node === AffectedWanNode::Principal
+            ? ($assignment->ip_wan_principal ?: null)
+            : ($assignment->ip_wan_secundaria ?: null);
+
+        $detailText = trim((string) ($detail ?: ''));
+        if ($detailText === '') {
+            $detailText = "Caída parcial · {$nodeLabel} · {$nodoName}"
+                .($wanIp ? " · {$wanIp}" : '');
+        }
+
+        $incident = Incident::query()->create([
+            'school_id' => $assignment->school_id,
+            'network_assignment_id' => $assignment->id,
+            'prtg_sensor_id' => $sensor->id,
+            'detection_source' => Incident::DETECTION_MANUAL_PARTIAL,
+            'affected_wan_node' => $node,
+            'started_at' => now(),
+            'current_status' => MonitoringStatus::Parcial->value,
+            'followup_status' => FollowupStatus::PendienteContacto,
+            'management_classification' => ManagementClassification::NewOutage,
+            'outage_text' => "Parcial {$node->value}",
+            'detail_text' => $detailText,
+            'school_snapshot' => $school?->only([
+                'id', 'current_sequence', 'legacy_reference', 'codigo_local', 'codigo_modular',
+                'local_educativo', 'departamento', 'provincia', 'distrito', 'centro_poblado', 'clasificacion',
+            ]),
+            'network_snapshot' => $assignment->only([
+                'id', 'cid', 'cid_status', 'prtg_device_name', 'capacidad_mbps', 'tecnologia_acceso',
+                'nodo_pop', 'ip_publica', 'ip_loopback', 'ip_wan_principal', 'ip_lan',
+                'nodo_acceso_a', 'nodo_acceso_b', 'ip_wan_secundaria',
+            ]),
+        ]);
+
+        IncidentUpdate::query()->create([
+            'incident_id' => $incident->id,
+            'type' => 'SYSTEM',
+            'status_before' => null,
+            'status_after' => FollowupStatus::PendienteContacto->value,
+            'observation' => "Incidencia manual: caída de enlace ({$nodeLabel}). Colegio puede seguir OPERATIVO en Ping. Cierre vía Tracking o al caer ambos enlaces.",
+            'user_id' => $userId,
+            'created_at' => now(),
+        ]);
+
+        return $incident->fresh() ?? $incident;
     }
 }

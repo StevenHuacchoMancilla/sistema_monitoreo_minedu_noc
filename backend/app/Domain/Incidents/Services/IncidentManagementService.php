@@ -104,6 +104,7 @@ class IncidentManagementService
             $followup = match ($classification) {
                 ManagementClassification::NewOutage => FollowupStatus::PendienteContacto,
                 ManagementClassification::NoResponse => FollowupStatus::EnEspera,
+                ManagementClassification::LinkOutage => FollowupStatus::EnEspera,
                 ManagementClassification::ContactConfirmed,
                 ManagementClassification::Complaint => FollowupStatus::EnGestion,
             };
