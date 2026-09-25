@@ -5,6 +5,7 @@ import { endpoints } from '../../../api/endpoints'
 import { Button } from '../../../components/ui/Button'
 import { FormField, Input, Select } from '../../../components/ui/FormControls'
 import { useDebouncedValue } from '../../../lib/useDebouncedValue'
+import type { SchoolListRow } from '../../schools/types/school'
 
 type Props = {
   open: boolean
@@ -123,7 +124,7 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
                   ) : rows.length === 0 ? (
                     <li className="px-3 py-2 text-xs text-slate-500">Sin resultados</li>
                   ) : (
-                    rows.map((row: { id: number; local_educativo?: string; codigo_local?: string; cid?: string | null }) => (
+                    rows.map((row: SchoolListRow) => (
                       <li key={row.id}>
                         <button
                           type="button"
