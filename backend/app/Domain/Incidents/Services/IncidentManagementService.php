@@ -99,13 +99,29 @@ class IncidentManagementService
                 'created_by' => $userId,
             ]);
 
+            // Toda gestión operativa sale de "Pendiente contacto".
+            // "En espera" (sin respuesta) entra al grupo En gestión, no se queda pegado.
             $followup = match ($classification) {
-                ManagementClassification::NewOutage,
-                ManagementClassification::NoResponse => FollowupStatus::PendienteContacto,
+                ManagementClassification::NewOutage => FollowupStatus::PendienteContacto,
+                ManagementClassification::NoResponse => FollowupStatus::EnEspera,
                 ManagementClassification::ContactConfirmed,
                 ManagementClassification::Complaint => FollowupStatus::EnGestion,
-                default => $incident->followup_status ?? FollowupStatus::PendienteContacto,
             };
+
+            // No degradar técnico en campo / escalado al registrar contacto.
+            $current = $incident->followup_status;
+            if (
+                $current === FollowupStatus::TecnicoEnCampo
+                || $current === FollowupStatus::Escalado
+            ) {
+                if (in_array($followup, [
+                    FollowupStatus::PendienteContacto,
+                    FollowupStatus::EnEspera,
+                    FollowupStatus::EnGestion,
+                ], true)) {
+                    $followup = $current;
+                }
+            }
 
             $incident->fill([
                 'management_classification' => $classification,

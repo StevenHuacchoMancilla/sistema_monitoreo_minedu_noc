@@ -144,6 +144,25 @@ class IncidentManagementWorkflowTest extends TestCase
         $this->assertDatabaseCount('incident_managements', 1);
     }
 
+    public function test_no_response_moves_to_en_espera_managing(): void
+    {
+        $incident = $this->seedIncident();
+
+        $this->postJson("/api/incidents/{$incident->id}/managements", [
+            'classification' => ManagementClassification::NoResponse->value,
+            'outage_text' => 'sin respuesta',
+            'detail' => 'SIN RESPUESTA',
+        ])->assertOk();
+
+        $incident->refresh();
+        $this->assertSame(ManagementClassification::NoResponse, $incident->management_classification);
+        $this->assertSame(FollowupStatus::EnEspera, $incident->followup_status);
+        $this->assertContains(
+            FollowupStatus::EnEspera->value,
+            FollowupStatus::managingValues()
+        );
+    }
+
     public function test_classification_can_evolve_no_response_to_confirmed(): void
     {
         $incident = $this->seedIncident();
@@ -163,6 +182,7 @@ class IncidentManagementWorkflowTest extends TestCase
 
         $incident->refresh();
         $this->assertSame(ManagementClassification::ContactConfirmed, $incident->management_classification);
+        $this->assertSame(FollowupStatus::EnGestion, $incident->followup_status);
         $this->assertDatabaseCount('incident_managements', 2);
     }
 }

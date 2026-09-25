@@ -59,11 +59,7 @@ export function AppRouter() {
               element={
                 <ActiveIncidentsPage
                   title="Pendientes de contacto"
-                  filter={(row) =>
-                    row.followup_status === 'PENDIENTE_CONTACTO' ||
-                    row.management_classification === 'NEW_OUTAGE' ||
-                    row.management_classification === 'NO_RESPONSE'
-                  }
+                  filter={(row) => row.followup_status === 'PENDIENTE_CONTACTO'}
                   presetFollowup="PENDIENTE_CONTACTO"
                 />
               }
@@ -74,6 +70,7 @@ export function AppRouter() {
                 <ActiveIncidentsPage
                   title="En gestión"
                   filter={(row) => MANAGING.has(row.followup_status ?? '')}
+                  presetFollowup="EN_GESTION_GROUP"
                 />
               }
             />

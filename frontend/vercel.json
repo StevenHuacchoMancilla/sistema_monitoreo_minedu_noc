@@ -7,6 +7,10 @@
     {
       "source": "/sanctum/:path*",
       "destination": "https://sistema-monitoreo-minedu-noc.onrender.com/sanctum/:path*"
+    },
+    {
+      "source": "/((?!api/|sanctum/).*)",
+      "destination": "/index.html"
     }
   ]
 }
