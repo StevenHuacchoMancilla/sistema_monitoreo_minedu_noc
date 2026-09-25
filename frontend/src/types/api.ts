@@ -206,6 +206,9 @@ export type SchoolDetail = {
     id: number
     started_at?: string | null
     followup_status?: string | null
+    detection_source?: string | null
+    affected_wan_node?: string | null
+    detail_text?: string | null
   } | null
   incident_history: Array<Record<string, unknown>>
 }
