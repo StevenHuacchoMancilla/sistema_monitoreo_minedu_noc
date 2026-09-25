@@ -1,10 +1,46 @@
-/** Origen del backend Laravel (sin /api). */
-export const BACKEND_URL = (
-  import.meta.env.VITE_BACKEND_URL ??
-  (import.meta.env.VITE_API_URL ?? 'http://127.0.0.1:8000/api').replace(/\/api\/?$/, '')
-).replace(/\/$/, '')
+/**
+ * Origen del backend Laravel (sin /api) y base /api.
+ * En Vercel el front y el API son orígenes distintos: las cookies XSRF de Render
+ * no son legibles por JS → CSRF 419. Solución: URLs same-origin (/api, /sanctum)
+ * + rewrites en vercel.json hacia Render (igual que el proxy de Vite en local).
+ */
+function resolveUrls(): { backend: string; api: string } {
+  const envApi = (import.meta.env.VITE_API_URL as string | undefined)?.trim()
+  const envBackend = (import.meta.env.VITE_BACKEND_URL as string | undefined)?.trim()
 
-export const API_URL = import.meta.env.VITE_API_URL ?? `${BACKEND_URL}/api`
+  const isAbs = (u: string) => /^https?:\/\//i.test(u)
+  const otherHost = (u: string) => {
+    if (typeof window === 'undefined' || !isAbs(u)) return false
+    try {
+      return new URL(u).origin !== window.location.origin
+    } catch {
+      return true
+    }
+  }
+
+  // API absoluto a otro host (ej. onrender.com desde vercel.app) → forzar proxy local.
+  if ((envApi && otherHost(envApi)) || (envBackend && otherHost(envBackend))) {
+    return { backend: '', api: '/api' }
+  }
+
+  // Relativo (/api) o vacío → same-origin (dev proxy / Vercel rewrites).
+  if (!envApi || envApi.startsWith('/')) {
+    const api = envApi || '/api'
+    const backend = (envBackend && !isAbs(envBackend) ? envBackend : '').replace(/\/$/, '')
+    return { backend, api }
+  }
+
+  const backend = (
+    envBackend ||
+    envApi.replace(/\/api\/?$/, '')
+  ).replace(/\/$/, '')
+
+  return { backend, api: envApi }
+}
+
+const resolved = resolveUrls()
+export const BACKEND_URL = resolved.backend
+export const API_URL = resolved.api
 
 export type AuthUser = {
   id: number
