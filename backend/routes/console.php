@@ -9,12 +9,10 @@ Artisan::command('inspire', function () {
 })->purpose('Display an inspiring quote');
 
 if (config('prtg.sync_enabled')) {
-    // Default 120s: evita solapes con syncs que tardan ~30–90s.
-    $seconds = max(60, (int) config('prtg.sync_interval_seconds', 120));
-    $minutes = max(1, (int) ceil($seconds / 60));
-
+    // Cada minuto: withoutOverlapping + SyncCoordinator evitan solapes.
+    // PRTG_SYNC_INTERVAL_SECONDS se usa como pista; el piso efectivo es 1 min en cron.
     Schedule::command('prtg:sync')
-        ->cron("*/{$minutes} * * * *")
+        ->everyMinute()
         ->withoutOverlapping(5);
 }
 

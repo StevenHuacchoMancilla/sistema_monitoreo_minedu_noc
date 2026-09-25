@@ -15,7 +15,17 @@ class SyncPrtgCommand extends Command
     {
         $this->info('Sincronizando PRTG...');
         $summary = $service->sync();
-        $this->table(['Métrica', 'Valor'], collect($summary)->map(fn ($v, $k) => [$k, is_scalar($v) ? $v : json_encode($v)])->values()->all());
+
+        if (! empty($summary['skipped'])) {
+            $this->warn('Sync omitido: ya hay uno en curso ('.$summary['reason'].').');
+
+            return self::SUCCESS;
+        }
+
+        $this->table(
+            ['Métrica', 'Valor'],
+            collect($summary)->map(fn ($v, $k) => [$k, is_scalar($v) ? $v : json_encode($v)])->values()->all()
+        );
 
         return self::SUCCESS;
     }

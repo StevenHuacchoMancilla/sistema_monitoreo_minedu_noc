@@ -108,6 +108,20 @@ export function ActiveIncidentsPage({
   const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
   const now = useNow()
 
+  // Al cambiar de pestaña (misma página React), resetear filtros de UI.
+  // La cola (pendiente / en gestión) ya la define `filter`; el dropdown arranca en "Todos".
+  useEffect(() => {
+    setSearch('')
+    setFollowup(presetFollowup ?? '')
+    setTecnologia('')
+    setFromDate('')
+    setToDate('')
+    setDuration('')
+    setPage(1)
+    setProvincia(searchParams.get('provincia') ?? '')
+    setDistrito(searchParams.get('distrito') ?? '')
+  }, [title, presetFollowup])
+
   useEffect(() => {
     setProvincia(searchParams.get('provincia') ?? '')
     setDistrito(searchParams.get('distrito') ?? '')
@@ -162,7 +176,7 @@ export function ActiveIncidentsPage({
   const pageRows = rows.slice((currentPage - 1) * perPage, currentPage * perPage)
 
   const hasFilters = Boolean(
-    search || (followup && followup !== presetFollowup) || provincia || distrito || tecnologia || fromDate || toDate || duration,
+    search || followup || provincia || distrito || tecnologia || fromDate || toDate || duration,
   )
 
   const withPageReset =

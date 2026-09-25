@@ -5,7 +5,7 @@ import { useLiveMonitoringSync } from '../hooks/useLiveMonitoringSync'
 export function LiveSyncBootstrap() {
   const { user, loading } = useAuth()
   useLiveMonitoringSync({
-    prtgMs: 120_000,
+    prtgMs: 60_000,
     cloudnetMs: 300_000,
     enabled: !loading && user !== null,
   })

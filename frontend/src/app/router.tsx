@@ -53,14 +53,14 @@ export function AppRouter() {
           </Route>
 
           <Route element={<RequirePermission permission={P.incidentsView} />}>
-            <Route path="/incidents/active" element={<ActiveIncidentsPage />} />
+            <Route path="/incidents/active" element={<ActiveIncidentsPage key="incidents-active" />} />
             <Route
               path="/incidents/pending"
               element={
                 <ActiveIncidentsPage
+                  key="incidents-pending"
                   title="Pendientes de contacto"
                   filter={(row) => row.followup_status === 'PENDIENTE_CONTACTO'}
-                  presetFollowup="PENDIENTE_CONTACTO"
                 />
               }
             />
@@ -68,9 +68,9 @@ export function AppRouter() {
               path="/incidents/managing"
               element={
                 <ActiveIncidentsPage
+                  key="incidents-managing"
                   title="En gestión"
                   filter={(row) => MANAGING.has(row.followup_status ?? '')}
-                  presetFollowup="EN_GESTION_GROUP"
                 />
               }
             />

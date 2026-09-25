@@ -48,8 +48,8 @@ export function useLiveMonitoringSync(options?: {
   enabled?: boolean
 }) {
   const client = useQueryClient()
-  // 2 min PRTG / 5 min Cloudnet: suficiente para NOC y evita solapes/timeouts.
-  const prtgMs = options?.prtgMs ?? 120_000
+  // 60s PRTG / 5 min Cloudnet. Candado server + leadership de pestaña evitan solapes.
+  const prtgMs = options?.prtgMs ?? 60_000
   const cloudnetMs = options?.cloudnetMs ?? 300_000
   const enabled = options?.enabled ?? true
   const prtgBusy = useRef(false)
