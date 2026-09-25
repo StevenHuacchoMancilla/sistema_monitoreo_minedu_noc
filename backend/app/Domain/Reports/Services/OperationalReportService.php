@@ -37,7 +37,7 @@ class OperationalReportService
             'legend' => [
                 ['key' => ManagementClassification::NewOutage->value, 'color' => 'yellow', 'label' => 'Nueva caída'],
                 ['key' => ManagementClassification::ContactConfirmed->value, 'color' => 'red', 'label' => 'Contacto confirmado'],
-                ['key' => ManagementClassification::NoResponse->value, 'color' => 'orange', 'label' => 'Sin respuesta'],
+                ['key' => ManagementClassification::NoResponse->value, 'color' => 'orange', 'label' => 'En espera'],
                 ['key' => ManagementClassification::Complaint->value, 'color' => 'blue', 'label' => 'Queja / reclamo'],
             ],
             'filters_applied' => $filters,

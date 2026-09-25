@@ -38,7 +38,7 @@ enum ManagementClassification: string
         return match ($this) {
             self::NewOutage => 'Nueva caída',
             self::ContactConfirmed => 'Contacto confirmado',
-            self::NoResponse => 'Sin respuesta',
+            self::NoResponse => 'En espera',
             self::Complaint => 'Queja / reclamo',
             self::Unclassified => 'Sin clasificar',
         };

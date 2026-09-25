@@ -175,6 +175,33 @@ class TrackingController extends Controller
         );
     }
 
+    /**
+     * Actualiza columnas CODIGO / CAUSA del Tracking General.
+     */
+    public function updateCodigoCausa(Request $request, TrackingRecord $tracking): JsonResponse
+    {
+        $payload = $request->validate([
+            'lock_version' => ['required', 'integer', 'min:1'],
+            'codigo' => ['nullable'],
+            'causa' => ['nullable', 'string', 'max:2000'],
+        ]);
+
+        if (array_key_exists('codigo', $payload) && is_string($payload['codigo'])) {
+            // ok — normalizer acepta string
+        } elseif (array_key_exists('codigo', $payload) && is_array($payload['codigo'])) {
+            $payload['codigo'] = array_values(array_map('strval', $payload['codigo']));
+        } elseif (array_key_exists('codigo', $payload) && $payload['codigo'] !== null) {
+            abort(422, 'codigo debe ser lista de letras o string.');
+        }
+
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+
+        return response()->json(
+            $this->detail->updateCodigoCausa($tracking, $payload, (int) $user->id)
+        );
+    }
+
     public function close(Request $request, TrackingRecord $tracking): JsonResponse
     {
         $payload = $request->validate([

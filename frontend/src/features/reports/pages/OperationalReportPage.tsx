@@ -18,7 +18,7 @@ function ReportLegend() {
   const items = [
     { color: 'bg-amber-400', label: 'Amarillo — Nueva caída', soft: 'bg-amber-50 border-amber-200' },
     { color: 'bg-red-500', label: 'Rojo — Contacto confirmado', soft: 'bg-red-50 border-red-200' },
-    { color: 'bg-orange-500', label: 'Naranja — Sin respuesta', soft: 'bg-orange-50 border-orange-200' },
+    { color: 'bg-orange-500', label: 'Naranja — En espera', soft: 'bg-orange-50 border-orange-200' },
     { color: 'bg-blue-500', label: 'Azul — Queja / reclamo', soft: 'bg-blue-50 border-blue-200' },
   ]
   return (
@@ -192,7 +192,7 @@ export function OperationalReportPage() {
               <option value="">Todos</option>
               <option value="NEW_OUTAGE">Nuevas</option>
               <option value="CONTACT_CONFIRMED">Contacto confirmado</option>
-              <option value="NO_RESPONSE">Sin respuesta</option>
+              <option value="NO_RESPONSE">En espera</option>
               <option value="COMPLAINT">Quejas</option>
             </Select>
           </FormField>

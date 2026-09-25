@@ -17,11 +17,12 @@ import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/Sta
 import { techBadgeClass } from '../../../lib/uiTokens'
 import { useAuth } from '../../auth/context/AuthContext'
 import { ApiError } from '../../../api/client'
-import { fetchTrackingDetail, postTrackingUpdate, closeTracking, reopenTracking, acknowledgeTrackingRecovery } from '../api/trackingApi'
+import { fetchTrackingDetail, postTrackingUpdate, closeTracking, reopenTracking, acknowledgeTrackingRecovery, updateTrackingCodigoCausa } from '../api/trackingApi'
 import { TrackingTimeline } from '../components/TrackingTimeline'
 import { TrackingUpdateComposer } from '../components/TrackingUpdateComposer'
 import { TrackingLifecyclePanel } from '../components/TrackingLifecyclePanel'
 import { TrackingTicketCard } from '../components/TrackingTicketCard'
+import { TrackingCodigoCausaPanel } from '../components/TrackingCodigoCausaPanel'
 import { formatDuration } from '../lib/format'
 import { trackingStatusTone } from '../lib/trackingStatus'
 
@@ -47,6 +48,16 @@ export function TrackingDetailPage() {
     onSuccess: (res) => {
       queryClient.setQueryData(['tracking', 'detail', trackingId], res)
       void queryClient.invalidateQueries({ queryKey: ['tracking', 'list'] })
+    },
+  })
+
+  const saveCodigoCausa = useMutation({
+    mutationFn: (payload: { codigo: string[]; causa: string; lock_version: number }) =>
+      updateTrackingCodigoCausa(trackingId, payload),
+    onSuccess: (res) => {
+      queryClient.setQueryData(['tracking', 'detail', trackingId], res)
+      void queryClient.invalidateQueries({ queryKey: ['tracking', 'list'] })
+      void queryClient.invalidateQueries({ queryKey: ['tracking', 'report'] })
     },
   })
 
@@ -229,6 +240,23 @@ export function TrackingDetailPage() {
                 onClose={(payload) => applyLifecycle({ type: 'close', payload })}
                 onReopen={(payload) => applyLifecycle({ type: 'reopen', payload })}
                 onAcknowledge={(payload) => applyLifecycle({ type: 'ack', payload })}
+              />
+              <TrackingCodigoCausaPanel
+                codigoLetters={data.codigo_letters ?? []}
+                causa={data.causa ?? null}
+                lockVersion={data.lock_version}
+                canWrite={canWrite}
+                saving={saveCodigoCausa.isPending}
+                error={
+                  saveCodigoCausa.isError
+                    ? saveCodigoCausa.error instanceof ApiError
+                      ? saveCodigoCausa.error.message
+                      : 'No se pudo guardar'
+                    : null
+                }
+                onSave={async (payload) => {
+                  await saveCodigoCausa.mutateAsync(payload)
+                }}
               />
               <SectionCard title="Timeline de seguimiento" accent="prtg">
                 <TrackingTimeline updates={data.updates} />

@@ -18,7 +18,7 @@ export function FollowupBadge({ status }: { status?: string | null }) {
 const CLASSIFICATION_LABELS: Record<string, string> = {
   NEW_OUTAGE: 'Nueva caída',
   CONTACT_CONFIRMED: 'Contacto confirmado',
-  NO_RESPONSE: 'Sin respuesta',
+  NO_RESPONSE: 'En espera',
   COMPLAINT: 'Queja / reclamo',
   UNCLASSIFIED: 'Sin clasificar',
 }

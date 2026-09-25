@@ -15,6 +15,8 @@ export type TrackingReportRow = {
   descripcion: string | null
   apertura: string | null
   nombre_apertura: string | null
+  codigo: string | null
+  causa: string | null
   seguimiento: string
   cierre: string | null
   nombre_cierre: string | null

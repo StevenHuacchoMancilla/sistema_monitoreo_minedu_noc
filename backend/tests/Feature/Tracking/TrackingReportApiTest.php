@@ -83,7 +83,9 @@ class TrackingReportApiTest extends TestCase
         $response->assertOk()
             ->assertJsonPath('meta.total', 1)
             ->assertJsonPath('columns.0.key', 'n_incidente')
-            ->assertJsonPath('columns.7.key', 'seguimiento')
+            ->assertJsonPath('columns.7.key', 'codigo')
+            ->assertJsonPath('columns.8.key', 'causa')
+            ->assertJsonPath('columns.9.key', 'seguimiento')
             ->assertJsonPath('data.0.n_incidente', 12)
             ->assertJsonPath('data.0.ticket', 'TK-12')
             ->assertJsonPath('data.0.tss', '120')
@@ -192,9 +194,11 @@ class TrackingReportApiTest extends TestCase
         $this->assertSame('DESCRIPCION', $sheet->getCell('E1')->getValue());
         $this->assertSame('APERTURA', $sheet->getCell('F1')->getValue());
         $this->assertSame('NOMBRE', $sheet->getCell('G1')->getValue());
-        $this->assertSame('SEGUIMIENTO', $sheet->getCell('H1')->getValue());
-        $this->assertSame('CIERRE', $sheet->getCell('I1')->getValue());
-        $this->assertSame('NOMBRE', $sheet->getCell('J1')->getValue());
+        $this->assertSame('CODIGO', $sheet->getCell('H1')->getValue());
+        $this->assertSame('CAUSA', $sheet->getCell('I1')->getValue());
+        $this->assertSame('SEGUIMIENTO', $sheet->getCell('J1')->getValue());
+        $this->assertSame('CIERRE', $sheet->getCell('K1')->getValue());
+        $this->assertSame('NOMBRE', $sheet->getCell('L1')->getValue());
 
         $this->assertSame(33, (int) $sheet->getCell('A2')->getValue());
         $this->assertSame('TK-33', (string) $sheet->getCell('B2')->getValue());

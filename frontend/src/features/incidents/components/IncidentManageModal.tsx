@@ -44,8 +44,8 @@ const RESULT_OPTIONS: Array<{
   },
   {
     value: 'NO_RESPONSE',
-    label: 'Sin respuesta',
-    hint: 'No fue posible contactar; sigue caído',
+    label: 'En espera',
+    hint: 'Fluido eléctrico, sin respuesta, equipos apagados, etc.',
     selected: 'border-orange-300 bg-orange-50 dark:border-orange-800 dark:bg-orange-950/40',
   },
   {

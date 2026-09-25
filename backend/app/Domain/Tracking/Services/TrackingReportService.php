@@ -18,7 +18,7 @@ use PhpOffice\PhpSpreadsheet\Writer\Xlsx;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 
 /**
- * Vista / export shape alineada a TRACKING GENERAL.xlsx (10 columnas).
+ * Vista / export shape alineada a TRACKING GENERAL (+ CODIGO / CAUSA).
  */
 class TrackingReportService
 {
@@ -103,27 +103,29 @@ class TrackingReportService
             $sheet->setCellValue([5, $r], $row['descripcion']);
             $sheet->setCellValueExplicit([6, $r], (string) ($row['apertura'] ?? ''), DataType::TYPE_STRING);
             $sheet->setCellValue([7, $r], $row['nombre_apertura']);
-            $sheet->setCellValue([8, $r], $row['seguimiento']);
-            $sheet->setCellValueExplicit([9, $r], (string) ($row['cierre'] ?? ''), DataType::TYPE_STRING);
-            $sheet->setCellValue([10, $r], $row['nombre_cierre']);
+            $sheet->setCellValueExplicit([8, $r], (string) ($row['codigo'] ?? ''), DataType::TYPE_STRING);
+            $sheet->setCellValue([9, $r], $row['causa']);
+            $sheet->setCellValue([10, $r], $row['seguimiento']);
+            $sheet->setCellValueExplicit([11, $r], (string) ($row['cierre'] ?? ''), DataType::TYPE_STRING);
+            $sheet->setCellValue([12, $r], $row['nombre_cierre']);
 
-            $sheet->getStyle("H{$r}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
+            $sheet->getStyle("J{$r}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
+            $sheet->getStyle("I{$r}")->getAlignment()->setWrapText(true)->setVertical(Alignment::VERTICAL_TOP);
 
             if (! empty($row['is_closed'])) {
-                // Verde solo visual (como el Excel histórico); el cierre real es CIERRE/NOMBRE.
-                $sheet->getStyle("A{$r}:J{$r}")->getFill()
+                $sheet->getStyle("A{$r}:L{$r}")->getFill()
                     ->setFillType(Fill::FILL_SOLID)
                     ->getStartColor()->setRGB('DCFCE7');
             }
         }
 
         $lastRow = max(1, count($rows) + 1);
-        $sheet->getStyle('A1:J'.$lastRow)->getBorders()->getAllBorders()
+        $sheet->getStyle('A1:L'.$lastRow)->getBorders()->getAllBorders()
             ->setBorderStyle(Border::BORDER_THIN)
             ->getColor()->setRGB('CBD5E1');
 
         $sheet->freezePane('A2');
-        $sheet->setAutoFilter('A1:J'.$lastRow);
+        $sheet->setAutoFilter('A1:L'.$lastRow);
         $this->setColumnWidths($sheet);
 
         $filename = 'tracking_general_'.now()->format('Ymd_His').'.xlsx';
@@ -149,6 +151,8 @@ class TrackingReportService
             ['key' => 'descripcion', 'label' => 'DESCRIPCION'],
             ['key' => 'apertura', 'label' => 'APERTURA'],
             ['key' => 'nombre_apertura', 'label' => 'NOMBRE'],
+            ['key' => 'codigo', 'label' => 'CODIGO'],
+            ['key' => 'causa', 'label' => 'CAUSA'],
             ['key' => 'seguimiento', 'label' => 'SEGUIMIENTO'],
             ['key' => 'cierre', 'label' => 'CIERRE'],
             ['key' => 'nombre_cierre', 'label' => 'NOMBRE'],
@@ -157,7 +161,7 @@ class TrackingReportService
 
     private function setColumnWidths(Worksheet $sheet): void
     {
-        $widths = [12, 12, 10, 12, 28, 16, 14, 42, 16, 14];
+        $widths = [12, 12, 10, 12, 28, 16, 14, 12, 28, 42, 16, 14];
         foreach ($widths as $i => $width) {
             $sheet->getColumnDimensionByColumn($i + 1)->setWidth($width);
         }
@@ -187,6 +191,8 @@ class TrackingReportService
             'descripcion' => $row->description,
             'apertura' => $this->formatDate($row->opened_at, $row->opened_at_precision),
             'nombre_apertura' => $row->openedByDisplayName(),
+            'codigo' => $row->codigo,
+            'causa' => $row->causa,
             'seguimiento' => $this->formatSeguimiento($row),
             'cierre' => $this->formatDate($row->closed_at, $row->closed_at_precision),
             'nombre_cierre' => $row->closedByDisplayName(),

@@ -38,6 +38,9 @@ export type TrackingDetail = {
   tss_snapshot: string | null
   cid_snapshot: string | null
   description: string | null
+  codigo?: string | null
+  codigo_letters?: string[]
+  causa?: string | null
   status: TrackingStatus | null
   status_label: string | null
   technical_status: string | null
@@ -98,6 +101,9 @@ export type TrackingListRow = {
   tss_snapshot: string | null
   cid_snapshot: string | null
   description: string | null
+  codigo?: string | null
+  codigo_letters?: string[]
+  causa?: string | null
   status: TrackingStatus | null
   status_label: string | null
   school_name?: string | null

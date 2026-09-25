@@ -2,6 +2,7 @@
 
 namespace App\Domain\Tracking\Services;
 
+use App\Domain\Tracking\Support\TrackingCodigoNormalizer;
 use App\Enums\AuditModule;
 use App\Enums\AuditSource;
 use App\Enums\MonitoringStatus;
@@ -138,6 +139,63 @@ class TrackingDetailService
             );
 
             return $update;
+        });
+
+        return $this->show($tracking->fresh() ?? $tracking);
+    }
+
+    /**
+     * Actualiza CODIGO (letras A–Z multi) y/o CAUSA (texto) del Tracking.
+     *
+     * @param  array{codigo?: list<string>|string|null, causa?: string|null, lock_version: int}  $payload
+     * @return array<string, mixed>
+     */
+    public function updateCodigoCausa(TrackingRecord $tracking, array $payload, int $userId): array
+    {
+        $expectedLock = (int) ($payload['lock_version'] ?? 0);
+        if ($expectedLock < 1 || $expectedLock !== (int) $tracking->lock_version) {
+            throw ValidationException::withMessages([
+                'lock_version' => ['El Tracking fue modificado por otro usuario. Recarga e intenta de nuevo.'],
+            ]);
+        }
+
+        $codigo = array_key_exists('codigo', $payload)
+            ? TrackingCodigoNormalizer::normalize($payload['codigo'])
+            : $tracking->codigo;
+
+        $causa = array_key_exists('causa', $payload)
+            ? (trim((string) ($payload['causa'] ?? '')) ?: null)
+            : $tracking->causa;
+
+        if ($causa !== null && mb_strlen($causa) > 2000) {
+            throw ValidationException::withMessages([
+                'causa' => ['La causa no puede superar 2000 caracteres.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($tracking, $codigo, $causa, $userId): void {
+            $before = [
+                'codigo' => $tracking->codigo,
+                'causa' => $tracking->causa,
+            ];
+
+            $tracking->codigo = $codigo;
+            $tracking->causa = $causa;
+            $tracking->bumpLockVersion();
+            $tracking->save();
+
+            $this->audit->record(
+                $tracking,
+                'UPDATE_TRACKING_CODIGO_CAUSA',
+                $before,
+                [
+                    'codigo' => $codigo,
+                    'causa' => $causa,
+                    'by_user_id' => $userId,
+                ],
+                AuditModule::TrackingGeneral,
+                AuditSource::Api
+            );
         });
 
         return $this->show($tracking->fresh() ?? $tracking);

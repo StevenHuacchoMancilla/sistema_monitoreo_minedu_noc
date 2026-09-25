@@ -1,4 +1,4 @@
-import { API_URL, ApiError, apiGet, apiPost } from '../../../api/client'
+import { API_URL, ApiError, apiGet, apiPost, apiPut } from '../../../api/client'
 import type { TrackingDetail, TrackingListResponse } from '../types/tracking'
 import type { TrackingReportResponse } from '../types/trackingReport'
 
@@ -81,6 +81,13 @@ export function openTrackingFromIncident(incidentId: number, ticket?: string | n
 
 export function postTrackingUpdate(id: number, body: { body: string; event_type?: string }) {
   return apiPost<{ data: TrackingDetail }>(`/tracking/${id}/updates`, body)
+}
+
+export function updateTrackingCodigoCausa(
+  id: number,
+  body: { lock_version: number; codigo?: string[] | string | null; causa?: string | null },
+) {
+  return apiPut<{ data: TrackingDetail }>(`/tracking/${id}/codigo-causa`, body)
 }
 
 export function closeTracking(id: number, body: { lock_version: number; closing_note?: string }) {

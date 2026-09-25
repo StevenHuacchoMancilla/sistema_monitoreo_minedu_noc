@@ -10,6 +10,8 @@ const COLUMN_WIDTH: Record<string, string> = {
   descripcion: 'min-w-[200px]',
   apertura: 'min-w-[120px]',
   nombre_apertura: 'min-w-[110px]',
+  codigo: 'min-w-[90px]',
+  causa: 'min-w-[180px]',
   seguimiento: 'min-w-[320px]',
   cierre: 'min-w-[120px]',
   nombre_cierre: 'min-w-[110px]',
@@ -67,6 +69,7 @@ export function TrackingReportTable({
                 {columns.map((col, idx) => {
                   const value = cellValue(row, col.key)
                   const isSeguimiento = col.key === 'seguimiento'
+                  const isCausa = col.key === 'causa'
                   const isFirst = idx === 0
 
                   return (
@@ -76,8 +79,12 @@ export function TrackingReportTable({
                         td,
                         COLUMN_WIDTH[col.key] ?? '',
                         isFirst ? `sticky left-0 z-10 ${stickyBg} font-semibold tabular-nums` : '',
-                        col.key === 'cid' || col.key === 'tss' ? 'font-mono tabular-nums' : '',
-                        isSeguimiento ? 'max-w-[360px] whitespace-pre-wrap leading-relaxed' : '',
+                        col.key === 'cid' || col.key === 'tss' || col.key === 'codigo'
+                          ? 'font-mono tabular-nums'
+                          : '',
+                        isSeguimiento || isCausa
+                          ? 'max-w-[360px] whitespace-pre-wrap leading-relaxed'
+                          : '',
                       ].join(' ')}
                     >
                       {isFirst ? (

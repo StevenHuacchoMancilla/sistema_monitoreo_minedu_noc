@@ -22,6 +22,9 @@ chmod -R ug+rwx storage bootstrap/cache || true
 # Enlace público de storage (idempotente)
 php artisan storage:link 2>/dev/null || true
 
+# Migraciones additive contra la BD (Supabase/Postgres). Seguro en redeploy.
+php artisan migrate --force --no-interaction
+
 # Caches de producción (no fallar el boot si falta alguna env)
 if [ -n "${APP_KEY:-}" ]; then
   php artisan config:cache || true
