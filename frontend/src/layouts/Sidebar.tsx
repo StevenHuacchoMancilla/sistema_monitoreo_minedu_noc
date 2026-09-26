@@ -23,10 +23,13 @@ import { usePermissions } from '../features/auth/hooks/usePermissions'
 import { P, type Permission } from '../features/auth/permissions'
 import { useSidebar } from './AppLayout'
 
+type NavSection = 'operacion' | 'reportes' | 'consulta'
+
 type NavItem = {
   to: string
   label: string
   end?: boolean
+  section: NavSection
   badgeKey?: 'caidas_activas' | 'pendientes_contacto' | 'en_gestion' | 'concentraciones' | 'recuperados' | 'tracking_abiertos' | 'notificaciones'
   tone?: 'danger' | 'warn' | 'info' | 'muted' | 'success'
   icon: LucideIcon
@@ -34,20 +37,27 @@ type NavItem = {
   permission: Permission
 }
 
+const SECTION_LABEL: Record<NavSection, string> = {
+  operacion: 'Operación',
+  reportes: 'Reportes',
+  consulta: 'Consulta',
+}
+
+/** Orden: cola operativa → reportes → consulta/admin. Notificaciones al final (campana ya cubre lo urgente). */
 const NAV: NavItem[] = [
-  { to: '/dashboard/prtg', label: 'Resumen PRTG', end: true, icon: LayoutDashboard, accent: 'prtg', permission: P.dashboardPrtg },
-  { to: '/incidents/active', label: 'Caídas activas', badgeKey: 'caidas_activas', tone: 'danger', icon: TriangleAlert, permission: P.incidentsView },
-  { to: '/incidents/pending', label: 'Pendientes de contacto', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone, permission: P.incidentsView },
-  { to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
-  { to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck, permission: P.recoveriesView },
-  { to: '/notifications', label: 'Notificaciones', badgeKey: 'notificaciones', tone: 'warn', icon: Bell, permission: P.recoveriesView },
-  { to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map, permission: P.incidentsView },
-  { to: '/history/schools', label: 'Historial por colegio', icon: History, permission: P.historyView },
-  { to: '/tracking', label: 'Tracking General', badgeKey: 'tracking_abiertos', tone: 'warn', icon: ClipboardList, permission: P.trackingView },
-  { to: '/schools', label: 'Locales educativos', icon: GraduationCap, permission: P.schoolsView },
-  { to: '/reports/operational', label: 'Vista de reporte', icon: FileSpreadsheet, permission: P.reportsView },
-  { to: '/reports/general', label: 'Reporte general', icon: Files, permission: P.reportsView },
-  { to: '/admin', label: 'Administración', icon: Settings, permission: P.adminView },
+  { section: 'operacion', to: '/dashboard/prtg', label: 'Resumen PRTG', end: true, icon: LayoutDashboard, accent: 'prtg', permission: P.dashboardPrtg },
+  { section: 'operacion', to: '/incidents/active', label: 'Caídas activas', badgeKey: 'caidas_activas', tone: 'danger', icon: TriangleAlert, permission: P.incidentsView },
+  { section: 'operacion', to: '/incidents/pending', label: 'Pendientes de contacto', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone, permission: P.incidentsView },
+  { section: 'operacion', to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
+  { section: 'operacion', to: '/tracking', label: 'Tracking General', badgeKey: 'tracking_abiertos', tone: 'warn', icon: ClipboardList, permission: P.trackingView },
+  { section: 'operacion', to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck, permission: P.recoveriesView },
+  { section: 'operacion', to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map, permission: P.incidentsView },
+  { section: 'reportes', to: '/reports/operational', label: 'Vista de reporte', icon: FileSpreadsheet, permission: P.reportsView },
+  { section: 'reportes', to: '/reports/general', label: 'Reporte general', icon: Files, permission: P.reportsView },
+  { section: 'consulta', to: '/history/schools', label: 'Historial por colegio', icon: History, permission: P.historyView },
+  { section: 'consulta', to: '/schools', label: 'Locales educativos', icon: GraduationCap, permission: P.schoolsView },
+  { section: 'consulta', to: '/notifications', label: 'Notificaciones', badgeKey: 'notificaciones', tone: 'warn', icon: Bell, permission: P.recoveriesView },
+  { section: 'consulta', to: '/admin', label: 'Administración', icon: Settings, permission: P.adminView },
 ]
 
 const toneClass: Record<NonNullable<NavItem['tone']>, string> = {
@@ -73,6 +83,9 @@ export function Sidebar({
   const { collapsed, toggle } = useSidebar()
   const isCollapsed = forceExpanded ? false : collapsed
   const items = NAV.filter((item) => can(item.permission))
+  const sections = (['operacion', 'reportes', 'consulta'] as const).filter((section) =>
+    items.some((item) => item.section === section),
+  )
 
   return (
     <aside className="flex h-full min-h-screen flex-col border-r border-slate-800 bg-slate-950 text-slate-300">
@@ -89,13 +102,20 @@ export function Sidebar({
       </div>
 
       <div className={`flex-1 overflow-y-auto py-4 ${isCollapsed ? 'px-2' : 'px-3'}`}>
-        {!isCollapsed ? (
-          <p className="mb-2 px-2 text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
-            Operación
-          </p>
-        ) : null}
-        <nav className="space-y-1">
-          {items.map((item) => {
+        <nav className="space-y-4">
+          {sections.map((section) => {
+            const sectionItems = items.filter((item) => item.section === section)
+            return (
+              <div key={section}>
+                {!isCollapsed ? (
+                  <p className="mb-2 px-2 text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
+                    {SECTION_LABEL[section]}
+                  </p>
+                ) : section !== 'operacion' ? (
+                  <div className="mx-auto mb-2 h-px w-6 bg-slate-800" aria-hidden />
+                ) : null}
+                <div className="space-y-1">
+                  {sectionItems.map((item) => {
             const Icon = item.icon
             const count =
               item.badgeKey === 'notificaciones'
@@ -176,6 +196,10 @@ export function Sidebar({
                   </>
                 ) : null}
               </NavLink>
+            )
+                  })}
+                </div>
+              </div>
             )
           })}
         </nav>
