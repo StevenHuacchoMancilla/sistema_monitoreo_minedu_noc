@@ -14,6 +14,7 @@ export type TrackingUpdate = {
   occurred_at: string | null
   created_at: string | null
   updated_at: string | null
+  can_delete?: boolean
 }
 
 export type TrackingActivityItem = {

@@ -145,6 +145,53 @@ class TrackingDetailService
     }
 
     /**
+     * Elimina un seguimiento humano (no eventos de sistema / PRTG).
+     *
+     * @return array<string, mixed>
+     */
+    public function deleteUpdate(TrackingRecord $tracking, TrackingUpdate $update, int $userId): array
+    {
+        if ((int) $update->tracking_record_id !== (int) $tracking->id) {
+            throw ValidationException::withMessages([
+                'update' => ['El seguimiento no pertenece a este Tracking.'],
+            ]);
+        }
+
+        $type = $update->event_type instanceof TrackingEventType
+            ? $update->event_type
+            : TrackingEventType::tryFrom((string) $update->event_type);
+
+        if ($type?->isSystem()) {
+            throw ValidationException::withMessages([
+                'update' => ['No se pueden eliminar eventos de sistema o recuperación técnica.'],
+            ]);
+        }
+
+        DB::transaction(function () use ($tracking, $update, $userId, $type) {
+            $before = [
+                'update_id' => $update->id,
+                'event_type' => $type?->value,
+                'body' => $update->body,
+                'created_by_user_id' => $update->created_by_user_id,
+            ];
+
+            $update->delete();
+
+            $this->audit->record(
+                $tracking,
+                'DELETE_TRACKING_UPDATE',
+                $before,
+                null,
+                AuditModule::TrackingGeneral,
+                AuditSource::Api,
+                $userId
+            );
+        });
+
+        return $this->show($tracking->fresh() ?? $tracking);
+    }
+
+    /**
      * Actualiza CODIGO (letras A–Z multi) y/o CAUSA (texto) del Tracking.
      *
      * @param  array{codigo?: list<string>|string|null, causa?: string|null, lock_version: int}  $payload

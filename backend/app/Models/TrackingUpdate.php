@@ -69,6 +69,7 @@ class TrackingUpdate extends Model
             'occurred_at' => $this->occurred_at?->toIso8601String(),
             'created_at' => $this->created_at?->toIso8601String(),
             'updated_at' => $this->updated_at?->toIso8601String(),
+            'can_delete' => ! ($type?->isSystem() ?? false),
         ];
     }
 }

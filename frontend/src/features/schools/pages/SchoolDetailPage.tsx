@@ -492,9 +492,16 @@ export function SchoolDetailPage() {
         schoolId={id}
         schoolLabel={[school?.local_educativo, assignment?.cid ? `CID ${assignment.cid}` : null].filter(Boolean).join(' · ')}
         onClose={() => setLinkOutageOpen(false)}
-        onCreated={(incidentId) => {
-          setManageId(incidentId)
+        onCreated={({ incidentId, classification, trackingId }) => {
           void refresh()
+          if (
+            (classification === 'LINK_OUTAGE' || classification === 'NO_RESPONSE') &&
+            trackingId
+          ) {
+            navigate(`/tracking/${trackingId}`)
+            return
+          }
+          setManageId(incidentId)
         }}
       />
 

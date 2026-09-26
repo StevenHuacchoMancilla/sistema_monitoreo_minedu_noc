@@ -345,6 +345,7 @@ class IncidentController extends Controller
             'network_assignment_id' => ['nullable', 'integer', 'required_without_all:school_id,cid'],
             'cid' => ['nullable', 'string', 'max:40', 'required_without_all:school_id,network_assignment_id'],
             'affected_wan_node' => ['required', Rule::in(AffectedWanNode::values())],
+            'classification' => ['required', Rule::in(ManagementClassification::operableValues())],
             'detail' => ['nullable', 'string', 'max:5000'],
         ]);
 
@@ -387,11 +388,23 @@ class IncidentController extends Controller
                 $userId,
                 $data['detail'] ?? null,
             );
+
+            // Clasificación inmediata: TIPO 1 → reporte; TIPO 2/3 → Tracking abierto.
+            $applied = $this->managements->apply($incident, [
+                'classification' => (string) $data['classification'],
+                'detail' => $data['detail'] ?? null,
+                'created_by' => $userId,
+            ]);
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        return $this->show($incident->fresh() ?? $incident);
+        $payload = $this->show($incident->fresh() ?? $incident)->getData(true);
+        if (is_array($payload)) {
+            $payload['tracking_sync'] = $applied['tracking'];
+        }
+
+        return response()->json($payload);
     }
 
     public function storeManagement(Request $request, Incident $incident): JsonResponse

@@ -175,6 +175,18 @@ class TrackingController extends Controller
         );
     }
 
+    public function destroyUpdate(Request $request, TrackingRecord $tracking, int $update): JsonResponse
+    {
+        $model = \App\Models\TrackingUpdate::query()->findOrFail($update);
+
+        /** @var \App\Models\User $user */
+        $user = $request->user();
+
+        return response()->json(
+            $this->detail->deleteUpdate($tracking, $model, (int) $user->id)
+        );
+    }
+
     /**
      * Actualiza columnas CODIGO / CAUSA del Tracking General.
      */

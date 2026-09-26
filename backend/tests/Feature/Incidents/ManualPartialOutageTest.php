@@ -5,6 +5,7 @@ namespace Tests\Feature\Incidents;
 use App\Enums\AffectedWanNode;
 use App\Enums\CidStatus;
 use App\Enums\FollowupStatus;
+use App\Enums\ManagementClassification;
 use App\Enums\MonitoringStatus;
 use App\Models\Incident;
 use App\Models\NetworkAssignment;
@@ -56,17 +57,20 @@ class ManualPartialOutageTest extends TestCase
         $response = $this->postJson('/api/incidents/manual-partial', [
             'school_id' => $school->id,
             'affected_wan_node' => AffectedWanNode::Principal->value,
+            'classification' => ManagementClassification::LinkOutage->value,
             'detail' => 'Caída NA principal',
         ]);
 
         $response->assertOk();
         $incidentId = (int) $response->json('estado.n_incidencia');
         $this->assertGreaterThan(0, $incidentId);
+        $this->assertNotNull($response->json('tracking_sync.tracking_id'));
 
         $incident = Incident::query()->findOrFail($incidentId);
         $this->assertTrue($incident->isManualPartial());
         $this->assertSame(AffectedWanNode::Principal, $incident->affected_wan_node);
-        $this->assertSame(FollowupStatus::PendienteContacto, $incident->followup_status);
+        $this->assertSame(ManagementClassification::LinkOutage, $incident->management_classification);
+        $this->assertSame(FollowupStatus::EnEspera, $incident->followup_status);
         $this->assertNull($incident->recovered_at);
 
         // Safety-net PRTG no debe cerrar la parcial aunque Ping esté OPERATIVO.
@@ -112,6 +116,7 @@ class ManualPartialOutageTest extends TestCase
         $this->postJson('/api/incidents/manual-partial', [
             'school_id' => $school->id,
             'affected_wan_node' => AffectedWanNode::Secundario->value,
+            'classification' => ManagementClassification::NoResponse->value,
         ])->assertStatus(422);
     }
 }

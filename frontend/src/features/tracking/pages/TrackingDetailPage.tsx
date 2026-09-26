@@ -17,7 +17,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/Sta
 import { techBadgeClass } from '../../../lib/uiTokens'
 import { useAuth } from '../../auth/context/AuthContext'
 import { ApiError } from '../../../api/client'
-import { fetchTrackingDetail, postTrackingUpdate, closeTracking, reopenTracking, acknowledgeTrackingRecovery, updateTrackingCodigoCausa } from '../api/trackingApi'
+import { fetchTrackingDetail, postTrackingUpdate, deleteTrackingUpdate, closeTracking, reopenTracking, acknowledgeTrackingRecovery, updateTrackingCodigoCausa } from '../api/trackingApi'
 import { TrackingTimeline } from '../components/TrackingTimeline'
 import { TrackingUpdateComposer } from '../components/TrackingUpdateComposer'
 import { TrackingLifecyclePanel } from '../components/TrackingLifecyclePanel'
@@ -45,6 +45,14 @@ export function TrackingDetailPage() {
 
   const addUpdate = useMutation({
     mutationFn: (body: string) => postTrackingUpdate(trackingId, { body }),
+    onSuccess: (res) => {
+      queryClient.setQueryData(['tracking', 'detail', trackingId], res)
+      void queryClient.invalidateQueries({ queryKey: ['tracking', 'list'] })
+    },
+  })
+
+  const removeUpdate = useMutation({
+    mutationFn: (updateId: number) => deleteTrackingUpdate(trackingId, updateId),
     onSuccess: (res) => {
       queryClient.setQueryData(['tracking', 'detail', trackingId], res)
       void queryClient.invalidateQueries({ queryKey: ['tracking', 'list'] })
@@ -259,7 +267,12 @@ export function TrackingDetailPage() {
                 }}
               />
               <SectionCard title="Timeline de seguimiento" accent="prtg">
-                <TrackingTimeline updates={data.updates} />
+                <TrackingTimeline
+                  updates={data.updates}
+                  canDelete={canWrite}
+                  deletingId={removeUpdate.isPending ? removeUpdate.variables ?? null : null}
+                  onDelete={(updateId) => removeUpdate.mutate(updateId)}
+                />
               </SectionCard>
               <TrackingUpdateComposer
                 disabled={!data.can_add_update || !canWrite}

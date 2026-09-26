@@ -98,6 +98,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::middleware('permission:'.PermissionCatalog::TRACKING_MANAGE)->group(function () {
         Route::post('/tracking', [TrackingController::class, 'store']);
         Route::post('/tracking/{tracking}/updates', [TrackingController::class, 'storeUpdate']);
+        Route::delete('/tracking/{tracking}/updates/{update}', [TrackingController::class, 'destroyUpdate']);
         Route::put('/tracking/{tracking}/codigo-causa', [TrackingController::class, 'updateCodigoCausa']);
         Route::post('/tracking/{tracking}/acknowledge-recovery', [TrackingController::class, 'acknowledgeRecovery']);
     });

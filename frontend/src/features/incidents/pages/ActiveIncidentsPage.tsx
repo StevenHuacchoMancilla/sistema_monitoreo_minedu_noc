@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useSearchParams } from 'react-router-dom'
+import { useSearchParams, useNavigate } from 'react-router-dom'
 import { Clock3, Eye, Hourglass, Network, RefreshCw, Sparkles, SquarePen, TriangleAlert, Wrench } from 'lucide-react'
 import { useAuth } from '../../auth/context/AuthContext'
 import { AppLayout } from '../../../layouts/AppLayout'
@@ -93,6 +93,7 @@ export function ActiveIncidentsPage({
   presetFollowup?: string
 }) {
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(25)
@@ -423,9 +424,16 @@ export function ActiveIncidentsPage({
       <RegisterLinkOutageModal
         open={linkOutageOpen}
         onClose={() => setLinkOutageOpen(false)}
-        onCreated={(id) => {
-          setManageId(id)
+        onCreated={({ incidentId, classification, trackingId }) => {
           refresh()
+          if (
+            (classification === 'LINK_OUTAGE' || classification === 'NO_RESPONSE') &&
+            trackingId
+          ) {
+            navigate(`/tracking/${trackingId}`)
+            return
+          }
+          setManageId(incidentId)
         }}
       />
     </AppLayout>
