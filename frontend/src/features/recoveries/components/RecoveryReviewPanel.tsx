@@ -44,8 +44,8 @@ const ACTIONS: Array<{
   },
   {
     action: 'CONTINUE_MONITORING',
-    label: 'Mantener seguimiento',
-    hint: 'La recuperación puede ser temporal; se sigue monitoreando.',
+    label: 'Seguir en reporte',
+    hint: 'Internet intermitente: mantiene el TIPO/gestión en reporte. Si cae otra vez, se reabre la misma incidencia hasta cerrar Tracking.',
     variant: 'secondary',
     icon: Wrench,
   },

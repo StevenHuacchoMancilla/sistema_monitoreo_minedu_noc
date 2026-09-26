@@ -99,7 +99,12 @@ class Incident extends Model
 
     public function scopeForClosingReport($query)
     {
-        return $query->active()
-            ->where('management_classification', ManagementClassification::ContactConfirmed->value);
+        // TIPO 1 activo, o recuperado con "Seguir en reporte" (internet intermitente).
+        return $query
+            ->where('management_classification', ManagementClassification::ContactConfirmed->value)
+            ->where(function ($q) {
+                $q->whereNull('recovered_at')
+                    ->orWhere('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value);
+            });
     }
 }

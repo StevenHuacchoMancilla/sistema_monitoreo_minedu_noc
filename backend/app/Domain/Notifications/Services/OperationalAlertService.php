@@ -111,6 +111,8 @@ class OperationalAlertService
                 ? $active->status->value
                 : ($active?->status),
             'tracking_id' => $trackingId ? (int) $trackingId : null,
+            'management_classification' => $incident->management_classification?->value,
+            'management_classification_label' => $incident->management_classification?->label(),
             'href' => $trackingId
                 ? '/tracking/'.$trackingId
                 : '/history/incidents/'.$incident->id,

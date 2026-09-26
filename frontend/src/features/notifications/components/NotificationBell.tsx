@@ -1,7 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell, Truck } from 'lucide-react'
 import { IconButton } from '../../../components/ui/IconButton'
+import { endpoints } from '../../../api/endpoints'
+import { useAuth } from '../../auth/context/AuthContext'
 import { useOperationalAlerts } from '../hooks/useOperationalAlerts'
 import type { OperationalAlert } from '../types/alerts'
 
@@ -28,9 +31,13 @@ function saveDismissed(ids: Set<string>) {
 
 export function NotificationBell() {
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const canManage = Boolean(user?.permissions?.includes('recoveries.manage'))
   const alerts = useOperationalAlerts()
+  const client = useQueryClient()
   const [open, setOpen] = useState(false)
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed())
+  const [busyId, setBusyId] = useState<string | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
 
   const visible = useMemo(
@@ -72,6 +79,28 @@ export function NotificationBell() {
     navigate(alert.href)
   }
 
+  const goAll = () => {
+    setOpen(false)
+    navigate('/notifications')
+  }
+
+  const keepInReport = useMutation({
+    mutationFn: (incidentId: number) =>
+      endpoints.recoveryReview(incidentId, { action: 'CONTINUE_MONITORING' }),
+    onSuccess: async (_data, incidentId) => {
+      const alert = visible.find((a) => a.incident_id === incidentId)
+      if (alert) dismiss(alert.id)
+      await Promise.all([
+        client.invalidateQueries({ queryKey: ['notifications'] }),
+        client.invalidateQueries({ queryKey: ['recoveries'] }),
+        client.invalidateQueries({ queryKey: ['dashboard'] }),
+        client.invalidateQueries({ queryKey: ['reports'] }),
+        client.invalidateQueries({ queryKey: ['tracking'] }),
+      ])
+    },
+    onSettled: () => setBusyId(null),
+  })
+
   return (
     <div className="relative" ref={panelRef}>
       <IconButton
@@ -101,8 +130,8 @@ export function NotificationBell() {
             </p>
             <button
               type="button"
-              className="text-xs font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200"
-              onClick={() => navigate('/recoveries?review_status=PENDING_REVIEW')}
+              className="text-xs font-medium text-sky-700 hover:text-sky-900 dark:text-sky-300 dark:hover:text-sky-100"
+              onClick={goAll}
             >
               Ver todas
             </button>
@@ -138,6 +167,20 @@ export function NotificationBell() {
                         </p>
                       ) : null}
                       <div className="mt-2 flex flex-wrap gap-2">
+                        {canManage ? (
+                          <button
+                            type="button"
+                            className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
+                            disabled={keepInReport.isPending}
+                            title="Mantener en reporte/gestión. Si cae otra vez, misma incidencia hasta cerrar Tracking."
+                            onClick={() => {
+                              setBusyId(alert.id)
+                              keepInReport.mutate(alert.incident_id)
+                            }}
+                          >
+                            {busyId === alert.id && keepInReport.isPending ? '…' : 'Seguir en reporte'}
+                          </button>
+                        ) : null}
                         <button
                           type="button"
                           className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700"
@@ -159,6 +202,18 @@ export function NotificationBell() {
               </li>
             ))}
           </ul>
+
+          {count > 0 ? (
+            <div className="border-t border-slate-100 px-3 py-2 dark:border-slate-800">
+              <button
+                type="button"
+                className="w-full rounded-lg py-1.5 text-center text-xs font-semibold text-sky-700 hover:bg-sky-50 dark:text-sky-300 dark:hover:bg-sky-950/40"
+                onClick={goAll}
+              >
+                Abrir centro de notificaciones
+              </button>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

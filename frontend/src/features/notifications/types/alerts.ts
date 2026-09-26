@@ -13,6 +13,9 @@ export type OperationalAlert = {
   recovered_at: string | null
   active_field_dispatch: boolean
   field_dispatch_status: string | null
+  tracking_id?: number | null
+  management_classification?: string | null
+  management_classification_label?: string | null
   href: string
 }
 

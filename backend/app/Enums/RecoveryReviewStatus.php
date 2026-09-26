@@ -21,7 +21,7 @@ enum RecoveryReviewStatus: string
         return match ($this) {
             self::PendingReview => 'Pendiente de revisión',
             self::Acknowledged => 'Recuperación confirmada',
-            self::ContinueMonitoring => 'Seguimiento activo',
+            self::ContinueMonitoring => 'Seguir en reporte',
         };
     }
 }

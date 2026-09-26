@@ -93,7 +93,7 @@ class RecoveryReviewService
 
             $title = match ($action) {
                 self::ACTION_ACKNOWLEDGE => 'Operador confirmó la recuperación técnica.',
-                self::ACTION_CONTINUE_MONITORING => 'Operador mantiene seguimiento pese a recuperación PRTG.',
+                self::ACTION_CONTINUE_MONITORING => 'Seguir en reporte: internet puede ser intermitente; se mantiene la gestión/TIPO y el historial hasta cerrar Tracking.',
                 self::ACTION_CONTINUE_ONSITE => 'Operador decide continuar atención en sitio.',
                 self::ACTION_CANCEL_DISPATCH => 'Operador canceló el desplazamiento a campo.',
                 self::ACTION_ADD_NOTE => 'Observación de revisión de recuperación.',

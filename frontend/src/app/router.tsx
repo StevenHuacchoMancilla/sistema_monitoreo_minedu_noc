@@ -6,6 +6,7 @@ import { SchoolHistoryIndexPage } from '../features/history/pages/SchoolHistoryI
 import { SchoolHistoryDetailPage } from '../features/history/pages/SchoolHistoryDetailPage'
 import { IncidentCaseFilePage } from '../features/history/pages/IncidentCaseFilePage'
 import { RecoveriesPage } from '../features/recoveries/pages/RecoveriesPage'
+import { NotificationsPage } from '../features/notifications/pages/NotificationsPage'
 import { AdminPage } from '../features/administration/pages/AdminPage'
 import { SchoolDetailPage } from '../features/schools/pages/SchoolDetailPage'
 import { SchoolsListPage } from '../features/schools/pages/SchoolsListPage'
@@ -75,6 +76,7 @@ export function AppRouter() {
 
           <Route element={<RequirePermission permission={P.recoveriesView} />}>
             <Route path="/recoveries" element={<RecoveriesPage />} />
+            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/incidents/recovered" element={<Navigate to="/recoveries" replace />} />
           </Route>
 

@@ -335,7 +335,7 @@ export function RecoveriesPage() {
               <option value="">Todas</option>
               <option value="PENDING_REVIEW">Pendiente de revisión</option>
               <option value="ACKNOWLEDGED">Confirmada</option>
-              <option value="CONTINUE_MONITORING">Seguimiento activo</option>
+              <option value="CONTINUE_MONITORING">Seguir en reporte</option>
             </Select>
           </FormField>
           <FormField label="Condiciones">
@@ -545,8 +545,8 @@ function RecoveryRow({ row }: { row: RecoveredRow }) {
             </Badge>
           ) : null}
           {row.recovery_review_status === 'CONTINUE_MONITORING' ? (
-            <Badge tone="info" className="max-w-full !text-[10px]">
-              Seguimiento
+            <Badge tone="warning" className="max-w-full !text-[10px]">
+              Seguir en reporte
             </Badge>
           ) : null}
           {!row.requires_review && !row.active_field_dispatch && !row.recovery_review_status ? (

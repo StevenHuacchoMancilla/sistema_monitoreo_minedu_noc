@@ -25,7 +25,7 @@ class ClosingReportService
         return [
             'total' => count($rows),
             'rows' => $rows,
-            'note' => 'Solo CONTACT_CONFIRMED activas (filas rojas). Recuperadas excluidas.',
+            'note' => 'TIPO 1 (CONTACT_CONFIRMED): activas, o recuperadas con “Seguir en reporte”.',
             'columns' => OperationalReportService::officialColumns(),
         ];
     }

@@ -4,7 +4,6 @@ import { Sidebar } from './Sidebar'
 import { Button } from '../components/ui/Button'
 import { IconButton } from '../components/ui/IconButton'
 import { NotificationBell } from '../features/notifications/components/NotificationBell'
-import { OperationalAlertsBanner } from '../features/notifications/components/OperationalAlertsBanner'
 import { UserMenu } from '../features/auth/components/UserMenu'
 import { ThemeToggle } from '../features/theme/ThemeToggle'
 
@@ -160,8 +159,6 @@ export function AppLayout({
                 <UserMenu />
               </div>
             </div>
-
-            <OperationalAlertsBanner />
 
             <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 lg:p-8">
               <div className="mx-auto min-w-0 w-full max-w-[100%]">

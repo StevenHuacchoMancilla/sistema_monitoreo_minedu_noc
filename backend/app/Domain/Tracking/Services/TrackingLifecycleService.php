@@ -128,7 +128,8 @@ class TrackingLifecycleService
                 $userId
             );
 
-            // Caída parcial de enlace: al cerrar Tracking se cierra la incidencia (Ping suele seguir OPERATIVO).
+            // Al cerrar Tracking: si había "Seguir en reporte", la incidencia deja de
+            // reabrirse automáticamente; la próxima caída será incidencia nueva.
             if ($locked->incident_id) {
                 $incident = \App\Models\Incident::query()->find($locked->incident_id);
                 if ($incident && $incident->isManualPartial() && $incident->recovered_at === null) {
@@ -136,6 +137,26 @@ class TrackingLifecycleService
                         $incident,
                         'Cierre operativo: Tracking cerrado (caída parcial de enlace).',
                     );
+                    $incident = $incident->fresh() ?? $incident;
+                }
+                if (
+                    $incident
+                    && $incident->recovered_at !== null
+                    && $incident->recovery_review_status === \App\Enums\RecoveryReviewStatus::ContinueMonitoring
+                ) {
+                    $incident->fill([
+                        'recovery_review_status' => \App\Enums\RecoveryReviewStatus::Acknowledged,
+                        'recovery_reviewed_at' => now(),
+                    ])->save();
+                    \App\Models\IncidentUpdate::query()->create([
+                        'incident_id' => $incident->id,
+                        'type' => 'RECOVERY_REVIEW',
+                        'status_before' => \App\Enums\RecoveryReviewStatus::ContinueMonitoring->value,
+                        'status_after' => \App\Enums\RecoveryReviewStatus::Acknowledged->value,
+                        'observation' => '[ACKNOWLEDGE] Tracking cerrado: fin de “Seguir en reporte”. Próxima caída = nueva incidencia.',
+                        'user_id' => $userId,
+                        'created_at' => now(),
+                    ]);
                 }
             }
 

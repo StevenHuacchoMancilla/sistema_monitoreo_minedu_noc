@@ -5,6 +5,7 @@ namespace App\Domain\Reports\Services;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
+use App\Enums\RecoveryReviewStatus;
 use App\Models\Incident;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
@@ -74,7 +75,12 @@ class OperationalReportService
 
         $query = Incident::query()
             ->with(['school', 'networkAssignment', 'sensor'])
-            ->when($activeOnly, fn (Builder $q) => $q->active())
+            ->when($activeOnly, function (Builder $q) {
+                $q->where(function (Builder $inner) {
+                    $inner->whereNull('recovered_at')
+                        ->orWhere('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value);
+                });
+            })
             ->whereNotNull('management_classification')
             ->where('management_classification', '!=', ManagementClassification::Unclassified->value)
             ->orderBy('started_at');

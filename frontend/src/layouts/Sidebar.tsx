@@ -2,6 +2,7 @@ import { NavLink } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
+  Bell,
   CircleCheck,
   ClipboardList,
   FileSpreadsheet,
@@ -17,6 +18,7 @@ import {
   TriangleAlert,
 } from 'lucide-react'
 import { useDashboardSummary } from '../features/dashboard/hooks/useDashboard'
+import { useOperationalAlerts } from '../features/notifications/hooks/useOperationalAlerts'
 import { usePermissions } from '../features/auth/hooks/usePermissions'
 import { P, type Permission } from '../features/auth/permissions'
 import { useSidebar } from './AppLayout'
@@ -25,7 +27,7 @@ type NavItem = {
   to: string
   label: string
   end?: boolean
-  badgeKey?: 'caidas_activas' | 'pendientes_contacto' | 'en_gestion' | 'concentraciones' | 'recuperados' | 'tracking_abiertos'
+  badgeKey?: 'caidas_activas' | 'pendientes_contacto' | 'en_gestion' | 'concentraciones' | 'recuperados' | 'tracking_abiertos' | 'notificaciones'
   tone?: 'danger' | 'warn' | 'info' | 'muted' | 'success'
   icon: LucideIcon
   accent?: 'prtg'
@@ -38,6 +40,7 @@ const NAV: NavItem[] = [
   { to: '/incidents/pending', label: 'Pendientes de contacto', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone, permission: P.incidentsView },
   { to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
   { to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck, permission: P.recoveriesView },
+  { to: '/notifications', label: 'Notificaciones', badgeKey: 'notificaciones', tone: 'warn', icon: Bell, permission: P.recoveriesView },
   { to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map, permission: P.incidentsView },
   { to: '/history/schools', label: 'Historial por colegio', icon: History, permission: P.historyView },
   { to: '/tracking', label: 'Tracking General', badgeKey: 'tracking_abiertos', tone: 'warn', icon: ClipboardList, permission: P.trackingView },
@@ -63,7 +66,9 @@ export function Sidebar({
   forceExpanded?: boolean
 }) {
   const summary = useDashboardSummary()
+  const alerts = useOperationalAlerts(60_000)
   const nav = summary.data?.nav
+  const notifCount = alerts.data?.meta.pending_review ?? alerts.data?.data?.length ?? 0
   const { can } = usePermissions()
   const { collapsed, toggle } = useSidebar()
   const isCollapsed = forceExpanded ? false : collapsed
@@ -92,7 +97,12 @@ export function Sidebar({
         <nav className="space-y-1">
           {items.map((item) => {
             const Icon = item.icon
-            const count = item.badgeKey ? nav?.[item.badgeKey] : undefined
+            const count =
+              item.badgeKey === 'notificaciones'
+                ? notifCount
+                : item.badgeKey
+                  ? nav?.[item.badgeKey as Exclude<NonNullable<NavItem['badgeKey']>, 'notificaciones'>]
+                  : undefined
             const pendingReviews =
               item.badgeKey === 'recuperados' ? (nav?.pending_reviews ?? 0) : 0
             const badgeTitle =
@@ -108,7 +118,9 @@ export function Sidebar({
                         ? 'Concentraciones zonales'
                         : item.badgeKey === 'tracking_abiertos'
                           ? 'Tracking abiertos (pendientes de cierre)'
-                          : undefined
+                          : item.badgeKey === 'notificaciones'
+                            ? 'Notificaciones pendientes de revisión'
+                            : undefined
             const collapsedTitle =
               item.badgeKey === 'recuperados' && typeof count === 'number'
                 ? `${item.label} · ${count.toLocaleString('es-PE')} hoy`

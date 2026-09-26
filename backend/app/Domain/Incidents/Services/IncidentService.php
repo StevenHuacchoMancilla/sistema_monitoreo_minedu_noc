@@ -299,37 +299,32 @@ class IncidentService
     }
 
     /**
-     * Reabre la última recuperación reciente del mismo Ping (flaps).
-     * Conserva started_at original; limpia recovered_at.
+     * Reabre incidencia recuperada reciente (flaps) o con seguimiento activo
+     * ("Seguir en reporte" / Tracking abierto). Conserva started_at y la gestión.
      */
     private function reopenRecentFlap(
         NetworkAssignment $assignment,
         PrtgSensor $sensor,
         ?CarbonInterface $downSince,
     ): ?Incident {
-        $window = max(0, (int) config('incidents.flap_reopen_seconds', 900));
-        if ($window <= 0) {
-            return null;
-        }
-
-        $recent = Incident::query()
-            ->where('network_assignment_id', $assignment->id)
-            ->where('prtg_sensor_id', $sensor->id)
-            ->whereNotNull('recovered_at')
-            ->where('recovered_at', '>=', now()->subSeconds($window))
-            ->orderByDesc('recovered_at')
-            ->first();
-
+        $recent = $this->findReopenableIncident($assignment, $sensor);
         if ($recent === null) {
             return null;
         }
 
         $before = $recent->followup_status?->value;
+        $keepManagement = $recent->recovery_review_status === RecoveryReviewStatus::ContinueMonitoring
+            || $recent->trackingRecords()->notClosed()->exists();
+
+        $preservedFollowup = $keepManagement && $recent->followup_status
+            ? $recent->followup_status
+            : FollowupStatus::PendienteContacto;
+
         $payload = [
             'recovered_at' => null,
             'prtg_up_at' => null,
             'current_status' => $sensor->normalized_status?->value ?? MonitoringStatus::Caido->value,
-            'followup_status' => FollowupStatus::PendienteContacto,
+            'followup_status' => $preservedFollowup,
             'recovered_while_managing' => false,
             'recovery_review_status' => null,
             'recovery_reviewed_at' => null,
@@ -339,19 +334,59 @@ class IncidentService
         }
         $recent->update($payload);
 
+        $reason = $keepManagement
+            ? 'Reabierta por re-caída con seguimiento en reporte / Tracking abierto. Misma incidencia y clasificación conservadas.'
+            : sprintf(
+                'Reabierta por re-caída dentro de %ds (coalesce de flaps). Misma incidencia; started_at original conservado.',
+                max(0, (int) config('incidents.flap_reopen_seconds', 900))
+            );
+
         IncidentUpdate::query()->create([
             'incident_id' => $recent->id,
             'type' => 'SYSTEM',
             'status_before' => $before,
-            'status_after' => FollowupStatus::PendienteContacto->value,
-            'observation' => sprintf(
-                'Reabierta por re-caída dentro de %ds (coalesce de flaps). Misma incidencia; started_at original conservado.',
-                $window
-            ),
+            'status_after' => $preservedFollowup instanceof FollowupStatus
+                ? $preservedFollowup->value
+                : (string) $preservedFollowup,
+            'observation' => $reason,
             'created_at' => now(),
         ]);
 
         return $recent->fresh() ?? $recent;
+    }
+
+    /**
+     * Candidata a reabrir: flap corto, o "Seguir en reporte", o Tracking aún abierto.
+     */
+    private function findReopenableIncident(NetworkAssignment $assignment, PrtgSensor $sensor): ?Incident
+    {
+        $monitored = Incident::query()
+            ->where('network_assignment_id', $assignment->id)
+            ->where('prtg_sensor_id', $sensor->id)
+            ->whereNotNull('recovered_at')
+            ->where(function ($q) {
+                $q->where('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value)
+                    ->orWhereHas('trackingRecords', fn ($t) => $t->notClosed());
+            })
+            ->orderByDesc('recovered_at')
+            ->first();
+
+        if ($monitored !== null) {
+            return $monitored;
+        }
+
+        $window = max(0, (int) config('incidents.flap_reopen_seconds', 900));
+        if ($window <= 0) {
+            return null;
+        }
+
+        return Incident::query()
+            ->where('network_assignment_id', $assignment->id)
+            ->where('prtg_sensor_id', $sensor->id)
+            ->whereNotNull('recovered_at')
+            ->where('recovered_at', '>=', now()->subSeconds($window))
+            ->orderByDesc('recovered_at')
+            ->first();
     }
 
     /**
