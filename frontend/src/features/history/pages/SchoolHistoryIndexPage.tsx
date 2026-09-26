@@ -40,7 +40,7 @@ export function SchoolHistoryIndexPage() {
   const [currentStatus, setCurrentStatus] = useState('')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(25)
-  const { prtg, cloudnet } = useManualSync()
+  const { prtg } = useManualSync()
 
   const qDebounced = useDebouncedValue(q.trim())
 
@@ -79,10 +79,9 @@ export function SchoolHistoryIndexPage() {
   return (
     <AppLayout
       bare
-      syncing={prtg.isPending || cloudnet.isPending}
+      syncing={prtg.isPending}
       onRefresh={() => void history.refetch()}
       onSyncPrtg={() => prtg.mutate()}
-      onSyncCloudnet={() => cloudnet.mutate()}
     >
       <PageHeader
         icon={<History className="h-5 w-5" aria-hidden />}

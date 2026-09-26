@@ -36,7 +36,6 @@ export function AppLayout({
   syncing,
   onRefresh,
   onSyncPrtg,
-  onSyncCloudnet,
   healthSlot,
   bare = false,
 }: {
@@ -47,7 +46,6 @@ export function AppLayout({
   syncing?: boolean
   onRefresh?: () => void
   onSyncPrtg?: () => void
-  onSyncCloudnet?: () => void
   healthSlot?: ReactNode
   bare?: boolean
 }) {
@@ -157,11 +155,6 @@ export function AppLayout({
                 {onSyncPrtg ? (
                   <Button type="button" size="sm" className="hidden sm:inline-flex" onClick={onSyncPrtg} disabled={syncing}>
                     PRTG
-                  </Button>
-                ) : null}
-                {onSyncCloudnet ? (
-                  <Button type="button" size="sm" className="hidden sm:inline-flex" onClick={onSyncCloudnet} disabled={syncing}>
-                    Cloudnet
                   </Button>
                 ) : null}
                 <UserMenu />

@@ -12,8 +12,6 @@ final class PermissionCatalog
 {
     public const DASHBOARD_PRTG_VIEW = 'dashboard.prtg.view';
 
-    public const DASHBOARD_CLOUDNET_VIEW = 'dashboard.cloudnet.view';
-
     public const INCIDENTS_VIEW = 'incidents.view';
 
     public const INCIDENTS_MANAGE = 'incidents.manage';
@@ -55,7 +53,6 @@ final class PermissionCatalog
     {
         return [
             self::DASHBOARD_PRTG_VIEW,
-            self::DASHBOARD_CLOUDNET_VIEW,
             self::INCIDENTS_VIEW,
             self::INCIDENTS_MANAGE,
             self::RECOVERIES_VIEW,
@@ -102,7 +99,6 @@ final class PermissionCatalog
             ],
             UserRole::Viewer => [
                 self::DASHBOARD_PRTG_VIEW,
-                self::DASHBOARD_CLOUDNET_VIEW,
                 self::INCIDENTS_VIEW,
                 self::RECOVERIES_VIEW,
                 self::HISTORY_VIEW,

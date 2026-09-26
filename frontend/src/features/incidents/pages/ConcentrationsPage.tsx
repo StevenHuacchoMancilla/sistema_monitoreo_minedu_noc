@@ -6,16 +6,15 @@ import { ConcentrationCards } from '../../dashboard/components/ConcentrationCard
 export function ConcentrationsPage() {
   const concentrations = useConcentrations()
   const summary = useDashboardSummary()
-  const { prtg, cloudnet } = useManualSync()
+  const { prtg } = useManualSync()
   const rows = concentrations.data?.data ?? []
 
   return (
     <AppLayout
       title="Concentraciones zonales"
-      syncing={prtg.isPending || cloudnet.isPending}
+      syncing={prtg.isPending}
       onRefresh={() => void concentrations.refetch()}
       onSyncPrtg={() => prtg.mutate()}
-      onSyncCloudnet={() => cloudnet.mutate()}
     >
       {concentrations.isLoading ? <LoadingState /> : null}
       {concentrations.isError ? (

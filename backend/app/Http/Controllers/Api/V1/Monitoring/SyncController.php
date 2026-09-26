@@ -2,7 +2,6 @@
 
 namespace App\Http\Controllers\Api\V1\Monitoring;
 
-use App\Domain\Monitoring\Cloudnet\Services\CloudnetSyncService;
 use App\Domain\Monitoring\PRTG\Services\PrtgSyncService;
 use App\Domain\Monitoring\Support\SyncCoordinator;
 use App\Http\Controllers\Controller;
@@ -35,25 +34,11 @@ class SyncController extends Controller
         return $this->enqueue('PRTG', fn () => $service->sync());
     }
 
-    public function cloudnet(Request $request, CloudnetSyncService $service): JsonResponse
-    {
-        if ($request->boolean('wait')) {
-            try {
-                return response()->json($service->sync());
-            } catch (Throwable $exception) {
-                return response()->json(['error' => $exception->getMessage()], 500);
-            }
-        }
-
-        return $this->enqueue('CLOUDNET', fn () => $service->sync());
-    }
-
     /**
      * @param  callable(): array<string, mixed>  $runner
      */
     private function enqueue(string $source, callable $runner): JsonResponse
     {
-        // Soft-check: si ya hay sync, no encolar otro (el candado real está en el service).
         $probe = SyncCoordinator::acquire($source, 5);
         if (! $probe) {
             return response()->json(SyncCoordinator::skippedResponse());

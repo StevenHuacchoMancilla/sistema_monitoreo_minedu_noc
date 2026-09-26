@@ -53,7 +53,7 @@ export function TrackingListPage() {
   const [closedTo, setClosedTo] = useState('')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(25)
-  const { prtg, cloudnet } = useManualSync()
+  const { prtg } = useManualSync()
 
   useEffect(() => {
     const timer = window.setTimeout(() => setQDebounced(q.trim()), 350)
@@ -167,10 +167,9 @@ export function TrackingListPage() {
   return (
     <AppLayout
       bare
-      syncing={prtg.isPending || cloudnet.isPending}
+      syncing={prtg.isPending}
       onRefresh={() => void list.refetch()}
       onSyncPrtg={() => prtg.mutate()}
-      onSyncCloudnet={() => cloudnet.mutate()}
     >
       <PageHeader
         icon={<ClipboardList className="h-5 w-5" aria-hidden />}

@@ -187,14 +187,11 @@ class SchoolController extends Controller
             ->limit(50)
             ->get();
 
-        $cloudnet = $school->cloudnetSites()->with(['devices', 'aps'])->get();
-
         return [
             'school' => $school,
             'location' => PrtgOperationalLocation::apiFields($assignment, $school),
             'sensors' => $sensors,
             'prtg_summary' => $prtgSummary,
-            'cloudnet_sites' => $cloudnet,
             'active_incident' => $activeIncident,
             'incident_history' => $history,
             'incidents' => $history,

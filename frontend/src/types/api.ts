@@ -27,10 +27,6 @@ export type DashboardKpis = {
   recuperados_hoy: number
   recuperados_total?: number
   concentraciones?: number
-  cloudnet_sites: number
-  cloudnet_online_devices: number
-  cloudnet_offline_devices: number
-  sites_sin_asociacion: number
   contactos_pendientes_match?: number
 }
 
@@ -61,20 +57,6 @@ export type DashboardSummary = {
   }
   active_incidents_preview: OutageRow[]
   oldest_incidents_preview?: OutageRow[]
-  cloudnet: {
-    sites: number
-    matched: number
-    pending: number
-    last_synced_at: string | null
-    devices?: number
-    preview?: Array<{
-      shop_id: string | number
-      site_name: string | null
-      address: string | null
-      match_status: string | null
-      school_id: number | null
-    }>
-  }
   concentrations: Concentration[]
   recent_recoveries: Array<{
     incident_id: number
@@ -90,7 +72,6 @@ export type DashboardSummary = {
   }>
   sync: {
     prtg: SyncRunSnapshot
-    cloudnet: SyncRunSnapshot
   }
 }
 
@@ -138,7 +119,6 @@ export type OutageRow = {
   telefono: string | null
   contacto_corto?: string | null
   telefono_masked?: string | null
-  cloudnet_status?: string | null
   reincidente_count?: number
   reincidente?: boolean
   glpi_ticket?: string | null
@@ -193,15 +173,6 @@ export type SchoolDetail = {
     last_check: string | null
     device_name?: string | null
   }
-  cloudnet_sites: Array<Record<string, unknown>>
-  cloudnet?: {
-    shop_id?: string | number
-    site_name?: string | null
-    address?: string | null
-    match_status?: string | null
-    last_synced_at?: string | null
-    devices?: number
-  } | null
   active_incident: {
     id: number
     started_at?: string | null
@@ -293,14 +264,6 @@ export type IncidentDetail = {
     legacy_reference: string | null
     current_sequence: number | null
   }
-  cloudnet?: {
-    shop_id?: string | number
-    site_name?: string | null
-    address?: string | null
-    match_status?: string | null
-    last_synced_at?: string | null
-    devices?: number
-  } | null
   contactos: Array<{
     id: number
     nombre: string | null

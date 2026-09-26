@@ -10,7 +10,7 @@ import { UsersAdminPanel } from '../components/UsersAdminPanel'
 export function AdminPage() {
   const { user } = useAuth()
   const summary = useDashboardSummary()
-  const { prtg, cloudnet } = useManualSync()
+  const { prtg } = useManualSync()
   const data = summary.data
   const isAdmin = Boolean(user?.is_admin)
   const [tab, setTab] = useState<'users' | 'diag'>(isAdmin ? 'users' : 'diag')
@@ -18,10 +18,9 @@ export function AdminPage() {
   return (
     <AppLayout
       bare
-      syncing={prtg.isPending || cloudnet.isPending}
+      syncing={prtg.isPending}
       onRefresh={() => void summary.refetch()}
       onSyncPrtg={() => prtg.mutate()}
-      onSyncCloudnet={() => cloudnet.mutate()}
     >
       <div className="mb-5">
         <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl">Administración</h1>
@@ -54,13 +53,9 @@ export function AdminPage() {
               <SectionCard title="Última sync PRTG">
                 <pre className="overflow-x-auto text-xs text-noc-muted">{JSON.stringify(data.sync.prtg, null, 2)}</pre>
               </SectionCard>
-              <SectionCard title="Última sync Cloudnet">
-                <pre className="overflow-x-auto text-xs text-noc-muted">{JSON.stringify(data.sync.cloudnet, null, 2)}</pre>
-              </SectionCard>
               <SectionCard title="Pendientes operativos">
                 <ul className="space-y-1 text-sm">
                   <li>Contactos pendientes match: {data.kpis.contactos_pendientes_match ?? 0}</li>
-                  <li>Sites Cloudnet sin asociación: {data.kpis.sites_sin_asociacion}</li>
                   <li>Sin datos PRTG: {data.kpis.sin_datos_prtg}</li>
                   <li>Sin CID: {data.kpis.sin_cid}</li>
                 </ul>

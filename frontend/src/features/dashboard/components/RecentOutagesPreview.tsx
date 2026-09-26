@@ -1,7 +1,7 @@
 import { Link, useNavigate } from 'react-router-dom'
 import { SectionCard } from '../../../components/ui/Card'
 import { EmptyState } from '../../../components/ui/States'
-import { CloudnetStatusBadge, FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
+import { FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
 import type { OutageRow } from '../../../types/api'
 
 export function RecentOutagesPreview({
@@ -36,7 +36,6 @@ export function RecentOutagesPreview({
                   <th className="px-2 py-2">CID</th>
                   <th className="px-2 py-2">Local</th>
                   <th className="px-2 py-2">PRTG</th>
-                  <th className="px-2 py-2">Cloudnet</th>
                   <th className="px-2 py-2">Duración</th>
                   <th className="px-2 py-2">Seguimiento</th>
                   <th className="px-2 py-2 text-right">Detalle</th>
@@ -59,9 +58,6 @@ export function RecentOutagesPreview({
                       </td>
                       <td className="px-2 py-2">
                         <PrtgStatusBadge status={row.estado_prtg} />
-                      </td>
-                      <td className="px-2 py-2">
-                        <CloudnetStatusBadge status={row.cloudnet_status} />
                       </td>
                       <td className="whitespace-nowrap px-2 py-2 text-noc-muted">{row.duracion}</td>
                       <td className="px-2 py-2">

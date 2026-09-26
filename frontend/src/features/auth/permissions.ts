@@ -1,6 +1,5 @@
 export type Permission =
   | 'dashboard.prtg.view'
-  | 'dashboard.cloudnet.view'
   | 'incidents.view'
   | 'incidents.manage'
   | 'recoveries.view'
@@ -21,7 +20,6 @@ export type Permission =
 
 export const P = {
   dashboardPrtg: 'dashboard.prtg.view',
-  dashboardCloudnet: 'dashboard.cloudnet.view',
   incidentsView: 'incidents.view',
   incidentsManage: 'incidents.manage',
   recoveriesView: 'recoveries.view',

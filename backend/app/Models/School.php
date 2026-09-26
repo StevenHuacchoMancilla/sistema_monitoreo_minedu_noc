@@ -48,9 +48,4 @@ class School extends Model
     {
         return $this->hasMany(TrackingRecord::class)->orderByDesc('id');
     }
-
-    public function cloudnetSites(): HasMany
-    {
-        return $this->hasMany(CloudnetSite::class);
-    }
 }

@@ -291,7 +291,7 @@ class PrtgDashboardService
             'PRTG_LOCATION_MISMATCH' => 'Ubicación no alineable con PRTG',
             'PRTG_LOCATION_UPDATED' => 'Ubicación alineada desde PRTG',
             'DUPLICATE_PRTG_DEVICE' => 'CID duplicado en PRTG',
-            'CLOUDNET_DEVICE_API_UNAVAILABLE' => 'API equipos Cloudnet no disponible',
+            'CLOUDNET_DEVICE_API_UNAVAILABLE' => 'API equipos (histórico)',
             'DUPLICATE_PING_SENSOR' => 'Varios sensores Ping',
             'PRTG_DEVICE_WITHOUT_CID' => 'Dispositivo sin CID',
             'PRTG_DEVICE_WITHOUT_ASSIGNMENT' => 'Sin asignación en BD',

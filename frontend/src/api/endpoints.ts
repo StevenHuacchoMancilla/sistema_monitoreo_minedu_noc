@@ -7,7 +7,7 @@ import type {
   OutageRow,
   SchoolDetail,
 } from '../types/api'
-import type { CloudnetDashboard, PrtgDashboard } from '../features/dashboard-prtg/types/prtgDashboard'
+import type { PrtgDashboard } from '../features/dashboard-prtg/types/prtgDashboard'
 import type {
   ClosingPreviewResponse,
   ManagementPayload,
@@ -33,7 +33,6 @@ function toQuery(params: Record<string, string | undefined | null>): string {
 export const endpoints = {
   dashboardSummary: () => apiGet<DashboardSummary>('/dashboard/summary'),
   dashboardPrtg: () => apiGet<PrtgDashboard>('/dashboard/prtg'),
-  dashboardCloudnet: () => apiGet<CloudnetDashboard>('/dashboard/cloudnet'),
   outages: (q = '') =>
     apiGet<{ data: OutageRow[] }>(`/dashboard/outages${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   concentrations: () => apiGet<{ data: Concentration[] }>('/dashboard/concentrations'),
@@ -99,7 +98,6 @@ export const endpoints = {
   generalReportXlsxUrl: (params: Record<string, string | undefined | null> = {}) =>
     `${API_URL}/reports/general.xlsx${toQuery(params)}`,
   syncPrtg: () => apiPost<Record<string, unknown>>('/sync/prtg', undefined, { timeoutMs: 30_000 }),
-  syncCloudnet: () => apiPost<Record<string, unknown>>('/sync/cloudnet', undefined, { timeoutMs: 30_000 }),
   prtgProvinces: () =>
     apiGet<{
       data: Array<{ name: string; district_count: number; assignment_count: number }>

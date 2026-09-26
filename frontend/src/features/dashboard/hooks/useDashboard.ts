@@ -39,10 +39,6 @@ export function useManualSync() {
     mutationFn: endpoints.syncPrtg,
     onSuccess: invalidate,
   })
-  const cloudnet = useMutation({
-    mutationFn: endpoints.syncCloudnet,
-    onSuccess: invalidate,
-  })
 
-  return { prtg, cloudnet }
+  return { prtg }
 }

@@ -2,7 +2,6 @@
 
 namespace App\Console\Commands;
 
-use App\Domain\Monitoring\Cloudnet\Services\CloudnetSyncService;
 use App\Domain\Monitoring\PRTG\Services\PrtgSyncService;
 use Illuminate\Console\Command;
 use Throwable;
@@ -10,19 +9,16 @@ use Throwable;
 class WatchMonitoringCommand extends Command
 {
     protected $signature = 'monitoring:watch
-                            {--prtg-interval=30 : Segundos entre sync PRTG}
-                            {--cloudnet-interval=300 : Segundos entre sync Cloudnet}';
+                            {--prtg-interval=30 : Segundos entre sync PRTG}';
 
-    protected $description = 'Sincroniza PRTG/Cloudnet en bucle continuo (tiempo casi real)';
+    protected $description = 'Sincroniza PRTG en bucle continuo (tiempo casi real)';
 
-    public function handle(PrtgSyncService $prtg, CloudnetSyncService $cloudnet): int
+    public function handle(PrtgSyncService $prtg): int
     {
         $prtgInterval = max(15, (int) $this->option('prtg-interval'));
-        $cloudInterval = max(60, (int) $this->option('cloudnet-interval'));
         $nextPrtg = 0;
-        $nextCloud = 0;
 
-        $this->info("Watch activo · PRTG cada {$prtgInterval}s · Cloudnet cada {$cloudInterval}s");
+        $this->info("Watch activo · PRTG cada {$prtgInterval}s");
 
         while (true) {
             $now = time();
@@ -35,16 +31,6 @@ class WatchMonitoringCommand extends Command
                     $this->error(now()->toTimeString().' PRTG ERROR: '.$e->getMessage());
                 }
                 $nextPrtg = time() + $prtgInterval;
-            }
-
-            if ($now >= $nextCloud && config('cloudnet.sync_enabled')) {
-                try {
-                    $summary = $cloudnet->sync();
-                    $this->line(now()->toTimeString().' Cloudnet OK · procesados '.($summary['processed_count'] ?? 0));
-                } catch (Throwable $e) {
-                    $this->error(now()->toTimeString().' Cloudnet ERROR: '.$e->getMessage());
-                }
-                $nextCloud = time() + $cloudInterval;
             }
 
             sleep(1);

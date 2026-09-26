@@ -4,7 +4,6 @@ import {
   Activity,
   CircleCheck,
   ClipboardList,
-  Cloud,
   FileSpreadsheet,
   Files,
   GraduationCap,
@@ -29,13 +28,12 @@ type NavItem = {
   badgeKey?: 'caidas_activas' | 'pendientes_contacto' | 'en_gestion' | 'concentraciones' | 'recuperados' | 'tracking_abiertos'
   tone?: 'danger' | 'warn' | 'info' | 'muted' | 'success'
   icon: LucideIcon
-  accent?: 'prtg' | 'cloudnet'
+  accent?: 'prtg'
   permission: Permission
 }
 
 const NAV: NavItem[] = [
   { to: '/dashboard/prtg', label: 'Resumen PRTG', end: true, icon: LayoutDashboard, accent: 'prtg', permission: P.dashboardPrtg },
-  { to: '/dashboard/cloudnet', label: 'Resumen Cloudnet', end: true, icon: Cloud, accent: 'cloudnet', permission: P.dashboardCloudnet },
   { to: '/incidents/active', label: 'Caídas activas', badgeKey: 'caidas_activas', tone: 'danger', icon: TriangleAlert, permission: P.incidentsView },
   { to: '/incidents/pending', label: 'Pendientes de contacto', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone, permission: P.incidentsView },
   { to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
@@ -129,7 +127,7 @@ export function Sidebar({
                     'group flex items-center gap-3 rounded-lg px-2.5 py-2 text-sm font-medium transition-colors duration-150',
                     isCollapsed ? 'justify-center' : '',
                     isActive
-                      ? `bg-slate-800 text-white border-l-2 ${item.accent === 'cloudnet' ? 'border-cyan-500' : 'border-blue-500'}`
+                      ? 'bg-slate-800 text-white border-l-2 border-blue-500'
                       : 'border-l-2 border-transparent text-slate-300 hover:bg-slate-900 hover:text-white',
                   ].join(' ')
                 }

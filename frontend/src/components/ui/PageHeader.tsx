@@ -47,7 +47,7 @@ export function PageHeader({
 
 export function MasterSourceBadge() {
   return (
-    <span title="Estos datos solo se modifican mediante CRUD o importación; PRTG y Cloudnet no los sobrescriben.">
+    <span title="Estos datos solo se modifican mediante CRUD o importación; PRTG no los sobrescribe.">
       <Badge tone="neutral">
         <Info className="h-3 w-3" aria-hidden />
         Fuente maestra

@@ -26,7 +26,7 @@ export function TrackingReportPage() {
   const [closedTo, setClosedTo] = useState('')
   const [downloading, setDownloading] = useState(false)
   const [downloadError, setDownloadError] = useState<string | null>(null)
-  const { prtg, cloudnet } = useManualSync()
+  const { prtg } = useManualSync()
 
   const filterParams = {
     q: q || undefined,
@@ -92,7 +92,7 @@ export function TrackingReportPage() {
     <AppLayout
       bare
       onRefresh={() => void report.refetch()}
-      syncing={report.isFetching || prtg.isPending || cloudnet.isPending}
+      syncing={report.isFetching || prtg.isPending}
     >
       <PageHeader
         icon={<FileSpreadsheet className="h-5 w-5" aria-hidden />}

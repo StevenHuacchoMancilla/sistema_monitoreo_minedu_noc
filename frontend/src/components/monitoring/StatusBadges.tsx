@@ -7,10 +7,6 @@ export function PrtgStatusBadge({ status }: { status?: string | null }) {
   return <Badge value={status} />
 }
 
-export function CloudnetStatusBadge({ status }: { status?: string | null }) {
-  return <Badge value={status ?? 'UNKNOWN'} />
-}
-
 export function FollowupBadge({ status }: { status?: string | null }) {
   return <Badge value={status} />
 }

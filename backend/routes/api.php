@@ -2,7 +2,6 @@
 
 use App\Domain\Auth\PermissionCatalog;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
-use App\Http\Controllers\Api\V1\Dashboard\CloudnetDashboardController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
 use App\Http\Controllers\Api\V1\Dashboard\PrtgDashboardController;
 use App\Http\Controllers\Api\V1\History\SchoolHistoryController;
@@ -34,10 +33,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     Route::middleware('permission:'.PermissionCatalog::DASHBOARD_PRTG_VIEW)->group(function () {
         Route::get('/dashboard/prtg', PrtgDashboardController::class);
-    });
-
-    Route::middleware('permission:'.PermissionCatalog::DASHBOARD_CLOUDNET_VIEW)->group(function () {
-        Route::get('/dashboard/cloudnet', CloudnetDashboardController::class);
     });
 
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
@@ -137,7 +132,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     Route::middleware('permission:'.PermissionCatalog::SYNC_RUN)->group(function () {
         Route::post('/sync/prtg', [SyncController::class, 'prtg']);
-        Route::post('/sync/cloudnet', [SyncController::class, 'cloudnet']);
     });
 
     // Solo ADMIN

@@ -44,21 +44,17 @@ function sleep(ms: number): Promise<void> {
 
 /**
  * Equivalente web a `php artisan monitoring:watch` (sin Cron de pago).
- * Solo una pestaña dispara sync; el servidor responde al instante y termina
+ * Solo sync PRTG. Una pestaña dispara; el servidor responde al instante y termina
  * el trabajo en background (evita timeout del proxy Vercel).
  */
 export function useLiveMonitoringSync(options?: {
   prtgMs?: number
-  cloudnetMs?: number
   enabled?: boolean
 }) {
   const client = useQueryClient()
-  // Igual que monitoring:watch en local: PRTG ~30s, Cloudnet ~5 min.
   const prtgMs = options?.prtgMs ?? 30_000
-  const cloudnetMs = options?.cloudnetMs ?? 300_000
   const enabled = options?.enabled ?? true
   const prtgBusy = useRef(false)
-  const cloudBusy = useRef(false)
 
   useEffect(() => {
     if (!enabled) return
@@ -78,9 +74,7 @@ export function useLiveMonitoringSync(options?: {
       renewTabLeadership()
       prtgBusy.current = true
       try {
-        // Respuesta rápida (QUEUED); el sync sigue en Render.
         await endpoints.syncPrtg()
-        // Dar tiempo a que el server avance y refrescar KPIs.
         await sleep(8_000)
         if (!cancelled) await invalidate()
       } catch {
@@ -90,23 +84,6 @@ export function useLiveMonitoringSync(options?: {
       }
     }
 
-    const syncCloudnet = async () => {
-      if (cloudBusy.current || cancelled) return
-      if (!tryClaimTabLeadership()) return
-      renewTabLeadership()
-      cloudBusy.current = true
-      try {
-        await endpoints.syncCloudnet()
-        await sleep(5_000)
-        if (!cancelled) await invalidate()
-      } catch {
-        // silencioso
-      } finally {
-        cloudBusy.current = false
-      }
-    }
-
-    // Bucle tipo watch: espera el intervalo DESPUÉS de cada disparo (no setInterval fijo).
     const runPrtgLoop = async () => {
       await sleep(1_500)
       while (!cancelled) {
@@ -116,16 +93,6 @@ export function useLiveMonitoringSync(options?: {
       }
     }
 
-    const runCloudLoop = async () => {
-      await sleep(20_000)
-      while (!cancelled) {
-        await syncCloudnet()
-        if (cancelled) break
-        await sleep(cloudnetMs)
-      }
-    }
-
-    // Refresco de datos aunque otra pestaña sea la líder.
     const refreshTimer = window.setInterval(() => {
       void invalidate()
     }, 20_000)
@@ -135,12 +102,11 @@ export function useLiveMonitoringSync(options?: {
     }, 15_000)
 
     void runPrtgLoop()
-    void runCloudLoop()
 
     return () => {
       cancelled = true
       window.clearInterval(refreshTimer)
       window.clearInterval(heartbeat)
     }
-  }, [client, prtgMs, cloudnetMs, enabled])
+  }, [client, prtgMs, enabled])
 }

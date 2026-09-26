@@ -48,7 +48,7 @@ export function SchoolHistoryDetailPage() {
   const { schoolId } = useParams()
   const id = Number(schoolId)
   const navigate = useNavigate()
-  const { prtg, cloudnet } = useManualSync()
+  const { prtg } = useManualSync()
 
   const [dateFrom, setDateFrom] = useState('')
   const [dateTo, setDateTo] = useState('')
@@ -117,10 +117,9 @@ export function SchoolHistoryDetailPage() {
   return (
     <AppLayout
       bare
-      syncing={prtg.isPending || cloudnet.isPending}
+      syncing={prtg.isPending}
       onRefresh={() => void refreshAll()}
       onSyncPrtg={() => prtg.mutate()}
-      onSyncCloudnet={() => cloudnet.mutate()}
     >
       <div className="mb-3">
         <Link

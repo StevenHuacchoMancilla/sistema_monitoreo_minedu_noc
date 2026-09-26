@@ -133,8 +133,8 @@ export function ActiveIncidentsPage({
 
   const outages = useOutages(useDebouncedValue(search.trim()))
   const summary = useDashboardSummary()
-  const { prtg, cloudnet } = useManualSync()
-  const syncing = prtg.isPending || cloudnet.isPending
+  const { prtg } = useManualSync()
+  const syncing = prtg.isPending
   const lastPrtgSync = summary.data?.sync?.prtg?.finished_at ?? null
 
   // Orden del servidor (started_at DESC, id DESC); aquí solo se filtra.
@@ -212,7 +212,6 @@ export function ActiveIncidentsPage({
       syncing={syncing}
       onRefresh={refresh}
       onSyncPrtg={() => prtg.mutate()}
-      onSyncCloudnet={() => cloudnet.mutate()}
     >
       <PageHeader
         icon={<TriangleAlert className="h-5 w-5 text-red-600 dark:text-red-400" aria-hidden />}

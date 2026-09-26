@@ -1,6 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { PrtgDashboardPage } from '../features/dashboard-prtg/pages/PrtgDashboardPage'
-import { CloudnetDashboardPage } from '../features/dashboard-cloudnet/pages/CloudnetDashboardPage'
 import { ActiveIncidentsPage } from '../features/incidents/pages/ActiveIncidentsPage'
 import { ConcentrationsPage } from '../features/incidents/pages/ConcentrationsPage'
 import { SchoolHistoryIndexPage } from '../features/history/pages/SchoolHistoryIndexPage'
@@ -47,9 +46,6 @@ export function AppRouter() {
 
           <Route element={<RequirePermission permission={P.dashboardPrtg} />}>
             <Route path="/dashboard/prtg" element={<PrtgDashboardPage />} />
-          </Route>
-          <Route element={<RequirePermission permission={P.dashboardCloudnet} />}>
-            <Route path="/dashboard/cloudnet" element={<CloudnetDashboardPage />} />
           </Route>
 
           <Route element={<RequirePermission permission={P.incidentsView} />}>

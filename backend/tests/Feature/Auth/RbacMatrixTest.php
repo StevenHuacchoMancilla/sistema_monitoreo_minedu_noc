@@ -18,7 +18,6 @@ class RbacMatrixTest extends TestCase
         $this->actingAsUser(null, UserRole::Admin);
 
         $this->assertTrue(PermissionCatalog::roleHas(UserRole::Admin, PermissionCatalog::DASHBOARD_PRTG_VIEW));
-        $this->assertTrue(PermissionCatalog::roleHas(UserRole::Admin, PermissionCatalog::DASHBOARD_CLOUDNET_VIEW));
         $this->getJson('/api/users')->assertOk();
         $this->getJson('/api/me')
             ->assertOk()
@@ -32,7 +31,6 @@ class RbacMatrixTest extends TestCase
         $this->actingAsUser(null, UserRole::NocOperator);
 
         $this->getJson('/api/dashboard/prtg')->assertForbidden();
-        $this->getJson('/api/dashboard/cloudnet')->assertForbidden();
         $this->getJson('/api/users')->assertForbidden();
         $this->getJson('/api/tracking/actors')->assertOk();
         $this->patchJson('/api/profile', [
@@ -51,10 +49,8 @@ class RbacMatrixTest extends TestCase
         $this->actingAsUser(null, UserRole::Viewer);
 
         $this->assertTrue(PermissionCatalog::roleHas(UserRole::Viewer, PermissionCatalog::DASHBOARD_PRTG_VIEW));
-        $this->assertTrue(PermissionCatalog::roleHas(UserRole::Viewer, PermissionCatalog::DASHBOARD_CLOUDNET_VIEW));
         // Middleware: VIEWER no es bloqueado (≠403). El body del dashboard puede fallar en sqlite.
         $this->assertNotSame(403, $this->getJson('/api/dashboard/prtg')->status());
-        $this->assertNotSame(403, $this->getJson('/api/dashboard/cloudnet')->status());
 
         $this->getJson('/api/incidents')->assertOk();
         $this->getJson('/api/tracking')->assertOk();

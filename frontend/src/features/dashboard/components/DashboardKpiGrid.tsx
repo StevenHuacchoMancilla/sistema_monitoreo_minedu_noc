@@ -11,7 +11,6 @@ export function DashboardKpiGrid({ kpis }: { kpis: DashboardKpis }) {
       <KpiCard label="Incidencias activas" value={kpis.incidencias_activas} tone="warn" />
       <KpiCard label="Pend. contacto" value={kpis.pendientes_contacto} tone="warn" />
       <KpiCard label="En gestión" value={kpis.en_gestion} />
-      <KpiCard label="Cloudnet sites" value={kpis.cloudnet_sites} />
       <KpiCard label="Sin datos PRTG" value={kpis.sin_datos_prtg} />
       <KpiCard label="Recuperados hoy" value={kpis.recuperados_hoy} tone="ok" />
     </div>

@@ -9,8 +9,6 @@ use App\Enums\ContactMatchStatus;
 use App\Enums\FollowupStatus;
 use App\Enums\MonitoringStatus;
 use App\Enums\RecoveryReviewStatus;
-use App\Models\CloudnetDevice;
-use App\Models\CloudnetSite;
 use App\Models\Incident;
 use App\Models\NetworkAssignment;
 use App\Models\PrtgSensor;
@@ -76,44 +74,12 @@ class DashboardService
         $eligible = NetworkAssignment::query()->where('is_active', true)->where('monitoring_eligible', true)->count();
         $withPing = \App\Domain\Monitoring\PRTG\Services\PrtgSensorQuery::monitoredAssignmentCount();
 
-        $cloudnetSites = CloudnetSite::query()->count();
-        $deviceCount = CloudnetDevice::query()->count();
-        $onlineDevices = 0;
-        $offlineDevices = 0;
-        if ($deviceCount > 0) {
-            $onlineDevices = CloudnetDevice::query()
-                ->where(function ($q) {
-                    $q->whereRaw('LOWER(status) in (?, ?, ?)', ['online', 'up', 'connected']);
-                })
-                ->count();
-            $offlineDevices = max(0, $deviceCount - $onlineDevices);
-        }
-
-        $sitesSinAsociacion = CloudnetSite::query()->whereNull('network_assignment_id')->count();
-        $matchedSites = CloudnetSite::query()->whereNotNull('network_assignment_id')->count();
-        $pendingSites = CloudnetSite::query()->whereNull('network_assignment_id')->count();
-        $lastCloudnetSync = CloudnetSite::query()->max('last_synced_at');
-
         $allConcentrations = $this->concentrations();
         $concentrationCount = count($allConcentrations);
         $concentrations = array_slice($allConcentrations, 0, 8);
 
         $allActive = $this->activeOutages();
         $activePreview = $allActive->take(8)->values()->all();
-
-        $cloudnetPreview = CloudnetSite::query()
-            ->orderByDesc('last_synced_at')
-            ->limit(6)
-            ->get(['id', 'shop_id', 'site_name', 'address', 'match_status', 'school_id'])
-            ->map(fn (CloudnetSite $site) => [
-                'shop_id' => $site->shop_id,
-                'site_name' => $site->site_name,
-                'address' => $site->address,
-                'match_status' => $site->match_status,
-                'school_id' => $site->school_id,
-            ])
-            ->values()
-            ->all();
 
         return [
             'health' => [
@@ -138,10 +104,6 @@ class DashboardService
                 'pending_reviews' => $pendingReviews,
                 'recuperados_total' => $recoveredTotal,
                 'concentraciones' => $concentrationCount,
-                'cloudnet_sites' => $cloudnetSites,
-                'cloudnet_online_devices' => $onlineDevices,
-                'cloudnet_offline_devices' => $offlineDevices,
-                'sites_sin_asociacion' => $sitesSinAsociacion,
                 'contactos_pendientes_match' => School::query()->where('contact_match_status', ContactMatchStatus::Pending)->count(),
             ],
             'nav' => [
@@ -155,19 +117,10 @@ class DashboardService
             ],
             'active_incidents_preview' => $activePreview,
             'oldest_incidents_preview' => [],
-            'cloudnet' => [
-                'sites' => $cloudnetSites,
-                'matched' => $matchedSites,
-                'pending' => $pendingSites,
-                'last_synced_at' => $lastCloudnetSync,
-                'devices' => $deviceCount,
-                'preview' => $cloudnetPreview,
-            ],
             'concentrations' => $concentrations,
             'recent_recoveries' => [],
             'sync' => [
                 'prtg' => $this->lastSyncRun('PRTG'),
-                'cloudnet' => $this->lastSyncRun('CLOUDNET'),
             ],
         ];
     }
@@ -219,7 +172,6 @@ class DashboardService
             ->values();
 
         $assignmentIds = $incidents->pluck('network_assignment_id')->filter()->unique()->values();
-        $schoolIds = $incidents->pluck('school_id')->filter()->unique()->values();
 
         $reincidenteCounts = Incident::query()
             ->whereIn('network_assignment_id', $assignmentIds)
@@ -227,29 +179,11 @@ class DashboardService
             ->groupBy('network_assignment_id')
             ->pluck('total', 'network_assignment_id');
 
-        $cloudnetByAssignment = CloudnetSite::query()
-            ->whereIn('network_assignment_id', $assignmentIds)
-            ->get()
-            ->keyBy('network_assignment_id');
-
-        $cloudnetBySchool = CloudnetSite::query()
-            ->whereIn('school_id', $schoolIds)
-            ->whereNull('network_assignment_id')
-            ->get()
-            ->groupBy('school_id');
-
-        return $incidents->map(function (Incident $incident) use ($cloudnetByAssignment, $cloudnetBySchool, $reincidenteCounts) {
+        return $incidents->map(function (Incident $incident) use ($reincidenteCounts) {
             $school = $incident->school;
             $assignment = $incident->networkAssignment;
             $sensor = $incident->sensor;
             $contact = $school?->contacts?->first();
-
-            $site = $assignment
-                ? ($cloudnetByAssignment->get($assignment->id) ?? null)
-                : null;
-            if ($site === null && $school) {
-                $site = $cloudnetBySchool->get($school->id)?->first();
-            }
 
             $reincidenteCount = (int) ($reincidenteCounts[$incident->network_assignment_id] ?? 1);
             $location = PrtgOperationalLocation::apiFields($assignment, $school);
@@ -298,7 +232,6 @@ class DashboardService
                 'telefono' => $contact?->phone,
                 'contacto_corto' => $this->shortContactName($contact),
                 'telefono_masked' => $contact?->phone,
-                'cloudnet_status' => $this->resolveCloudnetStatus($site),
                 'reincidente_count' => $reincidenteCount,
                 'reincidente' => $reincidenteCount > 1,
                 'glpi_ticket' => $incident->glpi_ticket,
@@ -524,20 +457,6 @@ class DashboardService
             'error_count' => $run['error_count'],
             'processed_count' => $run['processed_count'],
         ];
-    }
-
-    private function resolveCloudnetStatus(?CloudnetSite $site): string
-    {
-        if ($site === null) {
-            return 'UNKNOWN';
-        }
-
-        $status = (string) ($site->match_status ?? '');
-        if (str_starts_with($status, 'MATCHED')) {
-            return 'VINCULADO';
-        }
-
-        return 'UNKNOWN';
     }
 
     private function shortContactName(?SchoolContact $contact): ?string

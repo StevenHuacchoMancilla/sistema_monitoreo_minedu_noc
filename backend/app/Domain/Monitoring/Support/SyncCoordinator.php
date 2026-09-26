@@ -9,7 +9,7 @@ use Illuminate\Support\Facades\Cache;
 
 /**
  * Coordina syncs concurrentes (HTTP + schedule + varias pestañas)
- * para no solapar llamadas a PRTG/Cloudnet ni marcar runs como Failed falsos.
+ * para no solapar llamadas a PRTG ni marcar runs como Failed falsos.
  */
 final class SyncCoordinator
 {

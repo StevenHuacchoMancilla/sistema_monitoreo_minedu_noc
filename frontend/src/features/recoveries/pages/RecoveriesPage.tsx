@@ -67,7 +67,7 @@ function ymdToDmy(value: string | undefined): string {
 export function RecoveriesPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
-  const { prtg, cloudnet } = useManualSync()
+  const { prtg } = useManualSync()
 
   const reviewFromUrl = searchParams.get('review_status') || ''
 
@@ -172,13 +172,12 @@ export function RecoveriesPage() {
   return (
     <AppLayout
       bare
-      syncing={prtg.isPending || cloudnet.isPending}
+      syncing={prtg.isPending}
       onRefresh={() => {
         void list.refetch()
         void summary.refetch()
       }}
       onSyncPrtg={() => prtg.mutate()}
-      onSyncCloudnet={() => cloudnet.mutate()}
     >
       <PageHeader
         icon={<CircleCheck className="h-5 w-5" aria-hidden />}

@@ -7,7 +7,6 @@ export function Topbar({
   syncing,
   onRefresh,
   onSyncPrtg,
-  onSyncCloudnet,
   healthSlot,
 }: {
   title: string
@@ -15,7 +14,6 @@ export function Topbar({
   syncing?: boolean
   onRefresh?: () => void
   onSyncPrtg?: () => void
-  onSyncCloudnet?: () => void
   healthSlot?: ReactNode
 }) {
   return (
@@ -36,9 +34,6 @@ export function Topbar({
         </Button>
         <Button type="button" variant="ghost" onClick={onSyncPrtg} disabled={syncing} title="Forzar sync PRTG">
           {syncing ? 'Sincronizando…' : 'Forzar PRTG'}
-        </Button>
-        <Button type="button" variant="ghost" onClick={onSyncCloudnet} disabled={syncing} title="Forzar sync Cloudnet">
-          Forzar Cloudnet
         </Button>
         <span className="hidden rounded-full bg-green-100 px-2.5 py-1 text-[11px] font-medium text-green-800 sm:inline">
           Sync en vivo

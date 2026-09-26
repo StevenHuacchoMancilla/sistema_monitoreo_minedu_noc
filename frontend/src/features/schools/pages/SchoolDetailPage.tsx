@@ -11,7 +11,7 @@ import {
 import { AppLayout } from '../../../layouts/AppLayout'
 import { SectionCard } from '../../../components/ui/Card'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
-import { CloudnetStatusBadge, FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
+import { FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
 import { PageHeader } from '../../../components/ui/PageHeader'
 import { Badge } from '../../../components/ui/SoftBadge'
 import { Button } from '../../../components/ui/Button'
@@ -34,7 +34,6 @@ const TABS = [
   'RED',
   'CONTACTOS',
   'PRTG',
-  'CLOUDNET',
   'INCIDENCIAS',
   'HISTORIAL',
   'AUDITORÍA',
@@ -47,8 +46,8 @@ export function SchoolDetailPage() {
   const id = Number(schoolId)
   const navigate = useNavigate()
   const client = useQueryClient()
-  const { prtg, cloudnet } = useManualSync()
-  const syncing = prtg.isPending || cloudnet.isPending
+  const { prtg } = useManualSync()
+  const syncing = prtg.isPending
   const [tab, setTab] = useState<Tab>('GENERAL')
   const [reassignMode, setReassignMode] = useState(false)
   const [msg, setMsg] = useState<string | null>(null)
@@ -69,7 +68,6 @@ export function SchoolDetailPage() {
   const prtgSummary = detail.data?.prtg_summary
   const contacts = (school?.contacts ?? []) as SchoolContact[]
   const assignment = (school?.active_assignment ?? null) as NetworkAssignment | null
-  const cloudnetSites = (detail.data?.cloudnet_sites ?? []) as CloudnetSiteRow[]
   const history = (detail.data?.incident_history ?? []) as IncidentHistoryRow[]
   const auditLogs = ((detail.data as { audit_logs?: AuditRow[] } | undefined)?.audit_logs ?? []) as AuditRow[]
 
@@ -139,7 +137,6 @@ export function SchoolDetailPage() {
       syncing={syncing}
       onRefresh={() => void detail.refetch()}
       onSyncPrtg={() => prtg.mutate()}
-      onSyncCloudnet={() => cloudnet.mutate()}
     >
       <div className="space-y-6">
         <div>
@@ -356,29 +353,6 @@ export function SchoolDetailPage() {
             </SectionCard>
           ) : null}
 
-          {tab === 'CLOUDNET' ? (
-            <SectionCard title="Cloudnet (solo monitoreo)">
-              {cloudnetSites.length === 0 ? (
-                <EmptyState title="Sin site Cloudnet" description="No hay shop vinculado." />
-              ) : (
-                <ul className="space-y-3 text-sm">
-                  {cloudnetSites.map((site) => (
-                    <li key={site.id} className="rounded-lg border border-noc-border/60 p-3">
-                      <div className="mb-2 flex items-center justify-between gap-2">
-                        <p className="truncate font-medium">{site.site_name ?? String(site.shop_id)}</p>
-                        <CloudnetStatusBadge
-                          status={String(site.match_status ?? '').startsWith('MATCHED') ? 'ONLINE' : 'UNKNOWN'}
-                        />
-                      </div>
-                      <p className="text-xs text-noc-muted">Shop ID: {site.shop_id}</p>
-                      <p className="text-xs text-noc-muted">Match: {site.match_status ?? '—'}</p>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </SectionCard>
-          ) : null}
-
           {tab === 'INCIDENCIAS' ? (
             <SectionCard
               title="Incidencia activa"
@@ -574,14 +548,6 @@ type IncidentHistoryRow = {
   started_at?: string | null
   recovered_at?: string | null
   followup_status?: string | null
-}
-
-type CloudnetSiteRow = {
-  id: number
-  shop_id?: string | number
-  site_name?: string | null
-  match_status?: string | null
-  last_synced_at?: string | null
 }
 
 type AuditRow = {

@@ -118,12 +118,18 @@ async function request<T>(path: string, init?: RequestOptions): Promise<T> {
       : await response.text().catch(() => null)
 
             if (!response.ok) {
-      const message =
-        response.status === 403
-          ? 'No tienes permisos para realizar esta acción.'
-          : typeof body === 'object' && body && 'message' in body && typeof (body as { message: unknown }).message === 'string'
-            ? (body as { message: string }).message
-            : `API ${response.status}`
+      const message = (() => {
+        if (response.status === 403) return 'No tienes permisos para realizar esta acción.'
+        if (typeof body === 'object' && body) {
+          const obj = body as { message?: unknown; errors?: Record<string, string[] | string> }
+          if (obj.errors && typeof obj.errors === 'object') {
+            const first = Object.values(obj.errors).flat().find((v) => typeof v === 'string' && v.trim())
+            if (typeof first === 'string') return first
+          }
+          if (typeof obj.message === 'string' && obj.message.trim()) return obj.message
+        }
+        return `API ${response.status}`
+      })()
       throw new ApiError(response.status, message, body)
     }
 

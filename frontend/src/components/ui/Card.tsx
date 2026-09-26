@@ -36,14 +36,12 @@ export function SectionCard({
   title: string
   children: ReactNode
   action?: ReactNode
-  accent?: 'prtg' | 'cloudnet'
+  accent?: 'prtg'
 }) {
   const bar =
     accent === 'prtg'
       ? 'border-l-blue-500'
-      : accent === 'cloudnet'
-        ? 'border-l-cyan-500'
-        : 'border-l-slate-200 dark:border-l-slate-700'
+      : 'border-l-slate-200 dark:border-l-slate-700'
 
   return (
     <section

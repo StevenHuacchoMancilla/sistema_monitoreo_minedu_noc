@@ -2,6 +2,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { useState } from 'react'
 import { Network, Search, X } from 'lucide-react'
 import { endpoints } from '../../../api/endpoints'
+import { ApiError } from '../../../api/client'
 import { Button } from '../../../components/ui/Button'
 import { FormField, Input, Select } from '../../../components/ui/FormControls'
 import { useDebouncedValue } from '../../../lib/useDebouncedValue'
@@ -117,10 +118,21 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
     },
     onError: (e: unknown) => {
       let msg = 'No se pudo registrar la caída de enlace'
-      if (e && typeof e === 'object') {
+      if (e instanceof ApiError) {
+        msg = e.message
+        const errors = (e.body as { errors?: Record<string, string[] | string> } | null)?.errors
+        if (errors && typeof errors === 'object') {
+          const first = Object.values(errors).flat().find((v) => typeof v === 'string' && v.trim())
+          if (typeof first === 'string') msg = first
+        }
+      } else if (e && typeof e === 'object') {
         const err = e as { message?: string; body?: { message?: string } }
         if (typeof err.body?.message === 'string') msg = err.body.message
         else if (typeof err.message === 'string') msg = err.message
+      }
+      // Laravel sin locale muestra "validation.required"
+      if (msg === 'validation.required' || msg.startsWith('validation.')) {
+        msg = 'Falta un dato obligatorio. Selecciona colegio, enlace afectado y TIPO 1/2/3.'
       }
       setError(msg)
     },

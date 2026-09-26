@@ -85,9 +85,6 @@ class IncidentController extends Controller
         $assignment = $incident->networkAssignment;
         $sensor = $incident->sensor;
         $contacts = $school?->contacts ?? collect();
-        $cloudnetSite = $school
-            ? $school->cloudnetSites()->latest('last_synced_at')->first()
-            : null;
 
         $nombrePrtg = $sensor?->device_name;
         $storedName = (string) ($assignment?->prtg_device_name ?? '');
@@ -197,14 +194,6 @@ class IncidentController extends Controller
                 'legacy_reference' => $school?->legacy_reference,
                 'current_sequence' => $school?->current_sequence,
             ], PrtgOperationalLocation::apiFields($assignment, $school)),
-            'cloudnet' => $cloudnetSite ? [
-                'shop_id' => $cloudnetSite->shop_id,
-                'site_name' => $cloudnetSite->site_name,
-                'address' => $cloudnetSite->address,
-                'match_status' => $cloudnetSite->match_status,
-                'last_synced_at' => $cloudnetSite->last_synced_at?->toIso8601String(),
-                'devices' => $cloudnetSite->devices()->count(),
-            ] : null,
             'contactos' => $contacts->values()->map(fn ($c) => [
                 'id' => $c->id,
                 'nombre' => $c->name,
@@ -345,7 +334,8 @@ class IncidentController extends Controller
             'network_assignment_id' => ['nullable', 'integer', 'required_without_all:school_id,cid'],
             'cid' => ['nullable', 'string', 'max:40', 'required_without_all:school_id,network_assignment_id'],
             'affected_wan_node' => ['required', Rule::in(AffectedWanNode::values())],
-            'classification' => ['required', Rule::in(ManagementClassification::operableValues())],
+            // Opcional por compatibilidad con front antiguo; default TIPO 2 (enlace P2P).
+            'classification' => ['nullable', Rule::in(ManagementClassification::operableValues())],
             'detail' => ['nullable', 'string', 'max:5000'],
         ]);
 
@@ -354,6 +344,7 @@ class IncidentController extends Controller
             return response()->json(['message' => 'No autenticado.'], 401);
         }
 
+        $classification = (string) ($data['classification'] ?? ManagementClassification::LinkOutage->value);
         $assignment = null;
         if (! empty($data['network_assignment_id'])) {
             $assignment = NetworkAssignment::query()
@@ -391,7 +382,7 @@ class IncidentController extends Controller
 
             // Clasificación inmediata: TIPO 1 → reporte; TIPO 2/3 → Tracking abierto.
             $applied = $this->managements->apply($incident, [
-                'classification' => (string) $data['classification'],
+                'classification' => $classification,
                 'detail' => $data['detail'] ?? null,
                 'created_by' => $userId,
             ]);

@@ -17,7 +17,7 @@ export function KpiCard({
   tone?: 'default' | 'ok' | 'danger' | 'warn' | 'info' | 'cyan'
   to?: string
   linkLabel?: string
-  accent?: 'prtg' | 'cloudnet'
+  accent?: 'prtg'
 }) {
   const valueColor =
     tone === 'ok'
@@ -32,12 +32,7 @@ export function KpiCard({
               ? 'text-noc-cyan'
               : 'text-slate-950 dark:text-slate-50'
 
-  const bar =
-    accent === 'prtg'
-      ? 'border-t-blue-500'
-      : accent === 'cloudnet'
-        ? 'border-t-cyan-500'
-        : 'border-t-transparent'
+  const bar = accent === 'prtg' ? 'border-t-blue-500' : 'border-t-transparent'
 
   return (
     <article
@@ -165,33 +160,6 @@ export function HealthDot({ online, label }: { online: boolean; label: string })
   )
 }
 
-export function SourceSwitcher({ active }: { active: 'prtg' | 'cloudnet' }) {
-  return (
-    <div className="inline-flex rounded-lg border border-slate-200 bg-slate-50 p-0.5 text-xs font-semibold dark:border-slate-700 dark:bg-slate-900">
-      <Link
-        to="/dashboard/prtg"
-        className={`rounded-md px-3 py-1.5 transition ${
-          active === 'prtg'
-            ? 'bg-blue-600 text-white shadow-sm'
-            : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50'
-        }`}
-      >
-        PRTG
-      </Link>
-      <Link
-        to="/dashboard/cloudnet"
-        className={`rounded-md px-3 py-1.5 transition ${
-          active === 'cloudnet'
-            ? 'bg-cyan-600 text-white shadow-sm'
-            : 'text-slate-600 hover:text-slate-900 dark:text-slate-300 dark:hover:text-slate-50'
-        }`}
-      >
-        Cloudnet
-      </Link>
-    </div>
-  )
-}
-
 export function SectionSkeleton({ rows = 4 }: { rows?: number }) {
   return (
     <div className="animate-pulse space-y-3 rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
@@ -206,7 +174,7 @@ export function SectionSkeleton({ rows = 4 }: { rows?: number }) {
 export function DashboardHeader({
   title,
   subtitle,
-  accent,
+  accent = 'prtg',
   lastSync,
   status,
   warningCount,
@@ -214,25 +182,22 @@ export function DashboardHeader({
 }: {
   title: string
   subtitle: string
-  accent: 'prtg' | 'cloudnet'
+  accent?: 'prtg'
   lastSync?: string | null
   status?: string | null
   warningCount?: number | null
   children?: ReactNode
 }) {
-  const line = accent === 'prtg' ? 'bg-blue-500' : 'bg-cyan-500'
-
   return (
     <div className="mb-6 border-b border-slate-200 pb-5 dark:border-slate-800">
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
         <div className="min-w-0">
           <div className="mb-2 flex flex-wrap items-center gap-3">
-            <SourceSwitcher active={accent} />
             <SyncStatusBadge status={status} warningCount={warningCount} />
           </div>
           <h1 className="text-3xl font-bold tracking-tight text-slate-950 dark:text-slate-50">{title}</h1>
           <p className="mt-1 text-sm font-medium text-slate-500 dark:text-slate-400">{subtitle}</p>
-          <div className={`mt-3 h-1 w-28 rounded-full ${line}`} />
+          <div className={`mt-3 h-1 w-28 rounded-full ${accent === 'prtg' ? 'bg-blue-500' : 'bg-slate-400'}`} />
           {lastSync ? (
             <p className="mt-3 text-xs font-medium text-slate-500 dark:text-slate-400">
               Última sincronización: {formatDateTime(lastSync)}
