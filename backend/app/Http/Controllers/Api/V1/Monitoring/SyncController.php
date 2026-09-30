@@ -31,6 +31,16 @@ class SyncController extends Controller
             }
         }
 
+        // php artisan serve es un solo proceso: un sync de ~1 min dentro de afterResponse
+        // deja colgado el run y bloquea la API. En esta PC lo hace monitoring:watch.
+        if (PHP_SAPI === 'cli-server' && config('prtg.sync_enabled')) {
+            return response()->json([
+                'accepted' => true,
+                'status' => 'WATCH',
+                'source' => 'PRTG',
+            ]);
+        }
+
         return $this->enqueue('PRTG', fn () => $service->sync());
     }
 
@@ -48,7 +58,7 @@ class SyncController extends Controller
         dispatch(function () use ($source, $runner) {
             ignore_user_abort(true);
             if (function_exists('set_time_limit')) {
-                set_time_limit(300);
+                set_time_limit(0);
             }
             try {
                 $runner();

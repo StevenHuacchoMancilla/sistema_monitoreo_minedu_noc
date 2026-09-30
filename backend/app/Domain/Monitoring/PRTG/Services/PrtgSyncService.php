@@ -31,7 +31,7 @@ class PrtgSyncService
     {
         ignore_user_abort(true);
         if (function_exists('set_time_limit')) {
-            set_time_limit(300);
+            set_time_limit(0);
         }
 
         $lock = SyncCoordinator::acquire('PRTG', 300);

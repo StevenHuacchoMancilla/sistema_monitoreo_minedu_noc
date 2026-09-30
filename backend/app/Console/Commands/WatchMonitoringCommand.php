@@ -15,6 +15,10 @@ class WatchMonitoringCommand extends Command
 
     public function handle(PrtgSyncService $prtg): int
     {
+        if (function_exists('set_time_limit')) {
+            set_time_limit(0);
+        }
+
         $prtgInterval = max(15, (int) $this->option('prtg-interval'));
         $nextPrtg = 0;
 
