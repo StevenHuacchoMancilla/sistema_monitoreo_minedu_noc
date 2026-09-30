@@ -190,6 +190,7 @@ class PrtgDashboardService
                 $sensorInventory
             ),
             'nav' => [
+                'caidas_totales' => $activeOutages->count(),
                 'caidas_activas' => $activeIncidents,
                 'pendientes_contacto' => $pendingContact,
                 'en_gestion' => $enGestion,
@@ -200,6 +201,7 @@ class PrtgDashboardService
             ],
             'links' => [
                 'downs' => '/incidents/active',
+                'all_downs' => '/incidents/total',
                 'pending_contact' => '/incidents/pending',
                 'in_management' => '/incidents/managing',
                 'reopened_managing' => '/incidents/reopened-managing',

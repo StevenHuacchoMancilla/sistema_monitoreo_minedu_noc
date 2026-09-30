@@ -48,6 +48,7 @@ export type DashboardSummary = {
   }
   kpis: DashboardKpis
   nav?: {
+    caidas_totales?: number
     caidas_activas: number
     pendientes_contacto: number
     en_gestion: number
@@ -99,6 +100,9 @@ export type OutageRow = {
   duracion: string | null
   duration_seconds?: number | null
   started_at: string | null
+  /** Inicio del downtime actual en PRTG (la caída de ahora, no el historial de la incidencia). */
+  current_down_started_at?: string | null
+  in_management?: boolean
   tracking?: {
     id: number
     status: string | null

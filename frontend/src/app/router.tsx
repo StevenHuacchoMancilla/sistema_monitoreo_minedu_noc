@@ -51,6 +51,22 @@ export function AppRouter() {
 
           <Route element={<RequirePermission permission={P.incidentsView} />}>
             <Route
+              path="/incidents/total"
+              element={
+                <ActiveIncidentsPage
+                  key="incidents-total"
+                  title="Caídas totales"
+                  description="Todas las caídas que PRTG reporta en este momento, incluidas las que ya estaban en gestión. La hora y la duración son de esta caída (downtime actual), no del historial de la incidencia."
+                  tableTitle="Caídas actuales en PRTG"
+                  emptyTitle="No hay caídas en PRTG."
+                  emptyDescription="Ningún local monitoreado está caído en este momento."
+                  durationSource="current_down"
+                  showManagementTag
+                  showManagementFilter
+                />
+              }
+            />
+            <Route
               path="/incidents/active"
               element={
                 <ActiveIncidentsPage

@@ -62,11 +62,20 @@ const DURATION_FILTERS: Array<{ value: DurationBucket; label: string }> = [
   { value: 'long', label: 'Más de 1 h' },
 ]
 
-/** Segundos desde started_at con el reloj local; la duración nunca usa last_check. */
-function elapsedSeconds(row: OutageRow, nowMs: number): number | null {
-  if (!row.started_at) return null
-  const started = Date.parse(row.started_at)
+/** Segundos desde un instante ISO con el reloj local; la duración nunca usa last_check. */
+function elapsedSeconds(iso: string | null | undefined, nowMs: number): number | null {
+  if (!iso) return null
+  const started = Date.parse(iso)
   return Number.isNaN(started) ? null : Math.max(0, Math.floor((nowMs - started) / 1000))
+}
+
+function downClock(row: OutageRow, source: 'incident' | 'current_down'): string | null {
+  if (source === 'current_down') return row.current_down_started_at ?? row.started_at
+  return row.started_at
+}
+
+function inManagement(row: OutageRow): boolean {
+  return Boolean(row.in_management) || Boolean(row.reopened_from_management) || MANAGING.has(row.followup_status ?? '')
 }
 
 function bucketOf(seconds: number | null): DurationBucket {
@@ -92,6 +101,9 @@ export function ActiveIncidentsPage({
   filter,
   presetFollowup,
   showReopenedFilter = false,
+  durationSource = 'incident',
+  showManagementTag = false,
+  showManagementFilter = false,
 }: {
   title?: string
   description?: string
@@ -102,6 +114,10 @@ export function ActiveIncidentsPage({
   presetFollowup?: string
   /** En gestión: filtrar solo recaídas o excluirlas. */
   showReopenedFilter?: boolean
+  /** incident = historial de la incidencia; current_down = downtime actual de PRTG. */
+  durationSource?: 'incident' | 'current_down'
+  showManagementTag?: boolean
+  showManagementFilter?: boolean
 }) {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -110,6 +126,7 @@ export function ActiveIncidentsPage({
   const [perPage, setPerPage] = useState(25)
   const [followup, setFollowup] = useState(presetFollowup ?? '')
   const [reopenedScope, setReopenedScope] = useState<'' | 'only' | 'exclude'>('')
+  const [managementScope, setManagementScope] = useState<'' | 'managing' | 'new'>('')
   const [provincia, setProvincia] = useState(searchParams.get('provincia') ?? '')
   const [distrito, setDistrito] = useState(searchParams.get('distrito') ?? '')
   const [tecnologia, setTecnologia] = useState('')
@@ -129,6 +146,7 @@ export function ActiveIncidentsPage({
     setSearch('')
     setFollowup(presetFollowup ?? '')
     setReopenedScope('')
+    setManagementScope('')
     setTecnologia('')
     setFromDate('')
     setToDate('')
@@ -164,12 +182,12 @@ export function ActiveIncidentsPage({
   const kpis = useMemo(() => {
     const counts = { total: scoped.length, new: 0, mid: 0, long: 0, managing: 0 }
     for (const row of scoped) {
-      const bucket = bucketOf(elapsedSeconds(row, now))
+      const bucket = bucketOf(elapsedSeconds(downClock(row, durationSource), now))
       if (bucket) counts[bucket]++
-      if (MANAGING.has(row.followup_status ?? '')) counts.managing++
+      if (inManagement(row)) counts.managing++
     }
     return counts
-  }, [scoped, now])
+  }, [scoped, now, durationSource])
 
   const rows = useMemo(() => {
     return scoped.filter((r) => {
@@ -178,23 +196,25 @@ export function ActiveIncidentsPage({
       }
       if (reopenedScope === 'only' && !r.reopened_from_management) return false
       if (reopenedScope === 'exclude' && r.reopened_from_management) return false
+      if (managementScope === 'managing' && !inManagement(r)) return false
+      if (managementScope === 'new' && inManagement(r)) return false
       if (provincia && (r.provincia ?? '').toUpperCase() !== provincia.toUpperCase()) return false
       if (distrito && (r.distrito ?? '').toUpperCase() !== distrito.toUpperCase()) return false
       if (tecnologia && (r.tecnologia ?? '').toUpperCase() !== tecnologia.toUpperCase()) return false
-      const day = limaDateKey(r.started_at)
+      const day = limaDateKey(downClock(r, durationSource))
       if (fromDate && (day === null || day < fromDate)) return false
       if (toDate && (day === null || day > toDate)) return false
-      if (duration && bucketOf(elapsedSeconds(r, now)) !== duration) return false
+      if (duration && bucketOf(elapsedSeconds(downClock(r, durationSource), now)) !== duration) return false
       return true
     })
-  }, [scoped, followup, reopenedScope, provincia, distrito, tecnologia, fromDate, toDate, duration, now])
+  }, [scoped, followup, reopenedScope, managementScope, provincia, distrito, tecnologia, fromDate, toDate, duration, now, durationSource])
 
   const lastPage = Math.max(1, Math.ceil(rows.length / perPage))
   const currentPage = Math.min(page, lastPage)
   const pageRows = rows.slice((currentPage - 1) * perPage, currentPage * perPage)
 
   const hasFilters = Boolean(
-    search || followup || reopenedScope || provincia || distrito || tecnologia || fromDate || toDate || duration,
+    search || followup || reopenedScope || managementScope || provincia || distrito || tecnologia || fromDate || toDate || duration,
   )
 
   const withPageReset =
@@ -208,6 +228,7 @@ export function ActiveIncidentsPage({
     setSearch('')
     setFollowup(presetFollowup ?? '')
     setReopenedScope('')
+    setManagementScope('')
     setProvincia('')
     setDistrito('')
     setTecnologia('')
@@ -263,7 +284,7 @@ export function ActiveIncidentsPage({
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
         <MetricCard label="Total activas" value={kpis.total} icon={<TriangleAlert className="h-4 w-4" />} tone="danger" />
         <MetricCard
-          label={`Nuevas < ${NEW_MINUTES} min`}
+          label={durationSource === 'current_down' ? `Esta caída < ${NEW_MINUTES} min` : `Nuevas < ${NEW_MINUTES} min`}
           value={kpis.new}
           icon={<Sparkles className="h-4 w-4" />}
           tone="info"
@@ -310,6 +331,18 @@ export function ActiveIncidentsPage({
                 <option value="">Todas</option>
                 <option value="only">Solo recaída en gestión</option>
                 <option value="exclude">Sin recaída (primera caída)</option>
+              </Select>
+            </FormField>
+          ) : null}
+          {showManagementFilter ? (
+            <FormField label="Situación">
+              <Select
+                value={managementScope}
+                onChange={(e) => withPageReset(setManagementScope)(e.target.value as '' | 'managing' | 'new')}
+              >
+                <option value="">Todas</option>
+                <option value="managing">En gestión</option>
+                <option value="new">Sin gestión</option>
               </Select>
             </FormField>
           ) : null}
@@ -392,7 +425,7 @@ export function ActiveIncidentsPage({
                     <th className={thClassName}>Local</th>
                     <th className={thClassName}>Ubicación</th>
                     <th className={thClassName}>
-                      <span className="block">Caída</span>
+                      <span className="block">{durationSource === 'current_down' ? 'Caída actual' : 'Caída'}</span>
                       <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
                     </th>
                     <th className={thClassName}>Duración</th>
@@ -413,6 +446,8 @@ export function ActiveIncidentsPage({
                       row={row}
                       now={now}
                       canManage={canManage}
+                      durationSource={durationSource}
+                      showManagementTag={showManagementTag}
                       onManage={setManageId}
                     />
                   ))}
@@ -471,16 +506,22 @@ function OutageTableRow({
   row,
   now,
   canManage,
+  durationSource,
+  showManagementTag,
   onManage,
 }: {
   row: OutageRow
   now: number
   canManage: boolean
+  durationSource: 'incident' | 'current_down'
+  showManagementTag: boolean
   onManage: (id: number) => void
 }) {
-  const seconds = elapsedSeconds(row, now)
+  const clock = downClock(row, durationSource)
+  const seconds = elapsedSeconds(clock, now)
   const bucket = bucketOf(seconds)
   const reincidencias = row.reincidente_count ?? 1
+  const managing = inManagement(row)
 
   return (
     <tr className={`${trClassName} group`}>
@@ -513,7 +554,7 @@ function OutageTableRow({
         </span>
       </td>
       <td className={tdClassName}>
-        <IsoDateTimeCell value={row.started_at} />
+        <IsoDateTimeCell value={clock} />
       </td>
       <td className={`${tdClassName} font-semibold tabular-nums ${DURATION_CLASS[bucket]}`}>
         <span className="block truncate whitespace-nowrap">{formatDuration(seconds)}</span>
@@ -527,8 +568,17 @@ function OutageTableRow({
               label={row.management_classification_label}
             />
             {bucket === 'new' ? (
-              <Badge tone="info" title={`Caída iniciada hace menos de ${NEW_MINUTES} minutos`} className="!text-[10px] !font-medium">
-                Nueva
+              <Badge tone="info" title={`Esta caída lleva menos de ${NEW_MINUTES} minutos`} className="!text-[10px] !font-medium">
+                {durationSource === 'current_down' ? 'Reciente' : 'Nueva'}
+              </Badge>
+            ) : null}
+            {showManagementTag ? (
+              <Badge
+                tone={managing ? 'warning' : 'neutral'}
+                title={managing ? 'Este colegio ya estaba en gestión' : 'Caída nueva, todavía sin gestión'}
+                className="!text-[10px] !font-medium"
+              >
+                {managing ? 'En gestión' : 'Sin gestión'}
               </Badge>
             ) : null}
             {row.reopened_from_management ? (

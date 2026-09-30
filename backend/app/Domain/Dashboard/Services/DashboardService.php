@@ -110,6 +110,7 @@ class DashboardService
                 'contactos_pendientes_match' => School::query()->where('contact_match_status', ContactMatchStatus::Pending)->count(),
             ],
             'nav' => [
+                'caidas_totales' => $allActive->count(),
                 'caidas_activas' => $newOutages->count(),
                 'pendientes_contacto' => $newOutages->where('followup_status', FollowupStatus::PendienteContacto->value)->count(),
                 'en_gestion' => $enGestion,
@@ -218,6 +219,9 @@ class DashboardService
                     ? max(0, now()->getTimestamp() - $incident->started_at->getTimestamp())
                     : null,
                 'started_at' => $incident->started_at?->toIso8601String(),
+                'current_down_started_at' => ($incident->prtg_down_started_at ?? $incident->started_at)?->toIso8601String(),
+                'in_management' => $incident->reopened_from_management
+                    || ($incident->followup_status && in_array($incident->followup_status->value, FollowupStatus::managingValues(), true)),
                 'tracking' => $tracking ? [
                     'id' => $tracking->id,
                     'status' => $tracking->status?->value,

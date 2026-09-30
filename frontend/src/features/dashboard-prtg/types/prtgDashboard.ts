@@ -164,6 +164,7 @@ export type PrtgDashboard = {
     source_scope: string
   }
   nav: {
+    caidas_totales?: number
     caidas_activas: number
     pendientes_contacto: number
     en_gestion: number

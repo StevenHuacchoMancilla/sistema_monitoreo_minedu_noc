@@ -9,6 +9,7 @@ import {
   Files,
   GraduationCap,
   History,
+  Layers,
   LayoutDashboard,
   Map,
   PanelLeftClose,
@@ -31,7 +32,7 @@ type NavItem = {
   label: string
   end?: boolean
   section: NavSection
-  badgeKey?: 'caidas_activas' | 'pendientes_contacto' | 'en_gestion' | 'recaida_gestion' | 'concentraciones' | 'recuperados' | 'tracking_abiertos' | 'notificaciones'
+  badgeKey?: 'caidas_totales' | 'caidas_activas' | 'pendientes_contacto' | 'en_gestion' | 'recaida_gestion' | 'concentraciones' | 'recuperados' | 'tracking_abiertos' | 'notificaciones'
   tone?: 'danger' | 'warn' | 'info' | 'muted' | 'success'
   icon: LucideIcon
   accent?: 'prtg'
@@ -47,6 +48,7 @@ const SECTION_LABEL: Record<NavSection, string> = {
 /** Orden: cola operativa → reportes → consulta/admin. Notificaciones al final (campana ya cubre lo urgente). */
 const NAV: NavItem[] = [
   { section: 'operacion', to: '/dashboard/prtg', label: 'Resumen PRTG', end: true, icon: LayoutDashboard, accent: 'prtg', permission: P.dashboardPrtg },
+  { section: 'operacion', to: '/incidents/total', label: 'Caídas totales', badgeKey: 'caidas_totales', tone: 'danger', icon: Layers, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/active', label: 'Caídas activas', badgeKey: 'caidas_activas', tone: 'danger', icon: TriangleAlert, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/pending', label: 'Pendientes de contacto', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
@@ -130,8 +132,10 @@ export function Sidebar({
             const badgeTitle =
               item.badgeKey === 'recuperados'
                 ? 'Recuperados hoy'
-                : item.badgeKey === 'caidas_activas'
-                  ? 'Caídas activas'
+                : item.badgeKey === 'caidas_totales'
+                  ? 'Todas las caídas que PRTG reporta ahora'
+                  : item.badgeKey === 'caidas_activas'
+                    ? 'Caídas activas'
                   : item.badgeKey === 'pendientes_contacto'
                     ? 'Pendientes de contacto'
                     : item.badgeKey === 'en_gestion'
