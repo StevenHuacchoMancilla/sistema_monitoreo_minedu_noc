@@ -14,6 +14,7 @@ import {
   PanelLeftClose,
   PanelLeftOpen,
   Phone,
+  RefreshCcw,
   Settings,
   TriangleAlert,
 } from 'lucide-react'
@@ -30,7 +31,7 @@ type NavItem = {
   label: string
   end?: boolean
   section: NavSection
-  badgeKey?: 'caidas_activas' | 'pendientes_contacto' | 'en_gestion' | 'concentraciones' | 'recuperados' | 'tracking_abiertos' | 'notificaciones'
+  badgeKey?: 'caidas_activas' | 'pendientes_contacto' | 'en_gestion' | 'recaida_gestion' | 'concentraciones' | 'recuperados' | 'tracking_abiertos' | 'notificaciones'
   tone?: 'danger' | 'warn' | 'info' | 'muted' | 'success'
   icon: LucideIcon
   accent?: 'prtg'
@@ -49,6 +50,7 @@ const NAV: NavItem[] = [
   { section: 'operacion', to: '/incidents/active', label: 'Caídas activas', badgeKey: 'caidas_activas', tone: 'danger', icon: TriangleAlert, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/pending', label: 'Pendientes de contacto', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
+  { section: 'operacion', to: '/incidents/reopened-managing', label: 'Recaída en gestión', badgeKey: 'recaida_gestion', tone: 'warn', icon: RefreshCcw, permission: P.incidentsView },
   { section: 'operacion', to: '/tracking', label: 'Tracking General', badgeKey: 'tracking_abiertos', tone: 'warn', icon: ClipboardList, permission: P.trackingView },
   { section: 'operacion', to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck, permission: P.recoveriesView },
   { section: 'operacion', to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map, permission: P.incidentsView },
@@ -134,13 +136,15 @@ export function Sidebar({
                     ? 'Pendientes de contacto'
                     : item.badgeKey === 'en_gestion'
                       ? 'En gestión'
-                      : item.badgeKey === 'concentraciones'
-                        ? 'Concentraciones zonales'
-                        : item.badgeKey === 'tracking_abiertos'
-                          ? 'Tracking abiertos (pendientes de cierre)'
-                          : item.badgeKey === 'notificaciones'
-                            ? 'Notificaciones pendientes de revisión'
-                            : undefined
+                      : item.badgeKey === 'recaida_gestion'
+                        ? 'Recuperados durante gestión que volvieron a caer'
+                        : item.badgeKey === 'concentraciones'
+                          ? 'Concentraciones zonales'
+                          : item.badgeKey === 'tracking_abiertos'
+                            ? 'Tracking abiertos (pendientes de cierre)'
+                            : item.badgeKey === 'notificaciones'
+                              ? 'Notificaciones pendientes de revisión'
+                              : undefined
             const collapsedTitle =
               item.badgeKey === 'recuperados' && typeof count === 'number'
                 ? `${item.label} · ${count.toLocaleString('es-PE')} hoy`

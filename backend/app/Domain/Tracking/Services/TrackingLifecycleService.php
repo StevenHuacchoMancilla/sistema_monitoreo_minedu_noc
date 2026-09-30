@@ -147,6 +147,7 @@ class TrackingLifecycleService
                     $incident->fill([
                         'recovery_review_status' => \App\Enums\RecoveryReviewStatus::Acknowledged,
                         'recovery_reviewed_at' => now(),
+                        'reopened_from_management' => false,
                     ])->save();
                     \App\Models\IncidentUpdate::query()->create([
                         'incident_id' => $incident->id,

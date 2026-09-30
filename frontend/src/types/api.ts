@@ -24,6 +24,7 @@ export type DashboardKpis = {
   incidencias_activas: number
   pendientes_contacto: number
   en_gestion: number
+  recaida_gestion?: number
   recuperados_hoy: number
   recuperados_total?: number
   concentraciones?: number
@@ -50,6 +51,7 @@ export type DashboardSummary = {
     caidas_activas: number
     pendientes_contacto: number
     en_gestion: number
+    recaida_gestion?: number
     concentraciones: number
     recuperados: number
     pending_reviews?: number
@@ -123,6 +125,7 @@ export type OutageRow = {
   reincidente?: boolean
   glpi_ticket?: string | null
   responsible_area?: string | null
+  reopened_from_management?: boolean
 }
 
 export type Concentration = {

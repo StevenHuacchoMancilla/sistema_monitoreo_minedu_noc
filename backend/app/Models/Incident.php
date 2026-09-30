@@ -31,6 +31,7 @@ class Incident extends Model
             'recovery_review_status' => RecoveryReviewStatus::class,
             'affected_wan_node' => AffectedWanNode::class,
             'recovered_while_managing' => 'boolean',
+            'reopened_from_management' => 'boolean',
             'recovery_reviewed_at' => 'datetime',
             'school_snapshot' => 'array',
             'network_snapshot' => 'array',

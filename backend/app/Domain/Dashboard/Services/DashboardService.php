@@ -79,7 +79,9 @@ class DashboardService
         $concentrations = array_slice($allConcentrations, 0, 8);
 
         $allActive = $this->activeOutages();
-        $activePreview = $allActive->take(8)->values()->all();
+        $newOutages = $allActive->reject(fn (array $row) => ! empty($row['reopened_from_management']));
+        $reopenedManaging = $allActive->filter(fn (array $row) => ! empty($row['reopened_from_management']));
+        $activePreview = $newOutages->take(8)->values()->all();
 
         return [
             'health' => [
@@ -97,9 +99,10 @@ class DashboardService
                 'parciales' => (int) ($pingStatuses[MonitoringStatus::Parcial->value] ?? 0),
                 'pausados' => (int) ($pingStatuses[MonitoringStatus::Pausado->value] ?? 0),
                 'sin_datos_prtg' => max(0, $eligible - $withPing),
-                'incidencias_activas' => $allActive->count(),
-                'pendientes_contacto' => $allActive->where('followup_status', FollowupStatus::PendienteContacto->value)->count(),
+                'incidencias_activas' => $newOutages->count(),
+                'pendientes_contacto' => $newOutages->where('followup_status', FollowupStatus::PendienteContacto->value)->count(),
                 'en_gestion' => $enGestion,
+                'recaida_gestion' => $reopenedManaging->count(),
                 'recuperados_hoy' => $recoveredToday,
                 'pending_reviews' => $pendingReviews,
                 'recuperados_total' => $recoveredTotal,
@@ -107,9 +110,10 @@ class DashboardService
                 'contactos_pendientes_match' => School::query()->where('contact_match_status', ContactMatchStatus::Pending)->count(),
             ],
             'nav' => [
-                'caidas_activas' => $allActive->count(),
-                'pendientes_contacto' => $allActive->where('followup_status', FollowupStatus::PendienteContacto->value)->count(),
+                'caidas_activas' => $newOutages->count(),
+                'pendientes_contacto' => $newOutages->where('followup_status', FollowupStatus::PendienteContacto->value)->count(),
                 'en_gestion' => $enGestion,
+                'recaida_gestion' => $reopenedManaging->count(),
                 'concentraciones' => $concentrationCount,
                 'recuperados' => $recoveredToday,
                 'pending_reviews' => $pendingReviews,
@@ -236,6 +240,7 @@ class DashboardService
                 'reincidente' => $reincidenteCount > 1,
                 'glpi_ticket' => $incident->glpi_ticket,
                 'responsible_area' => $incident->responsible_area,
+                'reopened_from_management' => (bool) $incident->reopened_from_management,
             ];
         });
     }

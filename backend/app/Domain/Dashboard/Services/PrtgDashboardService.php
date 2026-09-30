@@ -56,9 +56,12 @@ class PrtgDashboardService
         $withoutPrtg = max(0, $eligible - $withPing);
 
         $activeOutages = $this->dashboard->activeOutages();
-        $activeIncidents = $activeOutages->count();
-        $pendingContact = $activeOutages->where('followup_status', FollowupStatus::PendienteContacto->value)->count();
+        $newOutages = $activeOutages->reject(fn (array $row) => ! empty($row['reopened_from_management']));
+        $reopenedManaging = $activeOutages->filter(fn (array $row) => ! empty($row['reopened_from_management']));
+        $activeIncidents = $newOutages->count();
+        $pendingContact = $newOutages->where('followup_status', FollowupStatus::PendienteContacto->value)->count();
         $enGestion = Incident::query()->active()->whereIn('followup_status', FollowupStatus::managingValues())->count();
+        $recaidaGestion = $reopenedManaging->count();
         $recoveredToday = Incident::query()
             ->whereNotNull('recovered_at')
             ->whereBetween('recovered_at', [\App\Support\OperationalTime::dayStart(), \App\Support\OperationalTime::dayEnd()])
@@ -190,6 +193,7 @@ class PrtgDashboardService
                 'caidas_activas' => $activeIncidents,
                 'pendientes_contacto' => $pendingContact,
                 'en_gestion' => $enGestion,
+                'recaida_gestion' => $recaidaGestion,
                 'concentraciones' => $concentrationCount,
                 'recuperados' => $recoveredToday,
                 'pending_reviews' => $pendingReviews,
@@ -198,6 +202,7 @@ class PrtgDashboardService
                 'downs' => '/incidents/active',
                 'pending_contact' => '/incidents/pending',
                 'in_management' => '/incidents/managing',
+                'reopened_managing' => '/incidents/reopened-managing',
                 'recoveries' => '/recoveries',
                 'pending_reviews' => '/recoveries?review_status=PENDING_REVIEW',
                 'concentrations' => '/concentrations',

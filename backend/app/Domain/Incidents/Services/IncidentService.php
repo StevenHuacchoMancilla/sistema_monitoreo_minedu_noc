@@ -314,11 +314,27 @@ class IncidentService
 
         $before = $recent->followup_status?->value;
         $keepManagement = $recent->recovery_review_status === RecoveryReviewStatus::ContinueMonitoring
-            || $recent->trackingRecords()->notClosed()->exists();
+            || $recent->trackingRecords()->notClosed()->exists()
+            || (bool) $recent->recovered_while_managing;
 
-        $preservedFollowup = $keepManagement && $recent->followup_status
-            ? $recent->followup_status
-            : FollowupStatus::PendienteContacto;
+        $managingValues = FollowupStatus::managingValues();
+        if ($keepManagement) {
+            if (
+                $recent->followup_status
+                && in_array($recent->followup_status->value, $managingValues, true)
+            ) {
+                $preservedFollowup = $recent->followup_status;
+            } else {
+                $preservedFollowup = match ($recent->management_classification) {
+                    ManagementClassification::ContactConfirmed => FollowupStatus::EnGestion,
+                    ManagementClassification::LinkOutage,
+                    ManagementClassification::NoResponse => FollowupStatus::EnEspera,
+                    default => FollowupStatus::EnGestion,
+                };
+            }
+        } else {
+            $preservedFollowup = FollowupStatus::PendienteContacto;
+        }
 
         $payload = [
             'recovered_at' => null,
@@ -326,6 +342,7 @@ class IncidentService
             'current_status' => $sensor->normalized_status?->value ?? MonitoringStatus::Caido->value,
             'followup_status' => $preservedFollowup,
             'recovered_while_managing' => false,
+            'reopened_from_management' => $keepManagement,
             'recovery_review_status' => null,
             'recovery_reviewed_at' => null,
         ];
@@ -335,7 +352,7 @@ class IncidentService
         $recent->update($payload);
 
         $reason = $keepManagement
-            ? 'Reabierta por re-caída con seguimiento en reporte / Tracking abierto. Misma incidencia y clasificación conservadas.'
+            ? 'Recaída en gestión: se recuperó durante seguimiento y volvió a caer. Misma incidencia; no entra como caída nueva.'
             : sprintf(
                 'Reabierta por re-caída dentro de %ds (coalesce de flaps). Misma incidencia; started_at original conservado.',
                 max(0, (int) config('incidents.flap_reopen_seconds', 900))
@@ -366,6 +383,7 @@ class IncidentService
             ->whereNotNull('recovered_at')
             ->where(function ($q) {
                 $q->where('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value)
+                    ->orWhere('recovered_while_managing', true)
                     ->orWhereHas('trackingRecords', fn ($t) => $t->notClosed());
             })
             ->orderByDesc('recovered_at')

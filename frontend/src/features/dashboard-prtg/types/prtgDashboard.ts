@@ -167,6 +167,7 @@ export type PrtgDashboard = {
     caidas_activas: number
     pendientes_contacto: number
     en_gestion: number
+    recaida_gestion?: number
     concentraciones: number
     recuperados: number
     pending_reviews?: number

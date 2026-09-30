@@ -109,6 +109,9 @@ class RecoveryReviewService
                 $incident->fill([
                     'recovery_review_status' => $nextStatus,
                     'recovery_reviewed_at' => now(),
+                    'reopened_from_management' => $action === self::ACTION_ACKNOWLEDGE
+                        ? false
+                        : $incident->reopened_from_management,
                 ])->save();
             }
 

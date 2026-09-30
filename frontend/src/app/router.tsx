@@ -50,14 +50,22 @@ export function AppRouter() {
           </Route>
 
           <Route element={<RequirePermission permission={P.incidentsView} />}>
-            <Route path="/incidents/active" element={<ActiveIncidentsPage key="incidents-active" />} />
+            <Route
+              path="/incidents/active"
+              element={
+                <ActiveIncidentsPage
+                  key="incidents-active"
+                  filter={(row) => !row.reopened_from_management}
+                />
+              }
+            />
             <Route
               path="/incidents/pending"
               element={
                 <ActiveIncidentsPage
                   key="incidents-pending"
                   title="Pendientes de contacto"
-                  filter={(row) => row.followup_status === 'PENDIENTE_CONTACTO'}
+                  filter={(row) => row.followup_status === 'PENDIENTE_CONTACTO' && !row.reopened_from_management}
                 />
               }
             />
@@ -67,7 +75,23 @@ export function AppRouter() {
                 <ActiveIncidentsPage
                   key="incidents-managing"
                   title="En gestión"
+                  description="Incidencias en seguimiento operativo. Incluye colegios que se recuperaron durante gestión y volvieron a caer (mismo historial)."
                   filter={(row) => MANAGING.has(row.followup_status ?? '')}
+                  showReopenedFilter
+                />
+              }
+            />
+            <Route
+              path="/incidents/reopened-managing"
+              element={
+                <ActiveIncidentsPage
+                  key="incidents-reopened-managing"
+                  title="Recaída en gestión"
+                  description="Colegios que estaban en gestión, se recuperaron durante el seguimiento y volvieron a caer. Conservan el mismo historial y Tracking; no entran como caída nueva."
+                  tableTitle="Recaídas con historial en gestión"
+                  emptyTitle="Sin recaídas en gestión"
+                  emptyDescription="No hay colegios en gestión que se hayan recuperado y vuelto a caer."
+                  filter={(row) => Boolean(row.reopened_from_management)}
                 />
               }
             />

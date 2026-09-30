@@ -85,12 +85,23 @@ const DURATION_CLASS: Record<DurationBucket, string> = {
 
 export function ActiveIncidentsPage({
   title = 'Caídas activas',
+  description = 'Ping CAÍDO en PRTG y caídas de un enlace (doble WAN) mientras el colegio sigue en línea. La duración se calcula desde el inicio de la incidencia.',
+  tableTitle = 'Caídas en curso',
+  emptyTitle = 'No existen caídas activas.',
+  emptyDescription = 'Todos los locales monitoreados están operativos.',
   filter,
   presetFollowup,
+  showReopenedFilter = false,
 }: {
   title?: string
+  description?: string
+  tableTitle?: string
+  emptyTitle?: string
+  emptyDescription?: string
   filter?: (row: OutageRow) => boolean
   presetFollowup?: string
+  /** En gestión: filtrar solo recaídas o excluirlas. */
+  showReopenedFilter?: boolean
 }) {
   const [searchParams] = useSearchParams()
   const navigate = useNavigate()
@@ -98,6 +109,7 @@ export function ActiveIncidentsPage({
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(25)
   const [followup, setFollowup] = useState(presetFollowup ?? '')
+  const [reopenedScope, setReopenedScope] = useState<'' | 'only' | 'exclude'>('')
   const [provincia, setProvincia] = useState(searchParams.get('provincia') ?? '')
   const [distrito, setDistrito] = useState(searchParams.get('distrito') ?? '')
   const [tecnologia, setTecnologia] = useState('')
@@ -116,6 +128,7 @@ export function ActiveIncidentsPage({
   useEffect(() => {
     setSearch('')
     setFollowup(presetFollowup ?? '')
+    setReopenedScope('')
     setTecnologia('')
     setFromDate('')
     setToDate('')
@@ -163,6 +176,8 @@ export function ActiveIncidentsPage({
       if (followup === 'EN_GESTION_GROUP' ? !MANAGING.has(r.followup_status ?? '') : followup && r.followup_status !== followup) {
         return false
       }
+      if (reopenedScope === 'only' && !r.reopened_from_management) return false
+      if (reopenedScope === 'exclude' && r.reopened_from_management) return false
       if (provincia && (r.provincia ?? '').toUpperCase() !== provincia.toUpperCase()) return false
       if (distrito && (r.distrito ?? '').toUpperCase() !== distrito.toUpperCase()) return false
       if (tecnologia && (r.tecnologia ?? '').toUpperCase() !== tecnologia.toUpperCase()) return false
@@ -172,14 +187,14 @@ export function ActiveIncidentsPage({
       if (duration && bucketOf(elapsedSeconds(r, now)) !== duration) return false
       return true
     })
-  }, [scoped, followup, provincia, distrito, tecnologia, fromDate, toDate, duration, now])
+  }, [scoped, followup, reopenedScope, provincia, distrito, tecnologia, fromDate, toDate, duration, now])
 
   const lastPage = Math.max(1, Math.ceil(rows.length / perPage))
   const currentPage = Math.min(page, lastPage)
   const pageRows = rows.slice((currentPage - 1) * perPage, currentPage * perPage)
 
   const hasFilters = Boolean(
-    search || followup || provincia || distrito || tecnologia || fromDate || toDate || duration,
+    search || followup || reopenedScope || provincia || distrito || tecnologia || fromDate || toDate || duration,
   )
 
   const withPageReset =
@@ -192,6 +207,7 @@ export function ActiveIncidentsPage({
   const clearFilters = () => {
     setSearch('')
     setFollowup(presetFollowup ?? '')
+    setReopenedScope('')
     setProvincia('')
     setDistrito('')
     setTecnologia('')
@@ -221,7 +237,7 @@ export function ActiveIncidentsPage({
             {kpis.total.toLocaleString('es-PE')} {kpis.total === 1 ? 'activa' : 'activas'}
           </Badge>
         }
-        description="Ping CAÍDO en PRTG y caídas de un enlace (doble WAN) mientras el colegio sigue en línea. La duración se calcula desde el inicio de la incidencia."
+        description={description}
         actions={
           <>
             <span
@@ -275,7 +291,7 @@ export function ActiveIncidentsPage({
           <FormField label="Estado gestión">
             <Select
               value={followup}
-              disabled={Boolean(filter)}
+              disabled={title === 'Pendientes de contacto' || title === 'Recaída en gestión'}
               onChange={(e) => withPageReset(setFollowup)(e.target.value)}
             >
               {FOLLOWUP_FILTERS.map((f) => (
@@ -285,6 +301,18 @@ export function ActiveIncidentsPage({
               ))}
             </Select>
           </FormField>
+          {showReopenedFilter ? (
+            <FormField label="Recaída">
+              <Select
+                value={reopenedScope}
+                onChange={(e) => withPageReset(setReopenedScope)(e.target.value as '' | 'only' | 'exclude')}
+              >
+                <option value="">Todas</option>
+                <option value="only">Solo recaída en gestión</option>
+                <option value="exclude">Sin recaída (primera caída)</option>
+              </Select>
+            </FormField>
+          ) : null}
           <PrtgLocationFilterFields
             province={provincia}
             district={distrito}
@@ -320,7 +348,7 @@ export function ActiveIncidentsPage({
       </div>
 
       <SectionCard
-        title="Caídas en curso"
+        title={tableTitle}
         action={
           <span className="text-xs font-semibold text-slate-500 tabular-nums dark:text-slate-400">
             {rows.length === kpis.total
@@ -335,7 +363,7 @@ export function ActiveIncidentsPage({
         ) : null}
         {!outages.isLoading && !outages.isError && rows.length === 0 ? (
           kpis.total === 0 && !search ? (
-            <EmptyState title="No existen caídas activas." description="Todos los locales monitoreados están operativos." />
+            <EmptyState title={emptyTitle} description={emptyDescription} />
           ) : (
             <EmptyState title="Sin resultados" description="Ninguna caída activa coincide con los filtros." />
           )
@@ -501,6 +529,15 @@ function OutageTableRow({
             {bucket === 'new' ? (
               <Badge tone="info" title={`Caída iniciada hace menos de ${NEW_MINUTES} minutos`} className="!text-[10px] !font-medium">
                 Nueva
+              </Badge>
+            ) : null}
+            {row.reopened_from_management ? (
+              <Badge
+                tone="warning"
+                title="Se recuperó durante gestión y volvió a caer; continúa el mismo historial"
+                className="!text-[10px] !font-medium"
+              >
+                Recaída gestión
               </Badge>
             ) : null}
             {reincidencias > 1 ? (
