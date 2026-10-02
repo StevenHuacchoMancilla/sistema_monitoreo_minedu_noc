@@ -38,50 +38,41 @@ class DashboardService
         }
         $connection = config('database.connections.'.$driver, []);
 
-        app(\App\Domain\Incidents\Services\IncidentService::class)->closeOperativeIncidents();
+        $managing = FollowupStatus::managingValues();
+        $trackingOpen = TrackingStatus::openValues();
+        $cidMissing = [CidStatus::Empty->value, CidStatus::Invalid->value, CidStatus::BajaImpe->value];
+        $dayStart = \App\Support\OperationalTime::dayStart();
+        $dayEnd = \App\Support\OperationalTime::dayEnd();
 
-        $totalSchools = School::query()->where('active', true)->count();
-        $validCid = NetworkAssignment::query()->where('is_active', true)->where('cid_status', CidStatus::Valid)->count();
-        $withoutCid = NetworkAssignment::query()->where('is_active', true)->whereIn('cid_status', [
-            CidStatus::Empty->value,
-            CidStatus::Invalid->value,
-            CidStatus::BajaImpe->value,
-        ])->count();
+        $counts = DB::selectOne(
+            'SELECT
+                (SELECT COUNT(*)::int FROM schools WHERE active = true) AS total_schools,
+                (SELECT COUNT(*)::int FROM network_assignments WHERE is_active = true AND cid_status = ?) AS valid_cid,
+                (SELECT COUNT(*)::int FROM network_assignments WHERE is_active = true AND cid_status IN (?, ?, ?)) AS without_cid,
+                (SELECT COUNT(*)::int FROM network_assignments WHERE is_active = true AND monitoring_eligible = true) AS eligible,
+                (SELECT COUNT(*)::int FROM incidents WHERE recovered_at IS NULL AND followup_status IN (?, ?, ?, ?, ?)) AS en_gestion,
+                (SELECT COUNT(*)::int FROM incidents WHERE recovered_at IS NOT NULL AND recovered_at BETWEEN ? AND ?) AS recovered_today,
+                (SELECT COUNT(*)::int FROM incidents WHERE recovered_at IS NOT NULL AND (recovery_review_status = ? OR (recovered_while_managing = true AND recovery_review_status IS NULL))) AS pending_reviews,
+                (SELECT COUNT(*)::int FROM incidents WHERE recovered_at IS NOT NULL) AS recovered_total,
+                (SELECT COUNT(*)::int FROM tracking_records WHERE status IN (?, ?, ?)) AS tracking_abiertos,
+                (SELECT COUNT(*)::int FROM schools WHERE contact_match_status = ?) AS contacts_pending',
+            [
+                CidStatus::Valid->value,
+                ...$cidMissing,
+                ...$managing,
+                $dayStart,
+                $dayEnd,
+                RecoveryReviewStatus::PendingReview->value,
+                ...$trackingOpen,
+                ContactMatchStatus::Pending->value,
+            ]
+        );
 
         $pingStatuses = \App\Domain\Monitoring\PRTG\Services\PrtgSensorQuery::statusCounts();
-
-        $activeIncidents = Incident::query()->active()->count();
-        $pendingContact = Incident::query()->active()->where('followup_status', FollowupStatus::PendienteContacto)->count();
-        $enGestion = Incident::query()->active()->whereIn('followup_status', FollowupStatus::managingValues())->count();
-        $recoveredToday = Incident::query()
-            ->whereNotNull('recovered_at')
-            ->whereBetween('recovered_at', [\App\Support\OperationalTime::dayStart(), \App\Support\OperationalTime::dayEnd()])
-            ->count();
-        $pendingReviews = Incident::query()
-            ->whereNotNull('recovered_at')
-            ->where(function ($q) {
-                $q->where('recovery_review_status', RecoveryReviewStatus::PendingReview->value)
-                    ->orWhere(function ($q2) {
-                        $q2->where('recovered_while_managing', true)
-                            ->whereNull('recovery_review_status');
-                    });
-            })
-            ->count();
-        $trackingAbiertos = TrackingRecord::query()
-            ->whereIn('status', TrackingStatus::openValues())
-            ->count();
-        $recoveredTotal = Incident::query()->whereNotNull('recovered_at')->count();
-        $eligible = NetworkAssignment::query()->where('is_active', true)->where('monitoring_eligible', true)->count();
-        $withPing = \App\Domain\Monitoring\PRTG\Services\PrtgSensorQuery::monitoredAssignmentCount();
-
-        $allConcentrations = $this->concentrations();
-        $concentrationCount = count($allConcentrations);
-        $concentrations = array_slice($allConcentrations, 0, 8);
-
-        $allActive = $this->activeOutages();
-        $newOutages = $allActive->reject(fn (array $row) => ! empty($row['reopened_from_management']));
-        $reopenedManaging = $allActive->filter(fn (array $row) => ! empty($row['reopened_from_management']));
-        $activePreview = $newOutages->take(8)->values()->all();
+        $withPing = array_sum($pingStatuses);
+        $outageNav = $this->outageNavCounts();
+        $concentrationCount = $this->concentrationCount();
+        $eligible = (int) $counts->eligible;
 
         return [
             'health' => [
@@ -91,43 +82,101 @@ class DashboardService
                 'name' => $connection['database'] ?? null,
             ],
             'kpis' => [
-                'total_locales' => $totalSchools,
-                'con_cid_valido' => $validCid,
-                'sin_cid' => $withoutCid,
+                'total_locales' => (int) $counts->total_schools,
+                'con_cid_valido' => (int) $counts->valid_cid,
+                'sin_cid' => (int) $counts->without_cid,
                 'operativos' => (int) ($pingStatuses[MonitoringStatus::Operativo->value] ?? 0),
                 'caidos' => (int) ($pingStatuses[MonitoringStatus::Caido->value] ?? 0),
                 'parciales' => (int) ($pingStatuses[MonitoringStatus::Parcial->value] ?? 0),
                 'pausados' => (int) ($pingStatuses[MonitoringStatus::Pausado->value] ?? 0),
                 'sin_datos_prtg' => max(0, $eligible - $withPing),
-                'incidencias_activas' => $newOutages->count(),
-                'pendientes_contacto' => $newOutages->where('followup_status', FollowupStatus::PendienteContacto->value)->count(),
-                'en_gestion' => $enGestion,
-                'recaida_gestion' => $reopenedManaging->count(),
-                'recuperados_hoy' => $recoveredToday,
-                'pending_reviews' => $pendingReviews,
-                'recuperados_total' => $recoveredTotal,
+                'incidencias_activas' => $outageNav['activas'],
+                'pendientes_contacto' => $outageNav['pendientes'],
+                'en_gestion' => (int) $counts->en_gestion,
+                'recaida_gestion' => $outageNav['recaidas'],
+                'recuperados_hoy' => (int) $counts->recovered_today,
+                'pending_reviews' => (int) $counts->pending_reviews,
+                'recuperados_total' => (int) $counts->recovered_total,
                 'concentraciones' => $concentrationCount,
-                'contactos_pendientes_match' => School::query()->where('contact_match_status', ContactMatchStatus::Pending)->count(),
+                'contactos_pendientes_match' => (int) $counts->contacts_pending,
             ],
             'nav' => [
-                'caidas_totales' => $allActive->count(),
-                'caidas_activas' => $newOutages->count(),
-                'pendientes_contacto' => $newOutages->where('followup_status', FollowupStatus::PendienteContacto->value)->count(),
-                'en_gestion' => $enGestion,
-                'recaida_gestion' => $reopenedManaging->count(),
+                'caidas_totales' => $outageNav['totales'],
+                'caidas_activas' => $outageNav['activas'],
+                'pendientes_contacto' => $outageNav['pendientes'],
+                'en_gestion' => (int) $counts->en_gestion,
+                'recaida_gestion' => $outageNav['recaidas'],
                 'concentraciones' => $concentrationCount,
-                'recuperados' => $recoveredToday,
-                'pending_reviews' => $pendingReviews,
-                'tracking_abiertos' => $trackingAbiertos,
+                'recuperados' => (int) $counts->recovered_today,
+                'pending_reviews' => (int) $counts->pending_reviews,
+                'tracking_abiertos' => (int) $counts->tracking_abiertos,
             ],
-            'active_incidents_preview' => $activePreview,
+            'active_incidents_preview' => [],
             'oldest_incidents_preview' => [],
-            'concentrations' => $concentrations,
+            'concentrations' => [],
             'recent_recoveries' => [],
             'sync' => [
                 'prtg' => $this->lastSyncRun('PRTG'),
             ],
         ];
+    }
+
+    /**
+     * Conteos del menú sin armar cada fila de la tabla.
+     *
+     * @return array{totales: int, activas: int, pendientes: int, recaidas: int}
+     */
+    public function outageNavCounts(): array
+    {
+        $row = DB::selectOne(
+            "SELECT
+                COUNT(*)::int AS totales,
+                COUNT(*) FILTER (WHERE NOT reopened_from_management)::int AS activas,
+                COUNT(*) FILTER (WHERE NOT reopened_from_management AND followup_status = ?)::int AS pendientes,
+                COUNT(*) FILTER (WHERE reopened_from_management)::int AS recaidas
+             FROM (
+                SELECT DISTINCT ON (network_assignment_id)
+                    reopened_from_management,
+                    followup_status
+                FROM incidents
+                WHERE recovered_at IS NULL
+                  AND (
+                    detection_source = ?
+                    OR EXISTS (
+                        SELECT 1 FROM prtg_sensors s
+                        WHERE s.id = incidents.prtg_sensor_id
+                          AND s.normalized_status = ?
+                    )
+                  )
+                ORDER BY network_assignment_id, started_at DESC NULLS LAST, id DESC
+             ) t",
+            [
+                FollowupStatus::PendienteContacto->value,
+                Incident::DETECTION_MANUAL_PARTIAL,
+                MonitoringStatus::Caido->value,
+            ]
+        );
+
+        return [
+            'totales' => (int) ($row->totales ?? 0),
+            'activas' => (int) ($row->activas ?? 0),
+            'pendientes' => (int) ($row->pendientes ?? 0),
+            'recaidas' => (int) ($row->recaidas ?? 0),
+        ];
+    }
+
+    public function concentrationCount(): int
+    {
+        $zones = [];
+        $incidents = Incident::query()->active()->with(['school', 'networkAssignment'])->get();
+        foreach ($incidents as $incident) {
+            $location = PrtgOperationalLocation::resolve($incident->networkAssignment, $incident->school);
+            $key = mb_strtoupper((string) ($location['province'] ?? 'SIN PROVINCIA'))
+                .'|'.mb_strtoupper((string) ($location['district'] ?? 'SIN DISTRITO'));
+            $zones[$key] = ($zones[$key] ?? 0) + 1;
+        }
+
+        return count(array_filter($zones, fn (int $n) => $n >= 2));
     }
 
     /**

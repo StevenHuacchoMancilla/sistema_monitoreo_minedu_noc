@@ -9,11 +9,15 @@ use App\Enums\CidStatus;
 use App\Enums\MonitoringStatus;
 use App\Enums\SyncIssueSeverity;
 use App\Enums\SyncRunStatus;
+use App\Models\Incident;
 use App\Models\NetworkAssignment;
 use App\Models\PrtgEvent;
 use App\Models\PrtgSensor;
 use App\Models\SyncIssue;
 use App\Models\SyncRun;
+use App\Support\OperationalTime;
+use Carbon\CarbonInterface;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Log;
 use Throwable;
 
@@ -23,6 +27,12 @@ class PrtgSyncService
         private readonly PrtgService $prtg,
         private readonly IncidentService $incidentService,
     ) {}
+
+    /** @var Collection<string, PrtgSensor>|null */
+    private ?Collection $sensorIndex = null;
+
+    /** @var Collection<string, Incident>|null */
+    private ?Collection $openIncidents = null;
 
     /**
      * @return array<string, mixed>
@@ -65,6 +75,9 @@ class PrtgSyncService
                 $this->issue($run, SyncIssueSeverity::Error, $code, null, null, $exception->getMessage(), []);
 
                 throw $exception;
+            } finally {
+                $this->sensorIndex = null;
+                $this->openIncidents = null;
             }
 
             $fresh = $run->fresh();
@@ -487,6 +500,14 @@ class PrtgSyncService
         $sensorsByDevice = $discovered['sensors_by_device'];
         $locationsByDevice = $discovered['locations_by_device'];
 
+        $this->sensorIndex = PrtgSensor::query()->get()->keyBy(
+            fn (PrtgSensor $sensor) => (string) $sensor->prtg_sensor_id
+        );
+        $this->openIncidents = Incident::query()
+            ->whereNull('recovered_at')
+            ->get()
+            ->keyBy(fn (Incident $incident) => $incident->network_assignment_id.'|'.$incident->prtg_sensor_id);
+
         foreach ($discovered['devices_by_cid'] as $cid => $candidates) {
             try {
                 $device = $this->resolveDevice($cid, $candidates, $assignments->get($cid), $run);
@@ -520,29 +541,32 @@ class PrtgSyncService
                 ];
 
                 // Ubicación operativa PRTG → network_assignments (no toca schools Excel/admin).
-                if ($this->persistAssignmentPrtgLocation($assignment, $location)) {
+                $locationChanged = $this->persistAssignmentPrtgLocation($assignment, $location);
+                if ($locationChanged) {
                     $summary['location_updated']++;
                 }
 
                 // Mismatch informativo: admin Excel (schools) vs jerarquía PRTG.
                 if ($this->locationMismatch($assignment, $location)) {
                     $summary['location_mismatches']++;
-                    $this->issue(
-                        $run,
-                        SyncIssueSeverity::Warning,
-                        'PRTG_LOCATION_MISMATCH',
-                        $cid,
-                        $assignment->school?->codigo_local,
-                        'Provincia/distrito admin (Excel) difiere de la jerarquía PRTG. Operativo usa PRTG.',
-                        [
-                            'school_provincia' => $assignment->school?->provincia,
-                            'school_distrito' => $assignment->school?->distrito,
-                            'prtg_province' => $location['province'],
-                            'prtg_district' => $location['district'],
-                            'assignment_prtg_province' => $assignment->prtg_province,
-                            'assignment_prtg_district' => $assignment->prtg_district,
-                        ]
-                    );
+                    if ($locationChanged) {
+                        $this->issue(
+                            $run,
+                            SyncIssueSeverity::Warning,
+                            'PRTG_LOCATION_MISMATCH',
+                            $cid,
+                            $assignment->school?->codigo_local,
+                            'Provincia/distrito admin (Excel) difiere de la jerarquía PRTG. Operativo usa PRTG.',
+                            [
+                                'school_provincia' => $assignment->school?->provincia,
+                                'school_distrito' => $assignment->school?->distrito,
+                                'prtg_province' => $location['province'],
+                                'prtg_district' => $location['district'],
+                                'assignment_prtg_province' => $assignment->prtg_province,
+                                'assignment_prtg_district' => $assignment->prtg_district,
+                            ]
+                        );
+                    }
                 }
 
                 $deviceSensors = $sensorsByDevice[$objid] ?? [];
@@ -552,8 +576,7 @@ class PrtgSyncService
                 foreach ($deviceSensors as $sensorRow) {
                     $sensorId = (string) ($sensorRow['objid'] ?? '');
                     if ($sensorId !== '') {
-                        $existing = PrtgSensor::query()->where('prtg_sensor_id', $sensorId)->first();
-                        $previousBySensor[$sensorId] = $existing?->normalized_status;
+                        $previousBySensor[$sensorId] = $this->sensorIndex?->get($sensorId)?->normalized_status;
                     }
                     $result = $this->upsertSensor($assignment->id, $device, $sensorRow, $root, $location);
                     $summary['created_count'] += $result['created'];
@@ -561,9 +584,7 @@ class PrtgSyncService
                 }
 
                 if ($ping !== null) {
-                    $sensorModel = PrtgSensor::query()
-                        ->where('prtg_sensor_id', (string) $ping['objid'])
-                        ->first();
+                    $sensorModel = $this->sensorIndex?->get((string) $ping['objid']);
 
                     if ($sensorModel) {
                         $previous = $previousBySensor[(string) $ping['objid']] ?? null;
@@ -1003,18 +1024,39 @@ class PrtgSyncService
             ],
         ];
 
-        $existing = PrtgSensor::query()->where('prtg_sensor_id', (string) $sensorRow['objid'])->first();
+        $sensorId = (string) ($sensorRow['objid'] ?? '');
+        $existing = $sensorId !== '' ? $this->sensorIndex?->get($sensorId) : null;
         if ($existing) {
+            if (! $this->sensorNeedsWrite($existing, $statusRaw, $sensorRow)) {
+                return ['created' => 0, 'updated' => 0];
+            }
             $existing->fill($payload)->save();
 
             return ['created' => 0, 'updated' => 1];
         }
 
-        PrtgSensor::query()->create(array_merge($payload, [
-            'prtg_sensor_id' => (string) $sensorRow['objid'],
+        $created = PrtgSensor::query()->create(array_merge($payload, [
+            'prtg_sensor_id' => $sensorId,
         ]));
+        if ($sensorId !== '') {
+            $this->sensorIndex?->put($sensorId, $created);
+        }
 
         return ['created' => 1, 'updated' => 0];
+    }
+
+    /**
+     * El lastvalue del Ping cambia en cada lectura. Solo persistimos estado o el inicio de caída.
+     *
+     * @param  array<string, mixed>  $sensorRow
+     */
+    private function sensorNeedsWrite(PrtgSensor $existing, ?int $statusRaw, array $sensorRow): bool
+    {
+        if ((int) $existing->status_raw !== (int) $statusRaw) {
+            return true;
+        }
+
+        return (string) ($existing->down_since ?? '') !== (string) ($sensorRow['downtimesince'] ?? '');
     }
 
     /**
@@ -1052,7 +1094,13 @@ class PrtgSyncService
 
         if ($previous === null || $previous === $current) {
             if ($current === MonitoringStatus::Caido) {
-                $this->incidentService->ensureOpen($assignment, $sensor, $stateSince, $onAnomaly);
+                $key = $assignment->id.'|'.$sensor->id;
+                $open = $this->openIncidents?->get($key);
+                if ($open instanceof Incident && $this->downStartUnchanged($open, $stateSince)) {
+                    return;
+                }
+                $incident = $this->incidentService->ensureOpen($assignment, $sensor, $stateSince, $onAnomaly);
+                $this->openIncidents?->put($assignment->id.'|'.$incident->prtg_sensor_id, $incident);
             }
 
             return;
@@ -1075,6 +1123,17 @@ class PrtgSyncService
         if ($sensor->name === 'Ping' || strcasecmp((string) $sensor->name, 'Ping') === 0) {
             $this->incidentService->applyPingTransition($assignment, $sensor, $previous, $current, $stateSince, $onAnomaly);
         }
+    }
+
+    private function downStartUnchanged(Incident $open, ?CarbonInterface $downSince): bool
+    {
+        if ($open->isManualPartial() || $downSince === null || $open->prtg_down_started_at === null) {
+            return false;
+        }
+
+        $incoming = OperationalTime::toStorage($downSince);
+
+        return abs($open->prtg_down_started_at->getTimestamp() - $incoming->getTimestamp()) < 90;
     }
 
     /**

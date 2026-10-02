@@ -33,8 +33,6 @@ class PrtgDashboardService
             $dbOnline = false;
         }
 
-        app(\App\Domain\Incidents\Services\IncidentService::class)->closeOperativeIncidents();
-
         $totalSchools = \App\Models\School::query()->where('active', true)->count();
         $validCid = NetworkAssignment::query()
             ->where('is_active', true)
@@ -55,13 +53,11 @@ class PrtgDashboardService
         $withPing = \App\Domain\Monitoring\PRTG\Services\PrtgSensorQuery::monitoredAssignmentCount();
         $withoutPrtg = max(0, $eligible - $withPing);
 
-        $activeOutages = $this->dashboard->activeOutages();
-        $newOutages = $activeOutages->reject(fn (array $row) => ! empty($row['reopened_from_management']));
-        $reopenedManaging = $activeOutages->filter(fn (array $row) => ! empty($row['reopened_from_management']));
-        $activeIncidents = $newOutages->count();
-        $pendingContact = $newOutages->where('followup_status', FollowupStatus::PendienteContacto->value)->count();
+        $outageNav = $this->dashboard->outageNavCounts();
+        $activeIncidents = $outageNav['activas'];
+        $pendingContact = $outageNav['pendientes'];
         $enGestion = Incident::query()->active()->whereIn('followup_status', FollowupStatus::managingValues())->count();
-        $recaidaGestion = $reopenedManaging->count();
+        $recaidaGestion = $outageNav['recaidas'];
         $recoveredToday = Incident::query()
             ->whereNotNull('recovered_at')
             ->whereBetween('recovered_at', [\App\Support\OperationalTime::dayStart(), \App\Support\OperationalTime::dayEnd()])
@@ -77,7 +73,7 @@ class PrtgDashboardService
             })
             ->count();
         $recoveredTotal = Incident::query()->whereNotNull('recovered_at')->count();
-        $concentrationCount = count($this->dashboard->concentrations());
+        $concentrationCount = $this->dashboard->concentrationCount();
 
         $monitored = $withPing;
         $monitoredBase = max(1, $monitored);
@@ -190,7 +186,7 @@ class PrtgDashboardService
                 $sensorInventory
             ),
             'nav' => [
-                'caidas_totales' => $activeOutages->count(),
+                'caidas_totales' => $outageNav['totales'],
                 'caidas_activas' => $activeIncidents,
                 'pendientes_contacto' => $pendingContact,
                 'en_gestion' => $enGestion,
