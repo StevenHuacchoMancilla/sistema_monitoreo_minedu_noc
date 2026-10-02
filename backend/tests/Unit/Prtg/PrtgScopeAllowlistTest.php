@@ -263,6 +263,25 @@ class PrtgScopeAllowlistTest extends TestCase
         $this->assertSame(1, $result['excluded_outside_scope']);
     }
 
+    public function test_root_group_is_found_when_probe_was_renamed(): void
+    {
+        $service = new class extends PrtgService
+        {
+            public function fetchTable(string $content, array $query): array
+            {
+                return [
+                    ['objid' => 6495, 'group' => 'Operadores Global Fiber página inicial', 'probe' => 'Sonda de clúster', 'parentid' => 2],
+                    ['objid' => 1, 'group' => 'Sonda local', 'probe' => 'Sonda local', 'parentid' => 0],
+                ];
+            }
+        };
+
+        $root = $service->findAllowedRootGroup();
+
+        $this->assertSame(6495, $root['objid']);
+        $this->assertSame('Sonda de clúster', $root['probe']);
+    }
+
     public function test_case8_missing_root_throws_configuration_error(): void
     {
         $this->expectException(\RuntimeException::class);

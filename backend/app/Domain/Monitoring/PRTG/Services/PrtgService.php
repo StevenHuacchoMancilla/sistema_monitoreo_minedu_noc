@@ -3,6 +3,7 @@
 namespace App\Domain\Monitoring\PRTG\Services;
 
 use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\Log;
 use RuntimeException;
 
 class PrtgService
@@ -37,7 +38,9 @@ class PrtgService
     }
 
     /**
-     * Localiza el root allowlist: probe + group exactos.
+     * Localiza el root allowlist. Prefiere probe + grupo exactos.
+     * Si el grupo se movió de sonda (p. ej. Sonda local → Sonda de clúster)
+     * y el nombre es único, lo usa igual para no dejar de leer las caídas.
      *
      * @return array{objid: int, name: string, probe: string, parentid: int|null}
      */
@@ -51,23 +54,52 @@ class PrtgService
             'count' => (int) config('prtg.table_count', 10000),
         ]);
 
+        $sameName = [];
         foreach ($groups as $group) {
             $probe = (string) ($group['probe'] ?? '');
             $name = (string) ($group['group'] ?? '');
-            if ($probe === $allowedProbe && $name === $allowedRoot) {
-                return [
-                    'objid' => (int) ($group['objid'] ?? 0),
-                    'name' => $name,
-                    'probe' => $probe,
-                    'parentid' => isset($group['parentid']) ? (int) $group['parentid'] : null,
-                ];
+            if ($name !== $allowedRoot) {
+                continue;
             }
+            if ($probe === $allowedProbe) {
+                return $this->rootPayload($group);
+            }
+            $sameName[] = $group;
         }
 
+        if (count($sameName) === 1) {
+            $group = $sameName[0];
+            Log::warning('[PRTG] Root group found on a different probe', [
+                'group' => $allowedRoot,
+                'configured_probe' => $allowedProbe,
+                'actual_probe' => (string) ($group['probe'] ?? ''),
+            ]);
+
+            return $this->rootPayload($group);
+        }
+
+        $hint = $sameName === []
+            ? 'No hay ningún grupo con ese nombre.'
+            : 'Hay varios grupos con ese nombre; configura PRTG_ALLOWED_PROBE.';
+
         throw new RuntimeException(
-            "PRTG_ALLOWED_ROOT_NOT_FOUND: no se encontró [{$allowedRoot}] bajo probe [{$allowedProbe}]. ".
-            'No se consultará Sonda local completa ni el scope anterior.'
+            "PRTG_ALLOWED_ROOT_NOT_FOUND: no se encontró [{$allowedRoot}] bajo probe [{$allowedProbe}]. {$hint} ".
+            'No se consultará la sonda completa ni el scope anterior.'
         );
+    }
+
+    /**
+     * @param  array<string, mixed>  $group
+     * @return array{objid: int, name: string, probe: string, parentid: int|null}
+     */
+    private function rootPayload(array $group): array
+    {
+        return [
+            'objid' => (int) ($group['objid'] ?? 0),
+            'name' => (string) ($group['group'] ?? ''),
+            'probe' => (string) ($group['probe'] ?? ''),
+            'parentid' => isset($group['parentid']) ? (int) $group['parentid'] : null,
+        ];
     }
 
     /**

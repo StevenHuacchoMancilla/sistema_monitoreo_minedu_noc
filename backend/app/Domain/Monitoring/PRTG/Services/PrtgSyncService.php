@@ -137,7 +137,7 @@ class PrtgSyncService
         ]);
         $sensors = $this->prtg->fetchTable('sensors', [
             'id' => $root['objid'],
-            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,uptimesince,lastup,type,parentid,message',
+            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,downtimesince_raw,uptimesince,uptimesince_raw,lastup,type,parentid,message',
             'count' => $tableCount,
         ]);
 
@@ -238,7 +238,7 @@ class PrtgSyncService
         ]);
         $sensors = $this->prtg->fetchTable('sensors', [
             'id' => $root['objid'],
-            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,uptimesince,lastup,type,parentid,message',
+            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,downtimesince_raw,uptimesince,uptimesince_raw,lastup,type,parentid,message',
             'count' => $tableCount,
         ]);
 
@@ -449,7 +449,7 @@ class PrtgSyncService
         ]);
         $sensors = $this->prtg->fetchTable('sensors', [
             'id' => $root['objid'],
-            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,uptimesince,lastup,type,parentid,message',
+            'columns' => 'objid,sensor,device,status,status_raw,lastvalue,lastcheck,lastcheck_raw,downtimesince,downtimesince_raw,uptimesince,uptimesince_raw,lastup,type,parentid,message',
             'count' => $tableCount,
         ]);
 
