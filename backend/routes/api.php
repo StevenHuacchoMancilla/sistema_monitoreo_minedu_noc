@@ -38,6 +38,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
     Route::get('/dashboard/outages', [DashboardController::class, 'outages']);
     Route::get('/dashboard/concentrations', [DashboardController::class, 'concentrations']);
+    Route::get('/dashboard/concentrations/zone', [DashboardController::class, 'concentrationZone']);
     Route::get('/dashboard/school-history', [DashboardController::class, 'schoolHistory']);
 
     Route::get('/prtg/locations/provinces', [PrtgLocationController::class, 'provinces']);

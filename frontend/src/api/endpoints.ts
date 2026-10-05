@@ -1,6 +1,7 @@
 import { apiGet, apiPost, apiPut, API_URL } from './client'
 import type {
   Concentration,
+  ConcentrationZone,
   DashboardSummary,
   IncidentDetail,
   IncidentGestionPayload,
@@ -36,6 +37,10 @@ export const endpoints = {
   outages: (q = '') =>
     apiGet<{ data: OutageRow[] }>(`/dashboard/outages${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   concentrations: () => apiGet<{ data: Concentration[] }>('/dashboard/concentrations'),
+  concentrationZone: (provincia: string, distrito: string) =>
+    apiGet<ConcentrationZone>(
+      `/dashboard/concentrations/zone${toQuery({ provincia, distrito })}`,
+    ),
   schools: (params: Record<string, string | undefined | null> = {}) =>
     apiGet<SchoolListResponse>(`/schools${toQuery(params)}`),
   schoolDetail: (id: number) => apiGet<SchoolDetail>(`/schools/${id}`),

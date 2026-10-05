@@ -34,6 +34,19 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function concentrationZone(Request $request): JsonResponse
+    {
+        $provincia = trim($request->string('provincia')->toString());
+        $distrito = trim($request->string('distrito')->toString());
+        if ($provincia === '' || $distrito === '' || strlen($provincia) > 120 || strlen($distrito) > 120) {
+            return response()->json([
+                'message' => 'Indica la provincia y el distrito de la zona PRTG.',
+            ], 422);
+        }
+
+        return response()->json($this->dashboard->concentrationZone($provincia, $distrito));
+    }
+
     public function schoolHistory(Request $request): JsonResponse
     {
         return response()->json([

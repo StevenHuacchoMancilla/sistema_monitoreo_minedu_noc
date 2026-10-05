@@ -1,6 +1,6 @@
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { endpoints } from '../../../api/endpoints'
-import type { Concentration, DashboardSummary, OutageRow } from '../../../types/api'
+import type { Concentration, ConcentrationZone, DashboardSummary, OutageRow } from '../../../types/api'
 
 const SUMMARY_KEY = ['dashboard', 'summary'] as const
 
@@ -25,6 +25,15 @@ export function useConcentrations() {
   return useQuery<{ data: Concentration[] }>({
     queryKey: ['dashboard', 'concentrations'],
     queryFn: endpoints.concentrations,
+    refetchInterval: 60_000,
+  })
+}
+
+export function useConcentrationZone(provincia: string, distrito: string) {
+  return useQuery<ConcentrationZone>({
+    queryKey: ['dashboard', 'concentrations', 'zone', provincia, distrito],
+    queryFn: () => endpoints.concentrationZone(provincia, distrito),
+    enabled: provincia !== '' && distrito !== '',
     refetchInterval: 60_000,
   })
 }

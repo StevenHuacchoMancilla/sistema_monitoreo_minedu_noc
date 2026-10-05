@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { PrtgDashboardPage } from '../features/dashboard-prtg/pages/PrtgDashboardPage'
 import { ActiveIncidentsPage } from '../features/incidents/pages/ActiveIncidentsPage'
 import { ConcentrationsPage } from '../features/incidents/pages/ConcentrationsPage'
+import { ConcentrationZonePage } from '../features/incidents/pages/ConcentrationZonePage'
 import { SchoolHistoryIndexPage } from '../features/history/pages/SchoolHistoryIndexPage'
 import { SchoolHistoryDetailPage } from '../features/history/pages/SchoolHistoryDetailPage'
 import { IncidentCaseFilePage } from '../features/history/pages/IncidentCaseFilePage'
@@ -112,6 +113,7 @@ export function AppRouter() {
               }
             />
             <Route path="/concentrations" element={<ConcentrationsPage />} />
+            <Route path="/concentrations/zone" element={<ConcentrationZonePage />} />
           </Route>
 
           <Route element={<RequirePermission permission={P.recoveriesView} />}>

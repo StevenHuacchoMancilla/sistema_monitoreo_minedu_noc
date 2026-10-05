@@ -147,7 +147,38 @@ export type Concentration = {
   sin_monitoreo?: number
   porcentaje_caidos?: number
   nodo_pop?: string | null
+  tecnologias_caidas?: Array<{ tecnologia: string; caidos: number }>
   oldest_started_at?: string | null
+}
+
+export type ConcentrationZoneSchool = {
+  school_id: number | null
+  assignment_id: number
+  incident_id: number | null
+  local_educativo: string | null
+  codigo_local: string | null
+  cid: string | null
+  tecnologia: string | null
+  nodo_pop: string | null
+  estado: string
+  down_started_at: string | null
+  followup_status: string | null
+}
+
+export type ConcentrationZone = {
+  zone: {
+    provincia: string
+    distrito: string
+    label: string
+    location_source?: string
+    total: number
+    caidos: number
+    parciales: number
+    operativos: number
+    sin_monitoreo: number
+    tecnologias: Array<{ tecnologia: string; total: number; caidos: number }>
+  }
+  data: ConcentrationZoneSchool[]
 }
 
 export type SchoolDetail = {

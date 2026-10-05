@@ -331,11 +331,14 @@ class DashboardService
                     'school_ids' => [],
                     'assignment_ids' => [],
                     'nodos' => [],
+                    'tecnologias' => [],
                     'oldest_started_at' => null,
                 ];
             }
 
             $zones[$key]['caidos']++;
+            $tech = $this->technologyLabel($incident->networkAssignment?->tecnologia_acceso);
+            $zones[$key]['tecnologias'][$tech] = ($zones[$key]['tecnologias'][$tech] ?? 0) + 1;
             if ($incident->school_id) {
                 $zones[$key]['school_ids'][$incident->school_id] = true;
             }
@@ -346,7 +349,7 @@ class DashboardService
             if ($nodo !== '') {
                 $zones[$key]['nodos'][$nodo] = true;
             }
-            $started = $incident->started_at;
+            $started = $incident->prtg_down_started_at ?? $incident->started_at;
             if ($started !== null) {
                 $current = $zones[$key]['oldest_started_at'];
                 if ($current === null || $started->lt($current)) {
@@ -387,6 +390,12 @@ class DashboardService
             $nodos = array_keys($zone['nodos']);
             sort($nodos);
 
+            $tecnologias = [];
+            foreach ($zone['tecnologias'] as $nombre => $cantidad) {
+                $tecnologias[] = ['tecnologia' => $nombre, 'caidos' => (int) $cantidad];
+            }
+            usort($tecnologias, fn (array $a, array $b) => $b['caidos'] <=> $a['caidos']);
+
             $out[] = [
                 'dimension' => 'distrito',
                 'label' => $zone['label'],
@@ -401,6 +410,7 @@ class DashboardService
                 'sin_monitoreo' => $sinMonitoreo,
                 'porcentaje_caidos' => $pct,
                 'nodo_pop' => $nodos !== [] ? implode(', ', $nodos) : '—',
+                'tecnologias_caidas' => $tecnologias,
                 'oldest_started_at' => $zone['oldest_started_at']?->toIso8601String(),
                 'nota' => 'Posible concentración operativa PRTG (no implica causa confirmada).',
             ];
@@ -409,6 +419,160 @@ class DashboardService
         usort($out, fn ($a, $b) => $b['caidos'] <=> $a['caidos']);
 
         return array_values($out);
+    }
+
+    /**
+     * Colegios de una zona PRTG (provincia > distrito de la rama monitoreada).
+     *
+     * @return array{zone: array<string, mixed>, data: array<int, array<string, mixed>>}
+     */
+    public function concentrationZone(string $provincia, string $distrito): array
+    {
+        $provincia = trim($provincia);
+        $distrito = trim($distrito);
+
+        $query = NetworkAssignment::query()
+            ->where('is_active', true)
+            ->where('monitoring_eligible', true)
+            ->where('cid_status', CidStatus::Valid);
+        $this->constrainAssignmentsByPrtgZone($query, $provincia, $distrito);
+
+        $assignments = $query
+            ->with([
+                'school:id,local_educativo,codigo_local',
+                'sensors' => fn ($sensors) => $sensors->whereRaw("LOWER(name) = 'ping'"),
+            ])
+            ->get();
+
+        if ($assignments->isEmpty()) {
+            return [
+                'zone' => [
+                    'provincia' => $provincia,
+                    'distrito' => $distrito,
+                    'label' => $provincia.' > '.$distrito,
+                    'location_source' => 'prtg',
+                    'total' => 0,
+                    'caidos' => 0,
+                    'parciales' => 0,
+                    'operativos' => 0,
+                    'sin_monitoreo' => 0,
+                    'tecnologias' => [],
+                ],
+                'data' => [],
+            ];
+        }
+
+        $incidents = Incident::query()
+            ->active()
+            ->whereIn('network_assignment_id', $assignments->pluck('id'))
+            ->orderByDesc('id')
+            ->get()
+            ->unique('network_assignment_id')
+            ->keyBy('network_assignment_id');
+
+        $schools = [];
+        $techTotals = [];
+        $techDowns = [];
+
+        foreach ($assignments as $assignment) {
+            $school = $assignment->school;
+            $ping = $assignment->sensors->first();
+            $incident = $incidents->get($assignment->id);
+            $status = $ping?->normalized_status;
+            $manual = $incident?->isManualPartial() ?? false;
+
+            if ($status === MonitoringStatus::Caido) {
+                $estado = MonitoringStatus::Caido->value;
+            } elseif ($manual) {
+                $estado = MonitoringStatus::Parcial->value;
+            } elseif ($status === MonitoringStatus::Operativo) {
+                $estado = MonitoringStatus::Operativo->value;
+            } elseif ($ping === null) {
+                $estado = 'SIN_MONITOREO';
+            } else {
+                $estado = $status?->value ?? 'SIN_MONITOREO';
+            }
+
+            $down = in_array($estado, [MonitoringStatus::Caido->value, MonitoringStatus::Parcial->value], true);
+            $downAt = $down
+                ? ($incident?->prtg_down_started_at ?? $incident?->started_at)?->toIso8601String()
+                : null;
+
+            $tech = $this->technologyLabel($assignment->tecnologia_acceso);
+            $techTotals[$tech] = ($techTotals[$tech] ?? 0) + 1;
+            if ($down) {
+                $techDowns[$tech] = ($techDowns[$tech] ?? 0) + 1;
+            }
+
+            $schools[] = [
+                'school_id' => $school?->id,
+                'assignment_id' => $assignment->id,
+                'incident_id' => $down ? $incident?->id : null,
+                'local_educativo' => $school?->local_educativo,
+                'codigo_local' => $school?->codigo_local,
+                'cid' => $assignment->cid,
+                'tecnologia' => trim((string) $assignment->tecnologia_acceso) !== ''
+                    ? $assignment->tecnologia_acceso
+                    : null,
+                'nodo_pop' => $assignment->nodo_pop,
+                'estado' => $estado,
+                'down_started_at' => $downAt,
+                'followup_status' => $down ? $incident?->followup_status?->value : null,
+            ];
+        }
+
+        $rank = [
+            MonitoringStatus::Caido->value => 0,
+            MonitoringStatus::Parcial->value => 1,
+            MonitoringStatus::Operativo->value => 2,
+        ];
+        usort($schools, function (array $a, array $b) use ($rank): int {
+            $byStatus = ($rank[$a['estado']] ?? 3) <=> ($rank[$b['estado']] ?? 3);
+            if ($byStatus !== 0) {
+                return $byStatus;
+            }
+            $byTime = strcmp((string) ($a['down_started_at'] ?? ''), (string) ($b['down_started_at'] ?? ''));
+            if ($byTime !== 0) {
+                return $byTime;
+            }
+
+            return strcasecmp((string) ($a['local_educativo'] ?? ''), (string) ($b['local_educativo'] ?? ''));
+        });
+
+        $count = fn (string $estado): int => count(array_filter($schools, fn (array $row) => $row['estado'] === $estado));
+
+        $tecnologias = [];
+        foreach ($techTotals as $nombre => $total) {
+            $tecnologias[] = [
+                'tecnologia' => $nombre,
+                'total' => $total,
+                'caidos' => $techDowns[$nombre] ?? 0,
+            ];
+        }
+        usort($tecnologias, fn (array $a, array $b) => $b['caidos'] <=> $a['caidos'] ?: $b['total'] <=> $a['total']);
+
+        return [
+            'zone' => [
+                'provincia' => $provincia,
+                'distrito' => $distrito,
+                'label' => $provincia.' > '.$distrito,
+                'location_source' => 'prtg',
+                'total' => count($schools),
+                'caidos' => $count(MonitoringStatus::Caido->value),
+                'parciales' => $count(MonitoringStatus::Parcial->value),
+                'operativos' => $count(MonitoringStatus::Operativo->value),
+                'sin_monitoreo' => $count('SIN_MONITOREO'),
+                'tecnologias' => $tecnologias,
+            ],
+            'data' => $schools,
+        ];
+    }
+
+    private function technologyLabel(?string $raw): string
+    {
+        $value = trim((string) $raw);
+
+        return $value !== '' ? $value : 'Sin tecnología';
     }
 
     /**

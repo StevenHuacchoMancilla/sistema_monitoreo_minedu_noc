@@ -27,7 +27,7 @@ export function ConcentrationsPage() {
         <ConcentrationCards
           items={rows}
           title="Concentraciones zonales"
-          subtitle="Comparación entre colegios caídos, operativos y sin monitoreo por zona PRTG."
+          subtitle="Zonas de la rama PRTG con varios colegios caídos a la vez. Abre una zona para ver cada colegio, la hora de esta caída y si es P2P o GPON."
           action={
             <span className="rounded-full bg-[#1d1d1f] px-3 py-1 text-xs font-semibold tabular-nums text-white">
               {(summary.data?.nav?.concentraciones ?? rows.length).toLocaleString('es-PE')}
