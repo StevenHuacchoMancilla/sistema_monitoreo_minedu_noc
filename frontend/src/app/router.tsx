@@ -13,6 +13,7 @@ import { SchoolDetailPage } from '../features/schools/pages/SchoolDetailPage'
 import { SchoolsListPage } from '../features/schools/pages/SchoolsListPage'
 import { OperationalReportPage } from '../features/reports/pages/OperationalReportPage'
 import { GeneralReportPage } from '../features/reports/pages/GeneralReportPage'
+import { TicketeraPage } from '../features/ticketera/pages/TicketeraPage'
 import { TrackingListPage } from '../features/tracking/pages/TrackingListPage'
 import { TrackingDetailPage } from '../features/tracking/pages/TrackingDetailPage'
 import { TrackingReportPage } from '../features/tracking/pages/TrackingReportPage'
@@ -144,6 +145,7 @@ export function AppRouter() {
             <Route path="/reports" element={<Navigate to="/reports/operational" replace />} />
             <Route path="/reports/operational" element={<OperationalReportPage />} />
             <Route path="/reports/general" element={<GeneralReportPage />} />
+            <Route path="/reports/ticketera" element={<TicketeraPage />} />
           </Route>
 
           <Route element={<RequirePermission permission={P.adminView} />}>

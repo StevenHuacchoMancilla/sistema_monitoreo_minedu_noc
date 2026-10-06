@@ -15,6 +15,7 @@ use App\Http\Controllers\Api\V1\Reports\ReportController;
 use App\Http\Controllers\Api\V1\Schools\SchoolController;
 use App\Http\Controllers\Api\V1\System\HealthController;
 use App\Http\Controllers\Api\V1\System\SyncRunController;
+use App\Http\Controllers\Api\V1\Ticketera\TicketeraController;
 use App\Http\Controllers\Api\V1\Tracking\TrackingController;
 use App\Http\Controllers\Api\V1\Users\UserController;
 use Illuminate\Support\Facades\Route;
@@ -129,6 +130,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     Route::middleware('permission:'.PermissionCatalog::RECOVERIES_MANAGE)->group(function () {
         Route::post('/incidents/{incident}/recovery-review', [IncidentController::class, 'recoveryReview']);
+    });
+
+    Route::middleware('permission:'.PermissionCatalog::REPORTS_VIEW)->group(function () {
+        Route::get('/ticketera', TicketeraController::class);
     });
 
     Route::middleware('permission:'.PermissionCatalog::SYNC_RUN)->group(function () {
