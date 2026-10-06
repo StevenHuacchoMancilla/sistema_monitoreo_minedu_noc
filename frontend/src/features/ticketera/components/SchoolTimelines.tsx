@@ -1,16 +1,16 @@
+import { useQuery } from '@tanstack/react-query'
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { endpoints } from '../../../api/endpoints'
 import { SectionCard } from '../../../components/ui/Card'
+import { Button } from '../../../components/ui/Button'
 import { FormField, Input, Select } from '../../../components/ui/FormControls'
-import type { TicketeraRow } from '../types/ticketera'
+import type { TicketeraRow, TicketeraTimeline } from '../types/ticketera'
 
 const DAY = 86_400_000
-const EVENT_SLOT = 34
-const EVENT_BAR = 20
 const DURATION_SLOT = 78
 const DURATION_BAR = 60
 const PLOT_H = 248
 const DURATION_LABEL_H = 58
-const EVENT_LABEL_H = 72
 const GUTTER = 76
 const LOG_FLOOR = 15_000
 
@@ -94,13 +94,6 @@ function labelOf(row: TicketeraRow): string {
   return `${ticket} · fila ${row.row}`
 }
 
-function shortId(row: TicketeraRow): string {
-  const ticket = row.ticket.trim()
-  const piece = ticket.split('_').filter(Boolean).pop()
-  if (piece && piece.length <= 6) return piece
-  return String(row.row)
-}
-
 function durationOf(lane: Lane, nowMs: number): number {
   return Math.max(0, (lane.closeMs ?? nowMs) - lane.openMs)
 }
@@ -170,9 +163,8 @@ export function SchoolTimelines({
   const [focusRow, setFocusRow] = useState<number | null>(null)
   const [active, setActive] = useState<number | null>(null)
   const [shownIndex, setShownIndex] = useState<number | null>(null)
+  const [timeView, setTimeView] = useState<{ start: number; end: number } | null>(null)
   const durationScroll = useRef<HTMLDivElement>(null)
-  const eventScroll = useRef<HTMLDivElement>(null)
-  const scrolling = useRef(false)
 
   const nowMs = Number.isFinite(Date.parse(now)) ? Date.parse(now) : Date.now()
   const rangeStart = dayStart(from)
@@ -182,6 +174,7 @@ export function SchoolTimelines({
     setFocusRow(null)
     setActive(null)
     setShownIndex(null)
+    setTimeView(null)
   }, [cid, from, to])
 
   const schools = useMemo(() => {
@@ -278,14 +271,13 @@ export function SchoolTimelines({
     }
   }, [rows, cid, rangeStart, rangeEnd, nowMs])
 
-  function syncScroll(source: HTMLDivElement, target: HTMLDivElement | null, fromSlot: number, toSlot: number) {
-    if (!target || scrolling.current) return
-    scrolling.current = true
-    target.scrollLeft = (source.scrollLeft / fromSlot) * toSlot
-    requestAnimationFrame(() => {
-      scrolling.current = false
-    })
-  }
+  const timelineQuery = useQuery({
+    queryKey: ['ticketera-timeline', cid, from, to],
+    queryFn: () => endpoints.ticketeraTimeline(cid, from, to),
+    enabled: cid.trim() !== '' && /^\d{4}-\d{2}-\d{2}$/.test(from) && /^\d{4}-\d{2}-\d{2}$/.test(to),
+    staleTime: 60_000,
+    retry: 0,
+  })
 
   function selectLane(index: number) {
     const lane = model.lanes[index]
@@ -294,7 +286,6 @@ export function SchoolTimelines({
     setActive(index)
     setShownIndex(index)
     durationScroll.current?.scrollTo({ left: Math.max(0, index * DURATION_SLOT - 160), behavior: 'smooth' })
-    eventScroll.current?.scrollTo({ left: Math.max(0, index * EVENT_SLOT - 80), behavior: 'smooth' })
   }
 
   if (rangeStart == null || rangeEnd == null) return null
@@ -394,7 +385,7 @@ export function SchoolTimelines({
 
           <ChartShell
             title="Duración de cada incidencia"
-            note={`${model.lanes.length} columnas en minutos, escala logarítmica. Así una caída de 2 minutos se ve aunque otra lleve días abierta. En la barra está la duración h:mm:ss; debajo, la fila, la fecha y la hora de apertura.`}
+            note={`${model.lanes.length} columnas, de la apertura más antigua a la más reciente. La hora es el eje: 01:40 va antes que 02:12. Escala logarítmica en minutos. Al pasar el cursor se ve la hora de recuperación.`}
             legend={(
               <>
                 <Swatch color="#e11d48" label="Con cierre" />
@@ -407,11 +398,7 @@ export function SchoolTimelines({
             ) : (
               <div className="flex">
                 <AxisGutter ticks={ticks} format={formatMinutes} axis="Minutos" yOf={yOf} height={PLOT_H + DURATION_LABEL_H} />
-                <div
-                  ref={durationScroll}
-                  className="min-w-0 flex-1 overflow-x-auto"
-                  onScroll={(event) => syncScroll(event.currentTarget, eventScroll.current, DURATION_SLOT, EVENT_SLOT)}
-                >
+                <div ref={durationScroll} className="min-w-0 flex-1 overflow-x-auto">
                   <DurationPlot
                     lanes={model.lanes}
                     nowMs={nowMs}
@@ -427,48 +414,18 @@ export function SchoolTimelines({
             )}
           </ChartShell>
 
-          <ChartShell
-            title="Apertura y recuperación de cada incidencia"
-            note={`${model.lanes.length} aperturas en rojo y ${closes} cierres en verde. Cada incidencia ocupa su propia columna, así que ninguna queda tapada por otra.`}
-            legend={(
-              <>
-                <Swatch color="#f43f5e" label="Apertura · −1" />
-                <Swatch color="#10b981" label="Cierre registrado · +1" />
-                <Swatch color="#334155" label="Sin cierre" hollow />
-              </>
-            )}
-          >
-            <div className="mb-3 grid grid-cols-3 gap-2">
-              <MiniStat label="Aperturas" value={String(model.lanes.length)} tone="down" />
-              <MiniStat label="Cierres" value={String(closes)} tone="ok" />
-              <MiniStat label="Sin cierre" value={String(model.lanes.filter((lane) => lane.openEnded || (lane.closeMs != null && lane.closeMs > nowMs)).length)} />
-            </div>
-            {model.lanes.length === 0 ? (
-              <p className="px-3 py-8 text-center text-sm text-slate-500">Este colegio no tiene incidencias válidas dentro del rango.</p>
-            ) : (
-              <div className="flex">
-                <svg width={GUTTER} height={PLOT_H + EVENT_LABEL_H} className="sticky left-0 z-10 shrink-0 bg-white text-slate-400 dark:bg-slate-900" aria-hidden>
-                  <text x={GUTTER - 8} y={28} textAnchor="end" fontSize={11} fill="currentColor">+1</text>
-                  <text x={GUTTER - 8} y={PLOT_H / 2 + 4} textAnchor="end" fontSize={11} fill="currentColor">0</text>
-                  <text x={GUTTER - 8} y={PLOT_H - 16} textAnchor="end" fontSize={11} fill="currentColor">−1</text>
-                </svg>
-                <div
-                  ref={eventScroll}
-                  className="min-w-0 flex-1 overflow-x-auto"
-                  onScroll={(event) => syncScroll(event.currentTarget, durationScroll.current, EVENT_SLOT, DURATION_SLOT)}
-                >
-                  <EventPlot
-                    lanes={model.lanes}
-                    nowMs={nowMs}
-                    highlighted={highlighted}
-                    onEnter={preview}
-                    onLeave={() => setActive(null)}
-                    onSelect={selectLane}
-                  />
-                </div>
-              </div>
-            )}
-          </ChartShell>
+          <ActivityTimeline
+            lanes={model.lanes}
+            nowMs={nowMs}
+            rangeStart={rangeStart}
+            rangeEnd={rangeEnd}
+            timeline={timelineQuery.data}
+            loading={timelineQuery.isFetching}
+            failed={timelineQuery.isError}
+            view={timeView}
+            onView={setTimeView}
+            onLane={(index) => preview(index)}
+          />
 
           {shown ? (
             <IncidentCard lane={shown} nowMs={nowMs} cid={cid} schoolName={school.name} lanes={model.lanes} rangeStart={rangeStart} rangeEnd={rangeEnd} />
@@ -535,6 +492,11 @@ function DurationPlot({
             <rect x={x} y={baseline - barH} width={DURATION_BAR} height={barH} rx={4} fill={lane.openEnded ? 'url(#ticketera-bar-open)' : 'url(#ticketera-bar-closed)'} stroke={on ? '#818cf8' : 'transparent'} strokeWidth={2}>
               <title>{`${labelOf(lane.row)} · ${hms(duration)} · ${formatMinutes(duration)}`}</title>
             </rect>
+            {on ? (
+              <text x={index * DURATION_SLOT + DURATION_SLOT / 2} y={Math.max(12, baseline - barH - 14)} textAnchor="middle" fontSize={10} fontWeight={700} fill="#34d399">
+                {lane.closeMs != null && lane.closeMs <= nowMs ? `Recuperó ${shortTime(lane.closeMs)}` : 'Sin recuperación'}
+              </text>
+            ) : null}
             <text
               x={index * DURATION_SLOT + DURATION_SLOT / 2}
               y={labelInside ? baseline - barH / 2 + 4 : baseline - barH - 6}
@@ -545,63 +507,12 @@ function DurationPlot({
             >
               {hms(duration)}
             </text>
-            <text x={index * DURATION_SLOT + DURATION_SLOT / 2} y={baseline + 14} textAnchor="middle" fontSize={10} fontWeight={600} fill="currentColor">{`Fila ${lane.row.row}`}</text>
+            <text x={index * DURATION_SLOT + DURATION_SLOT / 2} y={baseline + 14} textAnchor="middle" fontSize={10} fontWeight={700} fill="currentColor">{shortTime(lane.openMs)}</text>
             <text x={index * DURATION_SLOT + DURATION_SLOT / 2} y={baseline + 28} textAnchor="middle" fontSize={9} fill="currentColor">{shortDate(lane.openMs)}</text>
-            <text x={index * DURATION_SLOT + DURATION_SLOT / 2} y={baseline + 40} textAnchor="middle" fontSize={9} fill="currentColor">{shortTime(lane.openMs)}</text>
+            <text x={index * DURATION_SLOT + DURATION_SLOT / 2} y={baseline + 40} textAnchor="middle" fontSize={9} fill="currentColor">{`Fila ${lane.row.row}`}</text>
           </g>
         )
       })}
-    </svg>
-  )
-}
-
-function EventPlot({
-  lanes,
-  nowMs,
-  highlighted,
-  onEnter,
-  onLeave,
-  onSelect,
-}: {
-  lanes: Lane[]
-  nowMs: number
-  highlighted: (index: number) => boolean
-  onEnter: (index: number) => void
-  onLeave: () => void
-  onSelect: (index: number) => void
-}) {
-  const width = Math.max(lanes.length * EVENT_SLOT, EVENT_SLOT)
-  const mid = PLOT_H / 2
-  const amp = mid - 28
-  const height = PLOT_H + EVENT_LABEL_H
-  return (
-    <svg width={width} height={height} role="img" aria-label="Apertura y cierre de cada incidencia" className="max-w-none text-slate-400">
-      {dayBands(lanes).map((band) => (
-        <rect key={band.key} x={band.from * EVENT_SLOT} y={0} width={(band.to - band.from) * EVENT_SLOT} height={height} fill={band.alt ? 'rgba(148,163,184,0.08)' : 'transparent'} />
-      ))}
-      <line x1={0} x2={width} y1={mid} y2={mid} stroke="currentColor" strokeOpacity={0.55} />
-      {lanes.map((lane, index) => {
-        const x = index * EVENT_SLOT + (EVENT_SLOT - EVENT_BAR) / 2
-        const closed = lane.closeMs != null && lane.closeMs <= nowMs
-        const on = highlighted(index)
-        return (
-          <g key={lane.row.row} className="cursor-pointer" onMouseEnter={() => onEnter(index)} onMouseLeave={onLeave} onClick={() => onSelect(index)}>
-            <rect x={index * EVENT_SLOT} y={0} width={EVENT_SLOT} height={height} fill="transparent" />
-            <rect x={x} y={mid - amp} width={EVENT_BAR} height={amp} rx={4} fill={closed ? '#10b981' : 'rgba(51,65,85,0.45)'} stroke={on ? '#818cf8' : 'transparent'} strokeWidth={2}>
-              <title>{closed ? `Cierre · ${labelOf(lane.row)} · ${clock(lane.closeMs as number)}` : `Sin cierre · ${labelOf(lane.row)}`}</title>
-            </rect>
-            <rect x={x} y={mid} width={EVENT_BAR} height={amp} rx={4} fill="#f43f5e" stroke={on ? '#818cf8' : 'transparent'} strokeWidth={2}>
-              <title>{`Apertura · ${labelOf(lane.row)} · ${clock(lane.openMs)}`}</title>
-            </rect>
-            <text x={index * EVENT_SLOT + EVENT_SLOT / 2} y={PLOT_H + 16} textAnchor="middle" fontSize={10} fill="currentColor">{shortId(lane.row)}</text>
-          </g>
-        )
-      })}
-      {dayBands(lanes).map((band) => (
-        <text key={`${band.key}-label`} x={((band.from + band.to) / 2) * EVENT_SLOT} y={PLOT_H + EVENT_LABEL_H - 8} textAnchor="middle" fontSize={11} fontWeight={600} fill="currentColor">
-          {band.label}
-        </text>
-      ))}
     </svg>
   )
 }
@@ -760,12 +671,206 @@ function IncidentCard({
   )
 }
 
-function MiniStat({ label, value, tone }: { label: string; value: string; tone?: 'ok' | 'down' }) {
-  const color = tone === 'ok' ? 'text-emerald-600 dark:text-emerald-300' : tone === 'down' ? 'text-rose-600 dark:text-rose-300' : 'text-slate-900 dark:text-slate-100'
+const MINUTE = 60_000
+
+type DownSpan = { start: number; end: number }
+type ActivitySpan = { kind: 'down' | 'up'; start: number; end: number; lanes: Lane[] }
+
+function clipDowns(items: DownSpan[], rangeStart: number, rangeEnd: number, nowMs: number): DownSpan[] {
+  const endCap = Math.min(rangeEnd, nowMs)
+  const clipped = items
+    .map((item) => ({ start: Math.max(rangeStart, item.start), end: Math.min(endCap, item.end) }))
+    .filter((item) => item.end - item.start >= MINUTE)
+    .sort((a, b) => a.start - b.start)
+  const merged: DownSpan[] = []
+  for (const item of clipped) {
+    const last = merged[merged.length - 1]
+    if (last && item.start <= last.end) last.end = Math.max(last.end, item.end)
+    else merged.push({ ...item })
+  }
+  return merged
+}
+
+function activitySpans(downs: DownSpan[], rangeStart: number, rangeEnd: number, nowMs: number, lanes: Lane[]): ActivitySpan[] {
+  const endCap = Math.min(rangeEnd, nowMs)
+  const spans: ActivitySpan[] = []
+  let cursor = rangeStart
+  for (const down of downs) {
+    if (down.start > cursor) spans.push({ kind: 'up', start: cursor, end: down.start, lanes: [] })
+    const matched = lanes.filter((lane) => {
+      const laneEnd = Math.min(lane.closeMs ?? nowMs, nowMs)
+      return laneEnd - lane.openMs >= MINUTE && lane.openMs < down.end && laneEnd > down.start
+    })
+    spans.push({ kind: 'down', start: down.start, end: down.end, lanes: matched })
+    cursor = down.end
+  }
+  if (cursor < endCap) spans.push({ kind: 'up', start: cursor, end: endCap, lanes: [] })
+  return spans.filter((span) => span.end > span.start)
+}
+
+function ActivityTimeline({
+  lanes,
+  nowMs,
+  rangeStart,
+  rangeEnd,
+  timeline,
+  loading,
+  failed,
+  view,
+  onView,
+  onLane,
+}: {
+  lanes: Lane[]
+  nowMs: number
+  rangeStart: number
+  rangeEnd: number
+  timeline: TicketeraTimeline | undefined
+  loading: boolean
+  failed: boolean
+  view: { start: number; end: number } | null
+  onView: (next: { start: number; end: number } | null) => void
+  onLane: (index: number) => void
+}) {
+  const [tip, setTip] = useState<string[] | null>(null)
+  const endCap = Math.min(rangeEnd, nowMs)
+  const pending = loading && !timeline
+  const usingPrtg = timeline?.source === 'prtg'
+  const downs = pending
+    ? []
+    : clipDowns(
+    usingPrtg
+      ? (timeline?.outages ?? []).map((outage) => ({
+          start: Date.parse(outage.start),
+          end: outage.end ? Date.parse(outage.end) : nowMs,
+        }))
+      : lanes.map((lane) => ({ start: lane.openMs, end: lane.closeMs ?? nowMs })),
+    rangeStart,
+    rangeEnd,
+    nowMs,
+  )
+  const spans = pending ? [] : activitySpans(downs, rangeStart, rangeEnd, nowMs, lanes)
+  const firstDown = spans.find((span) => span.kind === 'down')
+  const lastDown = [...spans].reverse().find((span) => span.kind === 'down')
+  const fitted = firstDown && lastDown
+    ? {
+        start: Math.max(rangeStart, firstDown.start - 30 * MINUTE),
+        end: Math.min(endCap, lastDown.end + 2 * 3_600_000),
+      }
+    : { start: rangeStart, end: endCap }
+  const window = view ?? fitted
+  const spanMs = Math.max(MINUTE, window.end - window.start)
+  const plot = Math.min(36_000, Math.max(1100, (spanMs / MINUTE) * 16))
+  const xOf = (ms: number) => ((ms - window.start) / spanMs) * plot
+  const height = 230
+  const mid = 108
+  const amp = 72
+  const downMs = spans.filter((span) => span.kind === 'down').reduce((sum, span) => sum + (span.end - span.start), 0)
+  const upMs = spans.filter((span) => span.kind === 'up').reduce((sum, span) => sum + (span.end - span.start), 0)
+  const matched = spans.filter((span) => span.kind === 'down' && span.lanes.length > 0).length
+  const sheetShort = lanes.filter((lane) => durationOf(lane, nowMs) < MINUTE).length
+  const step = spanMs <= 6 * 3_600_000 ? 30 * MINUTE : spanMs <= 36 * 3_600_000 ? 3_600_000 : spanMs <= 7 * DAY ? 6 * 3_600_000 : DAY
+  const ticks: number[] = []
+  for (let tick = Math.ceil(window.start / step) * step; tick < window.end; tick += step) ticks.push(tick)
+
+  function shift(fraction: number) {
+    const delta = spanMs * fraction
+    const start = Math.max(rangeStart, window.start + delta)
+    const end = Math.min(endCap, window.end + delta)
+    if (end - start < 30 * MINUTE) return
+    onView({ start, end })
+  }
+
   return (
-    <div className="rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950">
-      <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-500">{label}</p>
-      <p className={`text-lg font-bold tabular-nums ${color}`}>{value}</p>
-    </div>
+    <ChartShell
+      title="Tiempo caído y tiempo activo"
+      note={timeline?.message ?? (failed ? 'No se alcanzó el historial de PRTG. Esta línea usa la ticketera y omite caídas de menos de 1 minuto.' : 'El ancho es el tiempo real. El rojo corre desde la caída hasta la recuperación. El verde corre desde esa hora, mientras el servicio está activo, hasta la siguiente caída. No cuenta como caída lo que dura menos de 1 minuto.')}
+      legend={(
+        <>
+          <Swatch color="#f43f5e" label="Caído · −1" />
+          <Swatch color="#10b981" label="Activo · +1" />
+        </>
+      )}
+    >
+      <div className="mb-3 grid gap-2 sm:grid-cols-4">
+        <Metric label="Tiempo caído" value={formatMinutes(downMs)} tone="down" />
+        <Metric label="Tiempo activo" value={formatMinutes(upMs)} tone="ok" />
+        <Metric label="Caídas mayores a 1 min" value={String(downs.length)} />
+        <Metric label={usingPrtg ? 'Coinciden con la hoja' : 'Fuente'} value={usingPrtg ? String(matched) : 'Ticketera'} hint={usingPrtg ? `Sensor ${timeline?.sensor_name ?? 'Ping'}` : 'Sin historial PRTG'} />
+      </div>
+      <div className="mb-3 flex flex-wrap items-center gap-2">
+        <Button variant="secondary" onClick={() => shift(-0.6)}>Anterior</Button>
+        <Button variant="secondary" onClick={() => shift(0.6)}>Siguiente</Button>
+        <Button variant="secondary" onClick={() => onView(null)}>Ajustar a las caídas</Button>
+        <Button variant="secondary" onClick={() => onView({ start: rangeStart, end: endCap })}>Ver todo el periodo</Button>
+        <span className="text-xs text-slate-500">
+          {pending ? 'Leyendo el historial de PRTG desde antes del rango hasta ahora. ' : ''}
+          {usingPrtg ? `PRTG ignoró ${timeline?.ignored_under_minute ?? 0} caídas de menos de 1 minuto. ` : ''}
+          {sheetShort > 0 ? `La hoja tiene ${sheetShort} tickets de menos de 1 minuto y no se pintan como caída.` : ''}
+        </span>
+      </div>
+      <div className="flex">
+        <svg width={52} height={height} className="shrink-0 bg-white text-slate-400 dark:bg-slate-900" aria-hidden>
+          <text x={44} y={mid - amp + 16} textAnchor="end" fontSize={11} fill="currentColor">+1</text>
+          <text x={44} y={mid + 4} textAnchor="end" fontSize={11} fill="currentColor">0</text>
+          <text x={44} y={mid + amp - 8} textAnchor="end" fontSize={11} fill="currentColor">−1</text>
+        </svg>
+        <div className="min-w-0 flex-1 overflow-x-auto">
+          <svg width={plot + 24} height={height} role="img" aria-label="Línea de tiempo de caída y actividad" className="max-w-none text-slate-400">
+            <line x1={0} x2={plot} y1={mid} y2={mid} stroke="currentColor" strokeOpacity={0.45} />
+            {ticks.map((tick) => (
+              <g key={tick}>
+                <line x1={xOf(tick)} x2={xOf(tick)} y1={24} y2={mid + amp + 8} stroke="currentColor" strokeOpacity={0.12} />
+                <text x={xOf(tick)} y={height - 8} textAnchor="middle" fontSize={10} fill="currentColor">{`${shortDate(tick)} ${shortTime(tick).slice(0, 5)}`}</text>
+              </g>
+            ))}
+            {spans.map((span) => {
+              const start = Math.max(window.start, span.start)
+              const end = Math.min(window.end, span.end)
+              if (end <= start) return null
+              const x = xOf(start)
+              const width = Math.max(2, xOf(end) - x)
+              const down = span.kind === 'down'
+              const lane = span.lanes[0]
+              return (
+                <g
+                  key={`${span.kind}-${span.start}`}
+                  className="cursor-pointer"
+                  onMouseEnter={() => {
+                    const lines = [
+                      down ? 'Caída' : 'Servicio activo',
+                      `Desde ${clock(span.start)}`,
+                      down
+                        ? `Recuperó ${clock(span.end)} · duró ${hms(span.end - span.start)}`
+                        : `Activo hasta ${clock(span.end)} · ${hms(span.end - span.start)}`,
+                      lane ? `${labelOf(lane.row)} · ${lane.row.causa.trim() || 'Sin causa global'}` : down ? 'PRTG registró la caída y la hoja no tiene un ticket de más de 1 minuto en ese tramo.' : 'Periodo sin caída mayor a 1 minuto.',
+                    ]
+                    setTip(lines)
+                    if (lane) {
+                      const laneIndex = lanes.findIndex((item) => item.row.row === lane.row.row)
+                      if (laneIndex >= 0) onLane(laneIndex)
+                    }
+                  }}
+                  onMouseLeave={() => setTip(null)}
+                >
+                  <rect x={x} y={down ? mid : mid - amp} width={width} height={amp - 6} rx={4} fill={down ? '#f43f5e' : '#10b981'} opacity={0.95}>
+                    <title>{`${down ? 'Caída' : 'Activo'} · ${hms(span.end - span.start)}`}</title>
+                  </rect>
+                  {width > 54 ? (
+                    <text x={x + width / 2} y={down ? mid + 28 : mid - 28} textAnchor="middle" fontSize={10} fontWeight={700} fill="#fff">{hms(span.end - span.start)}</text>
+                  ) : null}
+                </g>
+              )
+            })}
+          </svg>
+        </div>
+      </div>
+      {tip ? (
+        <div className="mt-3 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
+          {tip.map((line) => <p key={line}>{line}</p>)}
+        </div>
+      ) : (
+        <p className="mt-3 text-xs text-slate-500">Pasa el cursor por una barra para ver la hora de caída, la hora de recuperación y el ticket de la hoja si coincide.</p>
+      )}
+    </ChartShell>
   )
 }

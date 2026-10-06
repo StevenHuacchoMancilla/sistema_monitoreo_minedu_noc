@@ -50,6 +50,22 @@ export type TicketeraPayload = {
   rows: TicketeraRow[]
 }
 
+export type TicketeraPrtgOutage = {
+  start: string
+  end: string | null
+  seconds: number
+}
+
+export type TicketeraTimeline = {
+  source: 'prtg' | 'sheet'
+  cid: string
+  sensor: string | null
+  sensor_name: string | null
+  ignored_under_minute: number
+  outages: TicketeraPrtgOutage[]
+  message: string | null
+}
+
 export type TicketeraView = 'summary' | 'tickets' | 'quality'
 
 export type TicketeraFilters = {

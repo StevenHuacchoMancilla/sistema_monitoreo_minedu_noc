@@ -134,6 +134,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     Route::middleware('permission:'.PermissionCatalog::REPORTS_VIEW)->group(function () {
         Route::get('/ticketera', TicketeraController::class);
+        Route::get('/ticketera/timeline', [TicketeraController::class, 'timeline']);
     });
 
     Route::middleware('permission:'.PermissionCatalog::SYNC_RUN)->group(function () {

@@ -15,7 +15,7 @@ import type {
   OperationalReportResponse,
 } from '../features/reports/types/operationalReport'
 import type { GeneralReportResponse } from '../features/reports/types/generalReport'
-import type { TicketeraPayload } from '../features/ticketera/types/ticketera'
+import type { TicketeraPayload, TicketeraTimeline } from '../features/ticketera/types/ticketera'
 import type {
   ContactPayload,
   NetworkAssignmentPayload,
@@ -104,6 +104,8 @@ export const endpoints = {
   generalReportXlsxUrl: (params: Record<string, string | undefined | null> = {}) =>
     `${API_URL}/reports/general.xlsx${toQuery(params)}`,
   ticketera: (fresh = false) => apiGet<TicketeraPayload>(`/ticketera${fresh ? '?fresh=1' : ''}`),
+  ticketeraTimeline: (cid: string, from: string, to: string) =>
+    apiGet<TicketeraTimeline>(`/ticketera/timeline${toQuery({ cid, from, to })}`),
   syncPrtg: () => apiPost<Record<string, unknown>>('/sync/prtg', undefined, { timeoutMs: 30_000 }),
   prtgProvinces: () =>
     apiGet<{

@@ -19,9 +19,9 @@ class PrtgHistoricOutageReader
      *   outages: array<int, array{started_at: CarbonImmutable, recovered_at: ?CarbonImmutable}>
      * }
      */
-    public function intervalsForSensor(int $prtgSensorId, CarbonImmutable $fromUtc, CarbonImmutable $toUtc): array
+    public function intervalsForSensor(int $prtgSensorId, CarbonImmutable $fromUtc, CarbonImmutable $toUtc, int $count = 2000): array
     {
-        $messages = $this->fetchMessages($prtgSensorId);
+        $messages = $this->fetchMessages($prtgSensorId, $count);
         $events = $this->messagesToEvents($messages, $fromUtc, $toUtc);
         $outages = PrtgOutageIntervalBuilder::build($events);
 
@@ -31,7 +31,7 @@ class PrtgHistoricOutageReader
     /**
      * @return array<int, array<string, mixed>>
      */
-    public function fetchMessages(int $prtgSensorId): array
+    public function fetchMessages(int $prtgSensorId, int $count = 2000): array
     {
         $base = rtrim((string) config('prtg.base_url'), '/');
         $token = (string) config('prtg.api_token');
@@ -43,7 +43,7 @@ class PrtgHistoricOutageReader
             'content' => 'messages',
             'columns' => 'objid,datetime,parent,type,name,status,message',
             'id' => $prtgSensorId,
-            'count' => 2000,
+            'count' => max(1, $count),
             'apitoken' => $token,
         ]);
 
