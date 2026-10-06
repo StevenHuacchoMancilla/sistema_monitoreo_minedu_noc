@@ -218,27 +218,76 @@ class TicketeraReadService
 
     private function cacheKey(): string
     {
-        return 'ticketera.dashboard.'.(string) config('ticketera.spreadsheet_id');
+        return 'ticketera.dashboard.v2.'.(string) config('ticketera.spreadsheet_id');
     }
 
     private function fetchCsv(string $id, string $sheet): string
     {
-        $url = 'https://docs.google.com/spreadsheets/d/'.$id.'/gviz/tq?tqx=out:csv&sheet='.rawurlencode($sheet);
+        $gid = $this->resolveGid($id, $sheet);
+
+        if ($gid !== null) {
+            $exported = $this->download($id, '/export?format=csv&gid='.$gid);
+
+            if ($exported !== null) {
+                return $exported;
+            }
+        }
+
+        $visible = $this->download($id, '/gviz/tq?tqx=out:csv&sheet='.rawurlencode($sheet));
+
+        if ($visible === null) {
+            throw new RuntimeException('Google Sheets no respondió la hoja '.$sheet.'.');
+        }
+
+        return $visible;
+    }
+
+    /**
+     * La exportación por gid incluye las filas ocultas por un filtro de la hoja.
+     * El CSV de gviz solo devuelve las filas visibles y recorta el histórico.
+     */
+    private function resolveGid(string $id, string $sheet): ?string
+    {
+        $configured = trim((string) config('ticketera.sheet_gid', ''));
+
+        if ($configured !== '') {
+            return $configured;
+        }
 
         $response = $this->http()
-            ->timeout(40)
-            ->accept('text/csv')
+            ->timeout(30)
             ->withHeaders(['User-Agent' => 'NOC-Ticketera'])
-            ->get($url);
+            ->get('https://docs.google.com/spreadsheets/d/'.$id.'/htmlview');
 
         if (! $response->successful()) {
-            throw new RuntimeException('Google Sheets no respondió la hoja '.$sheet.' ('.$response->status().').');
+            return null;
+        }
+
+        $pattern = '/name:\s*"'.preg_quote($sheet, '/').'"[^}]{0,800}gid:\s*"(\d+)"/';
+
+        if (! preg_match($pattern, $response->body(), $match)) {
+            return null;
+        }
+
+        return $match[1];
+    }
+
+    private function download(string $id, string $path): ?string
+    {
+        $response = $this->http()
+            ->timeout(60)
+            ->withHeaders(['User-Agent' => 'NOC-Ticketera'])
+            ->get('https://docs.google.com/spreadsheets/d/'.$id.$path);
+
+        if (! $response->successful()) {
+            return null;
         }
 
         $body = $response->body();
+        $head = strtolower(substr($body, 0, 300));
 
-        if ($body === '' || str_contains(strtolower(substr($body, 0, 200)), '<html')) {
-            throw new RuntimeException('La hoja '.$sheet.' no está publicada para lectura.');
+        if ($body === '' || str_contains($head, '<html') || str_contains($head, '<!doctype')) {
+            return null;
         }
 
         return $body;
@@ -417,9 +466,13 @@ class TicketeraReadService
             return null;
         }
 
-        foreach (['d/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y'] as $format) {
-            $parsed = Carbon::createFromFormat($format, $text, $zone);
-            $errors = Carbon::getLastErrors();
+        foreach (['d/m/Y H:i:s', 'd/m/Y H:i', 'd/m/Y', 'Y-m-d H:i:s', 'Y-m-d H:i', 'Y-m-d'] as $format) {
+            try {
+                $parsed = Carbon::createFromFormat($format, $text, $zone);
+                $errors = Carbon::getLastErrors();
+            } catch (\Throwable) {
+                continue;
+            }
 
             if (! $parsed instanceof Carbon) {
                 continue;

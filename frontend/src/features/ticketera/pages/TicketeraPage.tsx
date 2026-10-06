@@ -14,6 +14,7 @@ import { DataTableContainer, tableClassName, thClassName, theadClassName, trClas
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
 import { formatDateTime24, formatDuration } from '../../../lib/datetime'
 import { TicketeraCharts } from '../components/TicketeraCharts'
+import { SchoolTimelines } from '../components/SchoolTimelines'
 import {
   FILTER_LABELS,
   defaultFilters,
@@ -128,10 +129,6 @@ export function TicketeraPage() {
       .sort((a, b) => direction * (metric(a) - metric(b)) || a.cid.localeCompare(b.cid, 'es', { numeric: true }))
     return rankLimit === 'all' ? ranked : ranked.slice(0, Number(rankLimit) || 15)
   }, [prepared, rankLimit, rankMetric, rankOrder, rankSearch])
-
-  useEffect(() => {
-    if (rankCid && !ranking.some((group) => group.cid === rankCid)) setRankCid('')
-  }, [ranking, rankCid])
 
   const detailRows = useMemo(() => {
     const source = rankCid ? ranking.find((group) => group.cid === rankCid)?.rows ?? [] : ranking.flatMap((group) => group.rows)
@@ -364,7 +361,14 @@ export function TicketeraPage() {
                         <tr key={group.cid} className={trClassName}>
                           <td className={cell}>{index + 1}</td>
                           <td className={`${cell} max-w-none`}>
-                            <button type="button" className="font-semibold text-blue-600" onClick={() => setRankCid(group.cid)}>
+                            <button
+                              type="button"
+                              className="font-semibold text-blue-600"
+                              onClick={() => {
+                                setRankCid(group.cid)
+                                document.getElementById('school-timelines')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                              }}
+                            >
                               {group.cid}
                             </button>
                             <span className="block truncate text-[11px] text-slate-500">{group.name || `TSS ${group.tss || '—'}`}</span>
@@ -382,6 +386,9 @@ export function TicketeraPage() {
                   <FormField label="Local del ranking">
                     <Select value={rankCid} onChange={(event) => setRankCid(event.target.value)}>
                       <option value="">Todos los locales del ranking</option>
+                      {rankCid && !ranking.some((group) => group.cid === rankCid) ? (
+                        <option value={rankCid}>{rankCid}</option>
+                      ) : null}
                       {ranking.map((group) => (
                         <option key={group.cid} value={group.cid}>
                           {group.cid} · {group.name || `TSS ${group.tss}`} · {group.rows.length}
@@ -416,6 +423,17 @@ export function TicketeraPage() {
                   </DataTableContainer>
                 </div>
               </SectionCard>
+              <div id="school-timelines">
+                <SchoolTimelines
+                  rows={query.data.rows}
+                  cid={rankCid}
+                  onCidChange={setRankCid}
+                  from={filters.from}
+                  to={filters.to}
+                  now={query.data.now}
+                  rankingRows={rankCid ? ranking.find((group) => group.cid === rankCid)?.rows.length ?? 0 : null}
+                />
+              </div>
             </div>
           ) : null}
 
