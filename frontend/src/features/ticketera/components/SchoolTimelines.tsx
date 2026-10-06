@@ -4,11 +4,15 @@ import { FormField, Input, Select } from '../../../components/ui/FormControls'
 import type { TicketeraRow } from '../types/ticketera'
 
 const DAY = 86_400_000
-const SLOT = 34
-const BAR = 20
+const EVENT_SLOT = 34
+const EVENT_BAR = 20
+const DURATION_SLOT = 78
+const DURATION_BAR = 60
 const PLOT_H = 248
-const LABEL_H = 78
-const GUTTER = 58
+const DURATION_LABEL_H = 58
+const EVENT_LABEL_H = 72
+const GUTTER = 76
+const LOG_FLOOR = 15_000
 
 type Lane = {
   row: TicketeraRow
@@ -22,11 +26,6 @@ type Lane = {
 
 type InvalidLane = { row: TicketeraRow; reason: string }
 
-type Hover = {
-  title: string
-  lines: string[]
-}
-
 function dayStart(key: string): number | null {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return null
   const value = Date.parse(`${key}T00:00:00-05:00`)
@@ -39,6 +38,24 @@ function clock(ms: number): string {
     year: 'numeric',
     month: '2-digit',
     day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hourCycle: 'h23',
+  }).format(new Date(ms))
+}
+
+function shortDate(ms: number): string {
+  return new Intl.DateTimeFormat('es-PE', {
+    timeZone: 'America/Lima',
+    day: '2-digit',
+    month: '2-digit',
+  }).format(new Date(ms))
+}
+
+function shortTime(ms: number): string {
+  return new Intl.DateTimeFormat('es-PE', {
+    timeZone: 'America/Lima',
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -88,37 +105,48 @@ function durationOf(lane: Lane, nowMs: number): number {
   return Math.max(0, (lane.closeMs ?? nowMs) - lane.openMs)
 }
 
-function niceMax(value: number): number {
-  if (value <= 0) return 1
-  const exp = 10 ** Math.floor(Math.log10(value))
-  const fraction = value / exp
-  const nice = fraction <= 1 ? 1 : fraction <= 2 ? 2 : fraction <= 5 ? 5 : 10
-  return nice * exp
-}
-
 function trim(value: number): string {
   const digits = value >= 10 ? 0 : 1
   return value.toFixed(digits).replace(/\.0$/, '')
 }
 
-function durationScale(maxMs: number): { maxMs: number; ticks: number[]; axis: string; format: (ms: number) => string } {
-  const max = Math.max(maxMs, 1000)
-  let unit = 3600000
-  let axis = 'Duración (horas)'
-  let format = (ms: number) => trim(ms / 3600000)
-  if (max < 120_000) {
-    unit = 1000
-    axis = 'Duración (segundos)'
-    format = (ms: number) => trim(ms / 1000)
-  } else if (max < 7_200_000) {
-    unit = 60_000
-    axis = 'Duración (minutos)'
-    format = (ms: number) => trim(ms / 60000)
+function formatMinutes(ms: number): string {
+  const minutes = ms / 60_000
+  if (minutes < 1) return `${Math.round(ms / 1000)} s`
+  if (minutes < 60) return `${trim(minutes)} min`
+  const hours = minutes / 60
+  if (hours < 48) return `${trim(hours)} h`
+  return `${trim(hours / 24)} d`
+}
+
+function logRatio(ms: number, maxMs: number): number {
+  const top = Math.max(maxMs, LOG_FLOOR * 4)
+  const value = Math.min(Math.max(ms, LOG_FLOOR), top)
+  return Math.log(value / LOG_FLOOR) / Math.log(top / LOG_FLOOR)
+}
+
+function logTicks(maxMs: number): number[] {
+  const marks = [30_000, 60_000, 120_000, 300_000, 900_000, 1_800_000, 3_600_000, 14_400_000, 86_400_000, 259_200_000]
+  return marks.filter((ms) => ms >= LOG_FLOOR && ms <= maxMs * 1.02)
+}
+
+function median(values: number[]): number {
+  if (!values.length) return 0
+  const sorted = [...values].sort((a, b) => a - b)
+  const mid = Math.floor(sorted.length / 2)
+  return sorted.length % 2 === 1 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2
+}
+
+function topCauses(lanes: Lane[]): Array<{ label: string; count: number }> {
+  const counts = new Map<string, number>()
+  for (const lane of lanes) {
+    const label = lane.row.causa.trim() || 'Sin causa global'
+    counts.set(label, (counts.get(label) ?? 0) + 1)
   }
-  const top = niceMax(max / unit) * unit
-  const steps = 4
-  const ticks = Array.from({ length: steps + 1 }, (_, index) => (top / steps) * index)
-  return { maxMs: top, ticks, axis, format }
+  return [...counts.entries()]
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 4)
 }
 
 export function SchoolTimelines({
@@ -139,9 +167,9 @@ export function SchoolTimelines({
   rankingRows: number | null
 }) {
   const [query, setQuery] = useState('')
-  const [hover, setHover] = useState<Hover | null>(null)
   const [focusRow, setFocusRow] = useState<number | null>(null)
   const [active, setActive] = useState<number | null>(null)
+  const [shownIndex, setShownIndex] = useState<number | null>(null)
   const durationScroll = useRef<HTMLDivElement>(null)
   const eventScroll = useRef<HTMLDivElement>(null)
   const scrolling = useRef(false)
@@ -152,8 +180,8 @@ export function SchoolTimelines({
 
   useEffect(() => {
     setFocusRow(null)
-    setHover(null)
     setActive(null)
+    setShownIndex(null)
   }, [cid, from, to])
 
   const schools = useMemo(() => {
@@ -250,35 +278,13 @@ export function SchoolTimelines({
     }
   }, [rows, cid, rangeStart, rangeEnd, nowMs])
 
-  function syncScroll(source: HTMLDivElement, target: HTMLDivElement | null) {
+  function syncScroll(source: HTMLDivElement, target: HTMLDivElement | null, fromSlot: number, toSlot: number) {
     if (!target || scrolling.current) return
     scrolling.current = true
-    target.scrollLeft = source.scrollLeft
+    target.scrollLeft = (source.scrollLeft / fromSlot) * toSlot
     requestAnimationFrame(() => {
       scrolling.current = false
     })
-  }
-
-  function detailLines(lane: Lane): string[] {
-    if (rangeStart == null || rangeEnd == null) return []
-    const inRange = Math.max(0, Math.min(rangeEnd, lane.endMs, nowMs) - Math.max(rangeStart, lane.openMs))
-    const next = model.lanes.find((item) => item.openMs > (lane.closeMs ?? lane.endMs))
-    const othersOpen = model.lanes.some((item) => {
-      if (item.row.row === lane.row.row || lane.closeMs == null || next == null) return false
-      return item.openMs < next.openMs && item.endMs > lane.closeMs
-    })
-    return [
-      `CID ${cid}${school?.name ? ` · ${school.name}` : ''}`,
-      `Apertura: ${clock(lane.openMs)}${lane.before ? ' · empezó antes del rango' : ''}`,
-      lane.closeMs == null ? 'Cierre: Sin cierre' : `Cierre registrado: ${clock(lane.closeMs)}${lane.closeMs > nowMs ? ' · posterior a la última lectura' : ''}`,
-      `Duración del ticket: ${hms(durationOf(lane, nowMs))}`,
-      `Dentro del rango observado: ${hms(inRange)}`,
-      next
-        ? `Siguiente apertura del CID: ${clock(next.openMs)} · espera ${hms(next.openMs - (lane.closeMs ?? nowMs))}${othersOpen ? ' · hay otros tickets activos, no es servicio confirmado' : ''}`
-        : 'No hay una apertura posterior en los datos de este CID.',
-      `Estado: ${lane.row.status}`,
-      lane.row.problems.length ? lane.row.problems.join(' · ') : 'Sin observaciones de fecha',
-    ]
   }
 
   function selectLane(index: number) {
@@ -286,22 +292,32 @@ export function SchoolTimelines({
     if (!lane) return
     setFocusRow(lane.row.row)
     setActive(index)
-    setHover({ title: labelOf(lane.row), lines: detailLines(lane) })
-    const left = Math.max(0, index * SLOT - 120)
-    durationScroll.current?.scrollTo({ left, behavior: 'smooth' })
-    eventScroll.current?.scrollTo({ left, behavior: 'smooth' })
+    setShownIndex(index)
+    durationScroll.current?.scrollTo({ left: Math.max(0, index * DURATION_SLOT - 160), behavior: 'smooth' })
+    eventScroll.current?.scrollTo({ left: Math.max(0, index * EVENT_SLOT - 80), behavior: 'smooth' })
   }
 
   if (rangeStart == null || rangeEnd == null) return null
 
   const durations = model.lanes.map((lane) => durationOf(lane, nowMs))
   const maxDuration = durations.reduce((max, value) => Math.max(max, value), 0)
-  const avgDuration = durations.length ? durations.reduce((sum, value) => sum + value, 0) / durations.length : 0
+  const medianDuration = median(durations)
+  const underFive = durations.filter((value) => value < 5 * 60_000).length
+  const causes = topCauses(model.lanes)
   const closes = model.lanes.filter((lane) => lane.closeMs != null && lane.closeMs <= nowMs).length
-  const scale = durationScale(maxDuration)
+  const scaleTop = Math.max(maxDuration, LOG_FLOOR * 4)
+  const ticks = logTicks(scaleTop)
+  const baseline = PLOT_H - 8
+  const inner = baseline - 18
+  const yOf = (ms: number) => baseline - logRatio(ms, scaleTop) * inner
   const up = Math.max(0, model.observed - model.down)
   const pct = model.observed ? (up / model.observed) * 100 : null
   const highlighted = (index: number) => model.lanes[index]?.row.row === focusRow || index === active
+  const shown = shownIndex == null ? null : model.lanes[shownIndex] ?? null
+  const preview = (index: number) => {
+    setActive(index)
+    setShownIndex(index)
+  }
 
   return (
     <SectionCard
@@ -350,14 +366,22 @@ export function SchoolTimelines({
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <Metric label="Disponibilidad estimada" value={pct == null ? '—' : `${pct.toFixed(2)}%`} tone="ok" />
-            <Metric label="Horas de caída" value={`${(model.down / 3600000).toFixed(2)} h`} tone="down" />
-            <Metric label="Duración media del ticket" value={hms(avgDuration)} />
-            <Metric label="Incidencias en la gráfica" value={String(model.lanes.length)} />
+            <Metric label="Duración mediana" value={formatMinutes(medianDuration)} />
+            <Metric label="Caídas de menos de 5 min" value={`${underFive} de ${model.lanes.length}`} />
+            <Metric label="Causa más frecuente" value={causes[0]?.label ?? '—'} hint={causes[0] ? `${causes[0].count} incidencias` : 'Sin causa global'} />
           </div>
+          {causes.length ? (
+            <div className="flex flex-wrap gap-2">
+              {causes.map((cause) => (
+                <span key={cause.label} className="rounded-full bg-slate-100 px-2.5 py-1 text-xs text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+                  {cause.label} · {cause.count}
+                </span>
+              ))}
+            </div>
+          ) : null}
           <p className="text-xs leading-relaxed text-slate-500">
-            Cada columna es una fila de la hoja, en orden de apertura. La altura de la primera gráfica es la duración real del ticket, no la posición dentro del mes.
-            {` Este CID tiene ${model.cidTotal} filas: ${model.lanes.length} entran en la gráfica, ${model.outside} caen fuera del rango y ${model.invalid.length} tienen fecha inválida.`}
-            {` Cierres dibujados: ${closes}. Sin cierre: ${model.lanes.filter((lane) => lane.openEnded).length}.`}
+            {`Este CID tiene ${model.cidTotal} filas: ${model.lanes.length} entran en la gráfica, ${model.outside} caen fuera del rango y ${model.invalid.length} tienen fecha inválida.`}
+            {` Cierres: ${closes}. Sin cierre: ${model.lanes.filter((lane) => lane.openEnded).length}.`}
             {rankingRows != null && rankingRows !== model.lanes.length
               ? ` El ranking cuenta ${rankingRows} con los filtros del reporte.`
               : ' Estas gráficas no usan el horario 08:00–16:00 ni el Top del ranking.'}
@@ -370,11 +394,11 @@ export function SchoolTimelines({
 
           <ChartShell
             title="Duración de cada incidencia"
-            note={`${model.lanes.length} columnas. La más larga mide ${hms(maxDuration)} y define la escala. Desplaza en horizontal para verlas todas.`}
+            note={`${model.lanes.length} columnas en minutos, escala logarítmica. Así una caída de 2 minutos se ve aunque otra lleve días abierta. En la barra está la duración h:mm:ss; debajo, la fila, la fecha y la hora de apertura.`}
             legend={(
               <>
                 <Swatch color="#e11d48" label="Con cierre" />
-                <Swatch color="#64748b" label="Sin cierre, hasta la última lectura" />
+                <Swatch color="#f59e0b" label="Sin cierre, hasta la última lectura" />
               </>
             )}
           >
@@ -382,33 +406,20 @@ export function SchoolTimelines({
               <p className="px-3 py-8 text-center text-sm text-slate-500">Este colegio no tiene incidencias válidas dentro del rango.</p>
             ) : (
               <div className="flex">
-                <AxisGutter
-                  ticks={scale.ticks}
-                  format={(ms) => scale.format(ms)}
-                  axis={scale.axis}
-                  max={scale.maxMs}
-                />
+                <AxisGutter ticks={ticks} format={formatMinutes} axis="Minutos" yOf={yOf} height={PLOT_H + DURATION_LABEL_H} />
                 <div
                   ref={durationScroll}
                   className="min-w-0 flex-1 overflow-x-auto"
-                  onScroll={(event) => syncScroll(event.currentTarget, eventScroll.current)}
+                  onScroll={(event) => syncScroll(event.currentTarget, eventScroll.current, DURATION_SLOT, EVENT_SLOT)}
                 >
                   <DurationPlot
                     lanes={model.lanes}
                     nowMs={nowMs}
-                    scaleMax={scale.maxMs}
-                    ticks={scale.ticks}
-                    format={scale.format}
+                    yOf={yOf}
+                    ticks={ticks}
                     highlighted={highlighted}
-                    onEnter={(index) => {
-                      setActive(index)
-                      const lane = model.lanes[index]
-                      if (lane && focusRow == null) setHover({ title: labelOf(lane.row), lines: detailLines(lane) })
-                    }}
-                    onLeave={() => {
-                      setActive(null)
-                      if (focusRow == null) setHover(null)
-                    }}
+                    onEnter={preview}
+                    onLeave={() => setActive(null)}
                     onSelect={selectLane}
                   />
                 </div>
@@ -436,7 +447,7 @@ export function SchoolTimelines({
               <p className="px-3 py-8 text-center text-sm text-slate-500">Este colegio no tiene incidencias válidas dentro del rango.</p>
             ) : (
               <div className="flex">
-                <svg width={GUTTER} height={PLOT_H + LABEL_H} className="sticky left-0 z-10 shrink-0 bg-white text-slate-400 dark:bg-slate-900" aria-hidden>
+                <svg width={GUTTER} height={PLOT_H + EVENT_LABEL_H} className="sticky left-0 z-10 shrink-0 bg-white text-slate-400 dark:bg-slate-900" aria-hidden>
                   <text x={GUTTER - 8} y={28} textAnchor="end" fontSize={11} fill="currentColor">+1</text>
                   <text x={GUTTER - 8} y={PLOT_H / 2 + 4} textAnchor="end" fontSize={11} fill="currentColor">0</text>
                   <text x={GUTTER - 8} y={PLOT_H - 16} textAnchor="end" fontSize={11} fill="currentColor">−1</text>
@@ -444,21 +455,14 @@ export function SchoolTimelines({
                 <div
                   ref={eventScroll}
                   className="min-w-0 flex-1 overflow-x-auto"
-                  onScroll={(event) => syncScroll(event.currentTarget, durationScroll.current)}
+                  onScroll={(event) => syncScroll(event.currentTarget, durationScroll.current, EVENT_SLOT, DURATION_SLOT)}
                 >
                   <EventPlot
                     lanes={model.lanes}
                     nowMs={nowMs}
                     highlighted={highlighted}
-                    onEnter={(index) => {
-                      setActive(index)
-                      const lane = model.lanes[index]
-                      if (lane && focusRow == null) setHover({ title: labelOf(lane.row), lines: detailLines(lane) })
-                    }}
-                    onLeave={() => {
-                      setActive(null)
-                      if (focusRow == null) setHover(null)
-                    }}
+                    onEnter={preview}
+                    onLeave={() => setActive(null)}
                     onSelect={selectLane}
                   />
                 </div>
@@ -466,13 +470,10 @@ export function SchoolTimelines({
             )}
           </ChartShell>
 
-          {hover ? (
-            <div className="rounded-lg border border-slate-200 bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-700 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200">
-              <p className="font-semibold">{hover.title}</p>
-              {hover.lines.map((line) => <p key={line}>{line}</p>)}
-            </div>
+          {shown ? (
+            <IncidentCard lane={shown} nowMs={nowMs} cid={cid} schoolName={school.name} lanes={model.lanes} rangeStart={rangeStart} rangeEnd={rangeEnd} />
           ) : (
-            <p className="text-xs text-slate-500">Pasa el cursor o pulsa una columna para ver apertura, cierre y duración de esa incidencia.</p>
+            <p className="text-xs text-slate-500">Pasa el cursor por una columna para ver duración, causa global, detalle y código de esa incidencia.</p>
           )}
         </div>
       )}
@@ -483,9 +484,8 @@ export function SchoolTimelines({
 function DurationPlot({
   lanes,
   nowMs,
-  scaleMax,
+  yOf,
   ticks,
-  format,
   highlighted,
   onEnter,
   onLeave,
@@ -493,69 +493,64 @@ function DurationPlot({
 }: {
   lanes: Lane[]
   nowMs: number
-  scaleMax: number
+  yOf: (ms: number) => number
   ticks: number[]
-  format: (ms: number) => string
   highlighted: (index: number) => boolean
   onEnter: (index: number) => void
   onLeave: () => void
   onSelect: (index: number) => void
 }) {
-  const width = Math.max(lanes.length * SLOT, SLOT)
-  const baseline = 12 + PLOT_H - 8
-  const inner = baseline - 12
+  const width = Math.max(lanes.length * DURATION_SLOT, DURATION_SLOT)
+  const baseline = PLOT_H - 8
+  const height = PLOT_H + DURATION_LABEL_H
   return (
-    <svg width={width} height={PLOT_H + LABEL_H} role="img" aria-label="Duración de cada incidencia" className="max-w-none text-slate-400">
+    <svg width={width} height={height} role="img" aria-label="Duración en minutos de cada incidencia" className="max-w-none text-slate-400">
       <defs>
         <linearGradient id="ticketera-bar-closed" x1="0" y1="1" x2="0" y2="0">
           <stop offset="0%" stopColor="#be123c" />
           <stop offset="100%" stopColor="#fb7185" />
         </linearGradient>
         <linearGradient id="ticketera-bar-open" x1="0" y1="1" x2="0" y2="0">
-          <stop offset="0%" stopColor="#475569" />
-          <stop offset="100%" stopColor="#cbd5e1" />
+          <stop offset="0%" stopColor="#b45309" />
+          <stop offset="100%" stopColor="#fbbf24" />
         </linearGradient>
       </defs>
       {dayBands(lanes).map((band) => (
-        <rect key={band.key} x={band.from * SLOT} y={0} width={(band.to - band.from) * SLOT} height={PLOT_H + LABEL_H} fill={band.alt ? 'rgba(148,163,184,0.08)' : 'transparent'} />
+        <rect key={band.key} x={band.from * DURATION_SLOT} y={0} width={(band.to - band.from) * DURATION_SLOT} height={height} fill={band.alt ? 'rgba(148,163,184,0.08)' : 'transparent'} />
       ))}
-      {ticks.map((tick) => {
-        const y = baseline - (tick / scaleMax) * inner
-        return <line key={tick} x1={0} x2={width} y1={y} y2={y} stroke="currentColor" strokeOpacity={tick === 0 ? 0.45 : 0.16} />
-      })}
+      {ticks.map((tick) => (
+        <line key={tick} x1={0} x2={width} y1={yOf(tick)} y2={yOf(tick)} stroke="currentColor" strokeOpacity={0.16} />
+      ))}
+      <line x1={0} x2={width} y1={baseline} y2={baseline} stroke="currentColor" strokeOpacity={0.45} />
       {lanes.map((lane, index) => {
         const duration = durationOf(lane, nowMs)
-        const height = Math.max(4, (duration / scaleMax) * inner)
-        const x = index * SLOT + (SLOT - BAR) / 2
-        const y = baseline - height
+        const y = yOf(duration)
+        const barH = Math.max(16, baseline - y)
+        const x = index * DURATION_SLOT + (DURATION_SLOT - DURATION_BAR) / 2
         const on = highlighted(index)
+        const labelInside = barH >= 22
         return (
           <g key={lane.row.row} className="cursor-pointer" onMouseEnter={() => onEnter(index)} onMouseLeave={onLeave} onClick={() => onSelect(index)}>
-            <rect x={index * SLOT} y={0} width={SLOT} height={PLOT_H + LABEL_H} fill="transparent" />
-            <rect
-              x={x}
-              y={y}
-              width={BAR}
-              height={height}
-              rx={4}
-              fill={lane.openEnded ? 'url(#ticketera-bar-open)' : 'url(#ticketera-bar-closed)'}
-              stroke={on ? '#818cf8' : 'transparent'}
-              strokeWidth={2}
-            >
-              <title>{`${labelOf(lane.row)} · ${hms(duration)} · ${clock(lane.openMs)}`}</title>
+            <rect x={index * DURATION_SLOT} y={0} width={DURATION_SLOT} height={height} fill="transparent" />
+            <rect x={x} y={baseline - barH} width={DURATION_BAR} height={barH} rx={4} fill={lane.openEnded ? 'url(#ticketera-bar-open)' : 'url(#ticketera-bar-closed)'} stroke={on ? '#818cf8' : 'transparent'} strokeWidth={2}>
+              <title>{`${labelOf(lane.row)} · ${hms(duration)} · ${formatMinutes(duration)}`}</title>
             </rect>
-            {on ? (
-              <text x={index * SLOT + SLOT / 2} y={Math.max(12, y - 6)} textAnchor="middle" fontSize={10} fontWeight={700} fill="currentColor">{format(duration)}</text>
-            ) : null}
-            <text x={index * SLOT + SLOT / 2} y={baseline + 16} textAnchor="middle" fontSize={10} fill="currentColor">{shortId(lane.row)}</text>
+            <text
+              x={index * DURATION_SLOT + DURATION_SLOT / 2}
+              y={labelInside ? baseline - barH / 2 + 4 : baseline - barH - 6}
+              textAnchor="middle"
+              fontSize={10}
+              fontWeight={700}
+              fill={labelInside ? '#fff' : 'currentColor'}
+            >
+              {hms(duration)}
+            </text>
+            <text x={index * DURATION_SLOT + DURATION_SLOT / 2} y={baseline + 14} textAnchor="middle" fontSize={10} fontWeight={600} fill="currentColor">{`Fila ${lane.row.row}`}</text>
+            <text x={index * DURATION_SLOT + DURATION_SLOT / 2} y={baseline + 28} textAnchor="middle" fontSize={9} fill="currentColor">{shortDate(lane.openMs)}</text>
+            <text x={index * DURATION_SLOT + DURATION_SLOT / 2} y={baseline + 40} textAnchor="middle" fontSize={9} fill="currentColor">{shortTime(lane.openMs)}</text>
           </g>
         )
       })}
-      {dayBands(lanes).map((band) => (
-        <text key={`${band.key}-label`} x={((band.from + band.to) / 2) * SLOT} y={PLOT_H + LABEL_H - 8} textAnchor="middle" fontSize={11} fontWeight={600} fill="currentColor">
-          {band.label}
-        </text>
-      ))}
     </svg>
   )
 }
@@ -575,34 +570,35 @@ function EventPlot({
   onLeave: () => void
   onSelect: (index: number) => void
 }) {
-  const width = Math.max(lanes.length * SLOT, SLOT)
+  const width = Math.max(lanes.length * EVENT_SLOT, EVENT_SLOT)
   const mid = PLOT_H / 2
   const amp = mid - 28
+  const height = PLOT_H + EVENT_LABEL_H
   return (
-    <svg width={width} height={PLOT_H + LABEL_H} role="img" aria-label="Apertura y cierre de cada incidencia" className="max-w-none text-slate-400">
+    <svg width={width} height={height} role="img" aria-label="Apertura y cierre de cada incidencia" className="max-w-none text-slate-400">
       {dayBands(lanes).map((band) => (
-        <rect key={band.key} x={band.from * SLOT} y={0} width={(band.to - band.from) * SLOT} height={PLOT_H + LABEL_H} fill={band.alt ? 'rgba(148,163,184,0.08)' : 'transparent'} />
+        <rect key={band.key} x={band.from * EVENT_SLOT} y={0} width={(band.to - band.from) * EVENT_SLOT} height={height} fill={band.alt ? 'rgba(148,163,184,0.08)' : 'transparent'} />
       ))}
       <line x1={0} x2={width} y1={mid} y2={mid} stroke="currentColor" strokeOpacity={0.55} />
       {lanes.map((lane, index) => {
-        const x = index * SLOT + (SLOT - BAR) / 2
+        const x = index * EVENT_SLOT + (EVENT_SLOT - EVENT_BAR) / 2
         const closed = lane.closeMs != null && lane.closeMs <= nowMs
         const on = highlighted(index)
         return (
           <g key={lane.row.row} className="cursor-pointer" onMouseEnter={() => onEnter(index)} onMouseLeave={onLeave} onClick={() => onSelect(index)}>
-            <rect x={index * SLOT} y={0} width={SLOT} height={PLOT_H + LABEL_H} fill="transparent" />
-            <rect x={x} y={mid - amp} width={BAR} height={amp} rx={4} fill={closed ? '#10b981' : 'rgba(51,65,85,0.45)'} stroke={on ? '#818cf8' : 'transparent'} strokeWidth={2}>
+            <rect x={index * EVENT_SLOT} y={0} width={EVENT_SLOT} height={height} fill="transparent" />
+            <rect x={x} y={mid - amp} width={EVENT_BAR} height={amp} rx={4} fill={closed ? '#10b981' : 'rgba(51,65,85,0.45)'} stroke={on ? '#818cf8' : 'transparent'} strokeWidth={2}>
               <title>{closed ? `Cierre · ${labelOf(lane.row)} · ${clock(lane.closeMs as number)}` : `Sin cierre · ${labelOf(lane.row)}`}</title>
             </rect>
-            <rect x={x} y={mid} width={BAR} height={amp} rx={4} fill="#f43f5e" stroke={on ? '#818cf8' : 'transparent'} strokeWidth={2}>
+            <rect x={x} y={mid} width={EVENT_BAR} height={amp} rx={4} fill="#f43f5e" stroke={on ? '#818cf8' : 'transparent'} strokeWidth={2}>
               <title>{`Apertura · ${labelOf(lane.row)} · ${clock(lane.openMs)}`}</title>
             </rect>
-            <text x={index * SLOT + SLOT / 2} y={PLOT_H + 16} textAnchor="middle" fontSize={10} fill="currentColor">{shortId(lane.row)}</text>
+            <text x={index * EVENT_SLOT + EVENT_SLOT / 2} y={PLOT_H + 16} textAnchor="middle" fontSize={10} fill="currentColor">{shortId(lane.row)}</text>
           </g>
         )
       })}
       {dayBands(lanes).map((band) => (
-        <text key={`${band.key}-label`} x={((band.from + band.to) / 2) * SLOT} y={PLOT_H + LABEL_H - 8} textAnchor="middle" fontSize={11} fontWeight={600} fill="currentColor">
+        <text key={`${band.key}-label`} x={((band.from + band.to) / 2) * EVENT_SLOT} y={PLOT_H + EVENT_LABEL_H - 8} textAnchor="middle" fontSize={11} fontWeight={600} fill="currentColor">
           {band.label}
         </text>
       ))}
@@ -625,24 +621,21 @@ function AxisGutter({
   ticks,
   format,
   axis,
-  max,
+  yOf,
+  height,
 }: {
   ticks: number[]
   format: (ms: number) => string
   axis: string
-  max: number
+  yOf: (ms: number) => number
+  height: number
 }) {
-  const baseline = 12 + PLOT_H - 8
-  const inner = baseline - 12
   return (
-    <svg width={GUTTER} height={PLOT_H + LABEL_H} className="sticky left-0 z-10 shrink-0 bg-white text-slate-400 dark:bg-slate-900" aria-hidden>
-      <text x={14} y={PLOT_H / 2} textAnchor="middle" fontSize={10} fill="currentColor" transform={`rotate(-90 14 ${PLOT_H / 2})`}>{axis}</text>
-      {ticks.map((tick) => {
-        const y = baseline - (tick / max) * inner
-        return (
-          <text key={tick} x={GUTTER - 6} y={y + 3} textAnchor="end" fontSize={10} fill="currentColor">{format(tick)}</text>
-        )
-      })}
+    <svg width={GUTTER} height={height} className="sticky left-0 z-10 shrink-0 bg-white text-slate-400 dark:bg-slate-900" aria-hidden>
+      <text x={12} y={PLOT_H / 2} textAnchor="middle" fontSize={10} fill="currentColor" transform={`rotate(-90 12 ${PLOT_H / 2})`}>{axis}</text>
+      {ticks.map((tick) => (
+        <text key={tick} x={GUTTER - 6} y={yOf(tick) + 3} textAnchor="end" fontSize={10} fill="currentColor">{format(tick)}</text>
+      ))}
     </svg>
   )
 }
@@ -681,12 +674,88 @@ function Swatch({ color, label, hollow = false }: { color: string; label: string
   )
 }
 
-function Metric({ label, value, tone }: { label: string; value: string; tone?: 'ok' | 'down' }) {
+function Metric({ label, value, hint, tone }: { label: string; value: string; hint?: string; tone?: 'ok' | 'down' }) {
   const color = tone === 'ok' ? 'text-emerald-600 dark:text-emerald-300' : tone === 'down' ? 'text-rose-600 dark:text-rose-300' : 'text-slate-900 dark:text-slate-100'
   return (
     <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-3 dark:border-slate-800 dark:bg-slate-950">
       <p className="text-[11px] font-medium text-slate-500">{label}</p>
-      <p className={`mt-1 text-xl font-bold tabular-nums ${color}`}>{value}</p>
+      <p className={`mt-1 truncate text-xl font-bold tabular-nums ${color}`} title={hint ?? value}>{value}</p>
+      {hint ? <p className="mt-0.5 truncate text-[11px] text-slate-500" title={hint}>{hint}</p> : null}
+    </div>
+  )
+}
+
+function IncidentCard({
+  lane,
+  nowMs,
+  cid,
+  schoolName,
+  lanes,
+  rangeStart,
+  rangeEnd,
+}: {
+  lane: Lane
+  nowMs: number
+  cid: string
+  schoolName: string
+  lanes: Lane[]
+  rangeStart: number
+  rangeEnd: number
+}) {
+  const duration = durationOf(lane, nowMs)
+  const inRange = Math.max(0, Math.min(rangeEnd, lane.endMs, nowMs) - Math.max(rangeStart, lane.openMs))
+  const why = [
+    ['Causa global', lane.row.causa],
+    ['Detalle', lane.row.detalle],
+    ['Código', lane.row.codigo],
+    ['Grupo', lane.row.grupo],
+    ['Atención', lane.row.atencion],
+    ['Área', lane.row.area],
+    ['Minedu', lane.row.minedu],
+    ['Energía', lane.row.energia],
+  ].filter((item): item is [string, string] => item[1].trim() !== '')
+  const next = lanes.find((item) => item.openMs > (lane.closeMs ?? lane.endMs))
+  return (
+    <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-950">
+      <div className="flex flex-wrap items-start justify-between gap-2">
+        <div>
+          <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{labelOf(lane.row)}</p>
+          <p className="text-xs text-slate-500">CID {cid}{schoolName ? ` · ${schoolName}` : ''}{lane.row.distrito ? ` · ${lane.row.distrito}` : ''}{lane.row.provincia ? `, ${lane.row.provincia}` : ''}</p>
+        </div>
+        <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${lane.openEnded ? 'bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200' : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-200'}`}>
+          {lane.row.status}
+        </span>
+      </div>
+      <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
+        <dl className="grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
+          <dt className="text-slate-500">Apertura</dt>
+          <dd className="text-slate-800 dark:text-slate-100">{clock(lane.openMs)}{lane.before ? ' · empezó antes del rango' : ''}</dd>
+          <dt className="text-slate-500">Cierre</dt>
+          <dd className="text-slate-800 dark:text-slate-100">{lane.closeMs == null ? 'Sin cierre' : `${clock(lane.closeMs)}${lane.closeMs > nowMs ? ' · posterior a la última lectura' : ''}`}</dd>
+          <dt className="text-slate-500">Duración</dt>
+          <dd className="font-semibold text-slate-900 dark:text-slate-100">{hms(duration)} · {formatMinutes(duration)}</dd>
+          <dt className="text-slate-500">En el rango</dt>
+          <dd className="text-slate-800 dark:text-slate-100">{hms(inRange)}{lane.openEnded ? ' · sigue contando hasta la última lectura' : ''}</dd>
+          <dt className="text-slate-500">Siguiente</dt>
+          <dd className="text-slate-800 dark:text-slate-100">{next ? `${clock(next.openMs)} · espera ${hms(next.openMs - (lane.closeMs ?? nowMs))}` : 'No hay otra apertura posterior'}</dd>
+        </dl>
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500">Por qué cayó</p>
+          {why.length ? (
+            <dl className="mt-1 grid grid-cols-[7.5rem_minmax(0,1fr)] gap-x-2 gap-y-1 text-xs">
+              {why.map(([label, value]) => (
+                <div key={label} className="contents">
+                  <dt className="text-slate-500">{label}</dt>
+                  <dd className="text-slate-800 dark:text-slate-100">{value}</dd>
+                </div>
+              ))}
+            </dl>
+          ) : (
+            <p className="mt-1 text-xs text-slate-500">Esta fila no trae causa global, detalle ni código en la hoja.</p>
+          )}
+          {lane.row.problems.length ? <p className="mt-2 text-xs text-amber-700 dark:text-amber-300">{lane.row.problems.join(' · ')}</p> : null}
+        </div>
+      </div>
     </div>
   )
 }
