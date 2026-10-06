@@ -249,9 +249,9 @@ export function SchoolTimelines({
   }
 
   function detailLines(lane: Lane): string[] {
-    const visibleStart = Math.max(timeWindow.start, rangeStart, lane.openMs)
-    const visibleEnd = Math.min(timeWindow.end, rangeEnd, lane.endMs, nowMs)
-    const inRange = Math.max(0, Math.min(rangeEnd, lane.endMs, nowMs) - Math.max(rangeStart, lane.openMs))
+    const visibleStart = Math.max(timeWindow.start, full.start, lane.openMs)
+    const visibleEnd = Math.min(timeWindow.end, full.end, lane.endMs, nowMs)
+    const inRange = Math.max(0, Math.min(full.end, lane.endMs, nowMs) - Math.max(full.start, lane.openMs))
     const next = model.lanes.find((item) => item.openMs > (lane.closeMs ?? lane.endMs))
     const othersOpen = model.lanes.some((item) => {
       if (item.row.row === lane.row.row || lane.closeMs == null || next == null) return false
@@ -266,7 +266,7 @@ export function SchoolTimelines({
       `En la ventana visible: ${hms(Math.max(0, visibleEnd - visibleStart))}`,
       lane.after ? 'La barra dibujada está recortada al rango o a la última lectura.' : 'La barra usa la duración real dentro de lo observado.',
       next
-        ? `Siguiente apertura del CID: ${clock(next.openMs)} · espera ${hms(next.openMs - (lane.closeMs ?? nowMs))}${next.openMs >= rangeEnd ? ' · fuera del rango' : ''}${othersOpen ? ' · hay otros tickets activos, no es servicio confirmado' : ''}`
+        ? `Siguiente apertura del CID: ${clock(next.openMs)} · espera ${hms(next.openMs - (lane.closeMs ?? nowMs))}${next.openMs >= full.end ? ' · fuera del rango' : ''}${othersOpen ? ' · hay otros tickets activos, no es servicio confirmado' : ''}`
         : 'No hay una apertura posterior en los datos de este CID.',
       `Estado: ${lane.row.status}`,
       lane.row.problems.length ? lane.row.problems.join(' · ') : 'Sin observaciones de fecha',
