@@ -166,7 +166,7 @@ class IncidentTimezoneTest extends TestCase
         $this->assertSame('22:43', OperationalTime::format($again->fresh()->started_at, 'H:i'));
     }
 
-    public function test_flap_reopens_same_incident_within_window(): void
+    public function test_new_fall_is_a_new_incident_even_inside_flap_window(): void
     {
         config(['incidents.use_system_clock' => true, 'incidents.flap_reopen_seconds' => 900]);
         $this->freezeLima('2026-09-23 11:00:00');
@@ -181,10 +181,42 @@ class IncidentTimezoneTest extends TestCase
         $this->freezeLima('2026-09-23 11:08:00');
         $again = $svc->ensureOpen($assignment, $sensor);
 
-        $this->assertSame($first->id, $again->id);
+        $this->assertNotSame($first->id, $again->id);
+        $this->assertSame('11:00', OperationalTime::format($first->fresh()->started_at, 'H:i'));
+        $this->assertSame('11:05', OperationalTime::format($first->fresh()->recovered_at, 'H:i'));
+        $this->assertSame('11:08', OperationalTime::format($again->fresh()->started_at, 'H:i'));
         $this->assertNull($again->fresh()->recovered_at);
-        $this->assertSame('11:00', OperationalTime::format($again->fresh()->started_at, 'H:i'));
-        $this->assertSame(1, Incident::query()->count());
+        $this->assertFalse((bool) $again->fresh()->reopened_from_management);
+        $this->assertSame(2, Incident::query()->count());
+    }
+
+    public function test_fall_while_previous_is_in_management_opens_a_new_incident(): void
+    {
+        config(['incidents.use_system_clock' => true, 'incidents.flap_reopen_seconds' => 900]);
+        $this->freezeLima('2026-09-23 09:00:00');
+        [$assignment, $sensor] = $this->seedAssignment();
+        $svc = app(IncidentService::class);
+
+        $managed = $svc->ensureOpen($assignment, $sensor);
+        $managed->update(['followup_status' => FollowupStatus::EnGestion]);
+
+        $this->freezeLima('2026-09-23 10:15:00');
+        $svc->recover($assignment, $sensor);
+        $managed->refresh();
+        $this->assertNotNull($managed->recovered_at);
+        $this->assertTrue((bool) $managed->recovered_while_managing);
+
+        $this->freezeLima('2026-09-23 10:40:00');
+        $fresh = $svc->ensureOpen($assignment, $sensor);
+
+        $this->assertNotSame($managed->id, $fresh->id);
+        $this->assertSame('09:00', OperationalTime::format($managed->fresh()->started_at, 'H:i'));
+        $this->assertSame('10:15', OperationalTime::format($managed->fresh()->recovered_at, 'H:i'));
+        $this->assertSame(FollowupStatus::Recuperado, $managed->fresh()->followup_status);
+        $this->assertSame('10:40', OperationalTime::format($fresh->fresh()->started_at, 'H:i'));
+        $this->assertNull($fresh->fresh()->recovered_at);
+        $this->assertFalse((bool) $fresh->fresh()->reopened_from_management);
+        $this->assertSame(FollowupStatus::PendienteContacto, $fresh->fresh()->followup_status);
     }
 
     public function test_future_prtg_timestamp_is_flagged_and_not_persisted(): void

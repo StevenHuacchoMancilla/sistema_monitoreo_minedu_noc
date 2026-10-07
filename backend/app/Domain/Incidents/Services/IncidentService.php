@@ -49,8 +49,9 @@ class IncidentService
     }
 
     /**
-     * started_at es inmutable al crear. Re-caída dentro de flap_reopen_seconds reabre la misma fila
-     * (agrupa inestabilidad Ping en una sola incidencia operativa).
+     * started_at queda fijo al crear. Si el colegio ya se recuperó y vuelve a caer,
+     * se abre otra incidencia: la anterior conserva su hora de caída y su hora de recuperación,
+     * aunque siga en gestión o con Tracking abierto.
      *
      * @param  ?Closure(string, string, array<string, mixed>): void  $onAnomaly
      */
@@ -104,13 +105,6 @@ class IncidentService
             $active->update($payload);
 
             return $active->fresh() ?? $active;
-        }
-
-        $reopened = $this->reopenRecentFlap($assignment, $sensor, $downSince);
-        if ($reopened !== null) {
-            $this->trackingHooks->onIncidentTechnicallyDown($reopened);
-
-            return $reopened;
         }
 
         $startedAt = $this->resolveStartedAt($assignment, $downSince, $onAnomaly);
@@ -296,115 +290,6 @@ class IncidentService
             ]);
             $payload['started_at'] = $prtgStart;
         }
-    }
-
-    /**
-     * Reabre incidencia recuperada reciente (flaps) o con seguimiento activo
-     * ("Seguir en reporte" / Tracking abierto). Conserva started_at y la gestión.
-     */
-    private function reopenRecentFlap(
-        NetworkAssignment $assignment,
-        PrtgSensor $sensor,
-        ?CarbonInterface $downSince,
-    ): ?Incident {
-        $recent = $this->findReopenableIncident($assignment, $sensor);
-        if ($recent === null) {
-            return null;
-        }
-
-        $before = $recent->followup_status?->value;
-        $keepManagement = $recent->recovery_review_status === RecoveryReviewStatus::ContinueMonitoring
-            || $recent->trackingRecords()->notClosed()->exists()
-            || (bool) $recent->recovered_while_managing;
-
-        $managingValues = FollowupStatus::managingValues();
-        if ($keepManagement) {
-            if (
-                $recent->followup_status
-                && in_array($recent->followup_status->value, $managingValues, true)
-            ) {
-                $preservedFollowup = $recent->followup_status;
-            } else {
-                $preservedFollowup = match ($recent->management_classification) {
-                    ManagementClassification::ContactConfirmed => FollowupStatus::EnGestion,
-                    ManagementClassification::LinkOutage,
-                    ManagementClassification::NoResponse => FollowupStatus::EnEspera,
-                    default => FollowupStatus::EnGestion,
-                };
-            }
-        } else {
-            $preservedFollowup = FollowupStatus::PendienteContacto;
-        }
-
-        $payload = [
-            'recovered_at' => null,
-            'prtg_up_at' => null,
-            'current_status' => $sensor->normalized_status?->value ?? MonitoringStatus::Caido->value,
-            'followup_status' => $preservedFollowup,
-            'recovered_while_managing' => false,
-            'reopened_from_management' => $keepManagement,
-            'recovery_review_status' => null,
-            'recovery_reviewed_at' => null,
-        ];
-        if ($downSince !== null) {
-            $payload['prtg_down_started_at'] = OperationalTime::toStorage($downSince);
-        }
-        $recent->update($payload);
-
-        $reason = $keepManagement
-            ? 'Recaída en gestión: se recuperó durante seguimiento y volvió a caer. Misma incidencia; no entra como caída nueva.'
-            : sprintf(
-                'Reabierta por re-caída dentro de %ds (coalesce de flaps). Misma incidencia; started_at original conservado.',
-                max(0, (int) config('incidents.flap_reopen_seconds', 900))
-            );
-
-        IncidentUpdate::query()->create([
-            'incident_id' => $recent->id,
-            'type' => 'SYSTEM',
-            'status_before' => $before,
-            'status_after' => $preservedFollowup instanceof FollowupStatus
-                ? $preservedFollowup->value
-                : (string) $preservedFollowup,
-            'observation' => $reason,
-            'created_at' => now(),
-        ]);
-
-        return $recent->fresh() ?? $recent;
-    }
-
-    /**
-     * Candidata a reabrir: flap corto, o "Seguir en reporte", o Tracking aún abierto.
-     */
-    private function findReopenableIncident(NetworkAssignment $assignment, PrtgSensor $sensor): ?Incident
-    {
-        $monitored = Incident::query()
-            ->where('network_assignment_id', $assignment->id)
-            ->where('prtg_sensor_id', $sensor->id)
-            ->whereNotNull('recovered_at')
-            ->where(function ($q) {
-                $q->where('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value)
-                    ->orWhere('recovered_while_managing', true)
-                    ->orWhereHas('trackingRecords', fn ($t) => $t->notClosed());
-            })
-            ->orderByDesc('recovered_at')
-            ->first();
-
-        if ($monitored !== null) {
-            return $monitored;
-        }
-
-        $window = max(0, (int) config('incidents.flap_reopen_seconds', 900));
-        if ($window <= 0) {
-            return null;
-        }
-
-        return Incident::query()
-            ->where('network_assignment_id', $assignment->id)
-            ->where('prtg_sensor_id', $sensor->id)
-            ->whereNotNull('recovered_at')
-            ->where('recovered_at', '>=', now()->subSeconds($window))
-            ->orderByDesc('recovered_at')
-            ->first();
     }
 
     /**
