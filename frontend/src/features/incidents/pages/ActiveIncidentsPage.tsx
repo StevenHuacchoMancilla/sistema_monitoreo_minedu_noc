@@ -37,6 +37,7 @@ import { IncidentManageModal } from '../components/IncidentManageModal'
 import { RegisterLinkOutageModal } from '../components/RegisterLinkOutageModal'
 import type { OutageRow } from '../../../types/api'
 
+const outageTd = `${tdClassName} !align-top`
 const NEW_MINUTES = 15
 const HOUR_MINUTES = 60
 
@@ -168,7 +169,8 @@ export function ActiveIncidentsPage({
   const syncing = prtg.isPending
   const lastPrtgSync = summary.data?.sync?.prtg?.finished_at ?? null
 
-  // Orden del servidor (started_at DESC, id DESC); aquí solo se filtra.
+  // Caídas activas: orden del servidor (started_at DESC).
+  // Caídas totales: la columna muestra el downtime actual, así que se ordena por esa hora, la más reciente arriba.
   const scoped = useMemo(() => {
     const data = outages.data?.data ?? []
     return filter ? data.filter(filter) : data
@@ -190,7 +192,7 @@ export function ActiveIncidentsPage({
   }, [scoped, now, durationSource])
 
   const rows = useMemo(() => {
-    return scoped.filter((r) => {
+    const filtered = scoped.filter((r) => {
       if (followup === 'EN_GESTION_GROUP' ? !MANAGING.has(r.followup_status ?? '') : followup && r.followup_status !== followup) {
         return false
       }
@@ -206,6 +208,15 @@ export function ActiveIncidentsPage({
       if (toDate && (day === null || day > toDate)) return false
       if (duration && bucketOf(elapsedSeconds(downClock(r, durationSource), now)) !== duration) return false
       return true
+    })
+    if (durationSource !== 'current_down') return filtered
+    return [...filtered].sort((a, b) => {
+      const aMs = Date.parse(downClock(a, 'current_down') ?? '')
+      const bMs = Date.parse(downClock(b, 'current_down') ?? '')
+      const aTime = Number.isNaN(aMs) ? 0 : aMs
+      const bTime = Number.isNaN(bMs) ? 0 : bMs
+      if (bTime !== aTime) return bTime - aTime
+      return b.incident_id - a.incident_id
     })
   }, [scoped, followup, reopenedScope, managementScope, provincia, distrito, tecnologia, fromDate, toDate, duration, now, durationSource])
 
@@ -525,7 +536,7 @@ function OutageTableRow({
 
   return (
     <tr className={`${trClassName} group`}>
-      <td className={tdClassName}>
+      <td className={outageTd}>
         <div className="flex min-w-0 flex-col items-start gap-1">
           <PrtgStatusBadge status={row.estado_prtg} />
           {row.is_link_outage ? (
@@ -535,8 +546,8 @@ function OutageTableRow({
           ) : null}
         </div>
       </td>
-      <td className={`${tdClassName} font-medium tabular-nums`}>{row.cid ?? '—'}</td>
-      <td className={tdClassName}>
+      <td className={`${outageTd} font-medium tabular-nums`}>{row.cid ?? '—'}</td>
+      <td className={outageTd}>
         <Truncate title={row.local_educativo} className="font-medium text-slate-900 dark:text-slate-100">
           {row.local_educativo ?? '—'}
         </Truncate>
@@ -544,7 +555,7 @@ function OutageTableRow({
           {[row.codigo_local, row.tecnologia].filter(Boolean).join(' · ') || '—'}
         </span>
       </td>
-      <td className={tdClassName}>
+      <td className={outageTd}>
         <Truncate title={row.provincia}>{row.provincia ?? '—'}</Truncate>
         <span className="flex min-w-0 items-center gap-1">
           <Truncate title={row.distrito} className="text-[11px] text-slate-500 dark:text-slate-400">
@@ -553,13 +564,13 @@ function OutageTableRow({
           <LocationMismatchBadge info={row} compact />
         </span>
       </td>
-      <td className={tdClassName}>
+      <td className={outageTd}>
         <IsoDateTimeCell value={clock} />
       </td>
-      <td className={`${tdClassName} font-semibold tabular-nums ${DURATION_CLASS[bucket]}`}>
+      <td className={`${outageTd} font-semibold tabular-nums ${DURATION_CLASS[bucket]}`}>
         <span className="block truncate whitespace-nowrap">{formatDuration(seconds)}</span>
       </td>
-      <td className={tdClassName}>
+      <td className={outageTd}>
         <div className="flex min-w-0 flex-col items-start gap-1">
           <FollowupBadge status={row.followup_status} />
           <div className="flex flex-wrap items-center gap-1">
@@ -602,12 +613,12 @@ function OutageTableRow({
           </div>
         </div>
       </td>
-      <td className={tdClassName}>
+      <td className={outageTd}>
         <Truncate title={row.responsible_area} className="text-slate-600 dark:text-slate-300">
           {row.responsible_area ?? '—'}
         </Truncate>
       </td>
-      <td className={tdClassName}>
+      <td className={outageTd}>
         {row.tracking ? (
           <span className="flex min-w-0 flex-col items-start gap-0.5">
             <Truncate className="text-[12px] font-medium tabular-nums" title={row.tracking.ticket}>
@@ -621,7 +632,7 @@ function OutageTableRow({
           <span className="text-slate-400">—</span>
         )}
       </td>
-      <td className="sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
+      <td className="sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 !align-top text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
         <IconButton
           label={canManage ? 'Gestionar' : 'Ver detalle'}
           onClick={() => onManage(row.incident_id)}
