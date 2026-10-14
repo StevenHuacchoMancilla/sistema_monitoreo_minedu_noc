@@ -108,6 +108,10 @@ final class PermissionCatalog
                 self::REPORTS_EXPORT,
                 self::PROFILE_MANAGE_OWN,
             ],
+            UserRole::RecoveryViewer => [
+                self::RECOVERIES_VIEW,
+                self::PROFILE_MANAGE_OWN,
+            ],
         };
     }
 

@@ -70,6 +70,39 @@ class RbacMatrixTest extends TestCase
         ])->assertOk();
     }
 
+    public function test_recovery_viewer_can_only_open_recoveries_and_own_profile(): void
+    {
+        $this->actingAsUser(null, UserRole::RecoveryViewer);
+
+        $this->assertSame(
+            [PermissionCatalog::RECOVERIES_VIEW, PermissionCatalog::PROFILE_MANAGE_OWN],
+            PermissionCatalog::forRole(UserRole::RecoveryViewer),
+        );
+        $this->assertFalse(PermissionCatalog::roleHas(UserRole::RecoveryViewer, PermissionCatalog::INCIDENTS_VIEW));
+        $this->assertTrue(PermissionCatalog::roleHas(UserRole::Viewer, PermissionCatalog::INCIDENTS_VIEW));
+
+        $this->getJson('/api/me')
+            ->assertOk()
+            ->assertJsonPath('data.role', 'RECOVERY_VIEWER')
+            ->assertJsonPath('data.role_label', 'Vista de recuperados')
+            ->assertJsonPath('data.can_write', false);
+
+        $this->getJson('/api/incidents/recovered?preset=today')->assertOk();
+        $this->getJson('/api/incidents/recovered/summary?preset=today')->assertOk();
+        $this->getJson('/api/profile')->assertOk();
+
+        $this->getJson('/api/incidents')->assertForbidden();
+        $this->getJson('/api/dashboard/outages')->assertForbidden();
+        $this->getJson('/api/dashboard/prtg')->assertForbidden();
+        $this->getJson('/api/notifications/operational')->assertForbidden();
+        $this->getJson('/api/tracking')->assertForbidden();
+        $this->getJson('/api/schools')->assertForbidden();
+        $this->getJson('/api/history/schools')->assertForbidden();
+        $this->getJson('/api/reports/operational')->assertForbidden();
+        $this->getJson('/api/users')->assertForbidden();
+        $this->postJson('/api/sync/prtg')->assertForbidden();
+    }
+
     public function test_profile_ignores_role_escalation(): void
     {
         $user = $this->actingAsUser(null, UserRole::NocOperator);

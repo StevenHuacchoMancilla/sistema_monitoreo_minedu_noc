@@ -5,6 +5,8 @@ import { Bell, Truck } from 'lucide-react'
 import { IconButton } from '../../../components/ui/IconButton'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/AuthContext'
+import { usePermissions } from '../../auth/hooks/usePermissions'
+import { P } from '../../auth/permissions'
 import { useOperationalAlerts } from '../hooks/useOperationalAlerts'
 import type { OperationalAlert } from '../types/alerts'
 
@@ -32,8 +34,10 @@ function saveDismissed(ids: Set<string>) {
 export function NotificationBell() {
   const navigate = useNavigate()
   const { user } = useAuth()
+  const { can } = usePermissions()
+  const canSee = can(P.incidentsView)
   const canManage = Boolean(user?.permissions?.includes('recoveries.manage'))
-  const alerts = useOperationalAlerts()
+  const alerts = useOperationalAlerts(60_000, canSee)
   const client = useQueryClient()
   const [open, setOpen] = useState(false)
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed())
@@ -100,6 +104,8 @@ export function NotificationBell() {
     },
     onSettled: () => setBusyId(null),
   })
+
+  if (!canSee) return null
 
   return (
     <div className="relative" ref={panelRef}>

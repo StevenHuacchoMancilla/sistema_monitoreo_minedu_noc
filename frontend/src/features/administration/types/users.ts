@@ -1,4 +1,4 @@
-export type ManagedUserRole = 'ADMIN' | 'NOC_OPERATOR' | 'VIEWER'
+export type ManagedUserRole = 'ADMIN' | 'NOC_OPERATOR' | 'VIEWER' | 'RECOVERY_VIEWER'
 
 export type ManagedUser = {
   id: number

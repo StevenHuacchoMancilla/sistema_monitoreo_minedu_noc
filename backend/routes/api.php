@@ -37,10 +37,13 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
     });
 
     Route::get('/dashboard/summary', [DashboardController::class, 'summary']);
-    Route::get('/dashboard/outages', [DashboardController::class, 'outages']);
-    Route::get('/dashboard/concentrations', [DashboardController::class, 'concentrations']);
-    Route::get('/dashboard/concentrations/zone', [DashboardController::class, 'concentrationZone']);
-    Route::get('/dashboard/school-history', [DashboardController::class, 'schoolHistory']);
+
+    Route::middleware('permission:'.PermissionCatalog::INCIDENTS_VIEW)->group(function () {
+        Route::get('/dashboard/outages', [DashboardController::class, 'outages']);
+        Route::get('/dashboard/concentrations', [DashboardController::class, 'concentrations']);
+        Route::get('/dashboard/concentrations/zone', [DashboardController::class, 'concentrationZone']);
+        Route::get('/dashboard/school-history', [DashboardController::class, 'schoolHistory']);
+    });
 
     Route::get('/prtg/locations/provinces', [PrtgLocationController::class, 'provinces']);
     Route::get('/prtg/locations/districts', [PrtgLocationController::class, 'districts']);
@@ -58,10 +61,13 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/schools/{school}', [SchoolController::class, 'show']);
     });
 
-    Route::middleware('permission:'.PermissionCatalog::INCIDENTS_VIEW)->group(function () {
-        Route::get('/incidents', [IncidentController::class, 'index']);
+    Route::middleware('permission:'.PermissionCatalog::RECOVERIES_VIEW)->group(function () {
         Route::get('/incidents/recovered/summary', [RecoveredIncidentController::class, 'summary']);
         Route::get('/incidents/recovered', [RecoveredIncidentController::class, 'index']);
+    });
+
+    Route::middleware('permission:'.PermissionCatalog::INCIDENTS_VIEW)->group(function () {
+        Route::get('/incidents', [IncidentController::class, 'index']);
         Route::get('/notifications/operational', [OperationalNotificationController::class, 'index']);
         Route::get('/incidents/{incident}', [IncidentController::class, 'show']);
     });

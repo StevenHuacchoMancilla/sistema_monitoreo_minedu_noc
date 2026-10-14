@@ -62,7 +62,7 @@ const NAV: NavItem[] = [
   { section: 'reportes', to: '/reports/ticketera', label: 'Ticketera', icon: Ticket, permission: P.reportsView },
   { section: 'consulta', to: '/history/schools', label: 'Historial por colegio', icon: History, permission: P.historyView },
   { section: 'consulta', to: '/schools', label: 'Locales educativos', icon: GraduationCap, permission: P.schoolsView },
-  { section: 'consulta', to: '/notifications', label: 'Notificaciones', badgeKey: 'notificaciones', tone: 'warn', icon: Bell, permission: P.recoveriesView },
+  { section: 'consulta', to: '/notifications', label: 'Notificaciones', badgeKey: 'notificaciones', tone: 'warn', icon: Bell, permission: P.incidentsView },
   { section: 'consulta', to: '/admin', label: 'Administración', icon: Settings, permission: P.adminView },
 ]
 
@@ -82,10 +82,10 @@ export function Sidebar({
   forceExpanded?: boolean
 }) {
   const summary = useDashboardSummary()
-  const alerts = useOperationalAlerts(60_000)
+  const { can } = usePermissions()
+  const alerts = useOperationalAlerts(60_000, can(P.incidentsView))
   const nav = summary.data?.nav
   const notifCount = alerts.data?.meta.pending_review ?? alerts.data?.data?.length ?? 0
-  const { can } = usePermissions()
   const { collapsed, toggle } = useSidebar()
   const isCollapsed = forceExpanded ? false : collapsed
   const items = NAV.filter((item) => can(item.permission))

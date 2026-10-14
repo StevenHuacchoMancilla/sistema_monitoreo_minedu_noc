@@ -9,6 +9,7 @@ enum UserRole: string
     case Admin = 'ADMIN';
     case NocOperator = 'NOC_OPERATOR';
     case Viewer = 'VIEWER';
+    case RecoveryViewer = 'RECOVERY_VIEWER';
 
     /**
      * @return list<string>
@@ -24,6 +25,7 @@ enum UserRole: string
             self::Admin => 'Administrador',
             self::NocOperator => 'Operador NOC',
             self::Viewer => 'Solo lectura',
+            self::RecoveryViewer => 'Vista de recuperados',
         };
     }
 

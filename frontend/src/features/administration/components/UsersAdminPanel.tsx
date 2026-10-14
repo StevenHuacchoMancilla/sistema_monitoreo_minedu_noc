@@ -33,11 +33,13 @@ const ROLE_OPTIONS: Array<{ value: ManagedUserRole; label: string }> = [
   { value: 'ADMIN', label: 'Administrador' },
   { value: 'NOC_OPERATOR', label: 'Operador NOC' },
   { value: 'VIEWER', label: 'Solo lectura' },
+  { value: 'RECOVERY_VIEWER', label: 'Vista de recuperados' },
 ]
 
 function roleTone(role: string | null | undefined) {
   if (role === 'ADMIN') return 'danger' as const
   if (role === 'NOC_OPERATOR') return 'info' as const
+  if (role === 'RECOVERY_VIEWER') return 'success' as const
   return 'neutral' as const
 }
 

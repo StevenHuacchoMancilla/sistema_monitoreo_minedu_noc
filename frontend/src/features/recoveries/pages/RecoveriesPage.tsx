@@ -35,6 +35,8 @@ import { PaginationBar } from '../../../components/ui/PaginationBar'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
 import { CaseStatusBadge, ContactOutcomeBadge } from '../../../components/monitoring/StatusBadges'
 import { formatDuration } from '../../../lib/datetime'
+import { usePermissions } from '../../auth/hooks/usePermissions'
+import { P } from '../../auth/permissions'
 import { useDebouncedValue } from '../../../lib/useDebouncedValue'
 import { useNow } from '../../../lib/useNow'
 import { useManualSync } from '../../dashboard/hooks/useDashboard'
@@ -67,6 +69,8 @@ function ymdToDmy(value: string | undefined): string {
 export function RecoveriesPage() {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
+  const { can } = usePermissions()
+  const canOpenHistory = can(P.historyView)
   const { prtg } = useManualSync()
 
   const reviewFromUrl = searchParams.get('review_status') || ''
@@ -91,11 +95,12 @@ export function RecoveriesPage() {
 
   // Enlaces antiguos (?focus=ID) abren directamente el expediente completo.
   useEffect(() => {
+    if (!canOpenHistory) return
     const focus = Number(searchParams.get('focus') || '')
     if (Number.isFinite(focus) && focus > 0) {
       navigate(incidentCaseFilePath(focus), { replace: true })
     }
-  }, [searchParams, navigate])
+  }, [searchParams, navigate, canOpenHistory])
 
   useEffect(() => {
     setPage(1)
@@ -177,7 +182,7 @@ export function RecoveriesPage() {
         void list.refetch()
         void summary.refetch()
       }}
-      onSyncPrtg={() => prtg.mutate()}
+      onSyncPrtg={can(P.syncRun) ? () => prtg.mutate() : undefined}
     >
       <PageHeader
         icon={<CircleCheck className="h-5 w-5" aria-hidden />}
@@ -412,7 +417,7 @@ export function RecoveriesPage() {
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <RecoveryRow key={row.id} row={row} />
+                    <RecoveryRow key={row.id} row={row} canOpenHistory={canOpenHistory} />
                   ))}
                 </tbody>
               </table>
@@ -447,7 +452,7 @@ export function RecoveriesPage() {
   )
 }
 
-function RecoveryRow({ row }: { row: RecoveredRow }) {
+function RecoveryRow({ row, canOpenHistory }: { row: RecoveredRow; canOpenHistory: boolean }) {
   const now = useNow(30_000)
   const showOutcome = row.management_classification && CONTACT_OUTCOMES.has(row.management_classification)
   const localSubtext = [row.codigo_local, row.tecnologia, row.distrito].filter(Boolean).join(' · ') || '—'
@@ -561,18 +566,22 @@ function RecoveryRow({ row }: { row: RecoveredRow }) {
         </div>
       </td>
       <td className="sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
-        <div className="inline-flex gap-0.5">
-          <RowIconLink
-            to={incidentCaseFilePath(row.id)}
-            label={row.requires_review ? 'Revisar incidencia' : 'Ver incidencia completa'}
-            highlight={row.requires_review}
-          >
-            <Eye className="h-4 w-4" aria-hidden />
-          </RowIconLink>
-          <RowIconLink to={`/history/schools/${row.school_id}`} label="Historial del colegio">
-            <History className="h-4 w-4" aria-hidden />
-          </RowIconLink>
-        </div>
+        {canOpenHistory ? (
+          <div className="inline-flex gap-0.5">
+            <RowIconLink
+              to={incidentCaseFilePath(row.id)}
+              label={row.requires_review ? 'Revisar incidencia' : 'Ver incidencia completa'}
+              highlight={row.requires_review}
+            >
+              <Eye className="h-4 w-4" aria-hidden />
+            </RowIconLink>
+            <RowIconLink to={`/history/schools/${row.school_id}`} label="Historial del colegio">
+              <History className="h-4 w-4" aria-hidden />
+            </RowIconLink>
+          </div>
+        ) : (
+          <span className="text-slate-300">—</span>
+        )}
       </td>
     </tr>
   )

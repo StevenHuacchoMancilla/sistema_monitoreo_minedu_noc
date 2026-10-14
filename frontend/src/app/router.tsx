@@ -119,8 +119,11 @@ export function AppRouter() {
 
           <Route element={<RequirePermission permission={P.recoveriesView} />}>
             <Route path="/recoveries" element={<RecoveriesPage />} />
-            <Route path="/notifications" element={<NotificationsPage />} />
             <Route path="/incidents/recovered" element={<Navigate to="/recoveries" replace />} />
+          </Route>
+
+          <Route element={<RequirePermission permission={P.incidentsView} />}>
+            <Route path="/notifications" element={<NotificationsPage />} />
           </Route>
 
           <Route element={<RequirePermission permission={P.historyView} />}>

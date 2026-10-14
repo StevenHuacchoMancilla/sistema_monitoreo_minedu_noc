@@ -46,7 +46,7 @@ export type AuthUser = {
   id: number
   name: string
   email: string
-  role: 'ADMIN' | 'NOC_OPERATOR' | 'VIEWER'
+  role: 'ADMIN' | 'NOC_OPERATOR' | 'VIEWER' | 'RECOVERY_VIEWER'
   role_label: string
   active: boolean
   last_login_at: string | null
