@@ -22,7 +22,8 @@ class PrtgService
         }
 
         $response = Http::withoutVerifying()
-            ->timeout(90)
+            ->connectTimeout(45)
+            ->timeout(120)
             ->get("{$base}/api/table.json", array_merge($query, [
                 'content' => $content,
                 'apitoken' => $token,

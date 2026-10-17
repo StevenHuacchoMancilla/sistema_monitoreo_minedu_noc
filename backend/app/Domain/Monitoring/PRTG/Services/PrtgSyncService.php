@@ -1027,7 +1027,7 @@ class PrtgSyncService
         $sensorId = (string) ($sensorRow['objid'] ?? '');
         $existing = $sensorId !== '' ? $this->sensorIndex?->get($sensorId) : null;
         if ($existing) {
-            if (! $this->sensorNeedsWrite($existing, $statusRaw, $sensorRow)) {
+            if (! $this->sensorNeedsWrite($existing, $statusRaw, $sensorRow, $payload['metadata']['source_scope'] ?? null)) {
                 return ['created' => 0, 'updated' => 0];
             }
             $existing->fill($payload)->save();
@@ -1046,17 +1046,28 @@ class PrtgSyncService
     }
 
     /**
-     * El lastvalue del Ping cambia en cada lectura. Solo persistimos estado o el inicio de caída.
+     * El lastvalue del Ping cambia en cada lectura. Persistimos si cambia el estado,
+     * el inicio de caída, o el scope (cambio de rama PRTG).
      *
      * @param  array<string, mixed>  $sensorRow
      */
-    private function sensorNeedsWrite(PrtgSensor $existing, ?int $statusRaw, array $sensorRow): bool
-    {
+    private function sensorNeedsWrite(
+        PrtgSensor $existing,
+        ?int $statusRaw,
+        array $sensorRow,
+        ?string $newScope = null,
+    ): bool {
         if ((int) $existing->status_raw !== (int) $statusRaw) {
             return true;
         }
 
-        return (string) ($existing->down_since ?? '') !== (string) ($sensorRow['downtimesince'] ?? '');
+        if ((string) ($existing->down_since ?? '') !== (string) ($sensorRow['downtimesince'] ?? '')) {
+            return true;
+        }
+
+        $existingScope = (string) ($existing->metadata['source_scope'] ?? '');
+
+        return $newScope !== null && $existingScope !== $newScope;
     }
 
     /**
