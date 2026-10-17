@@ -4,9 +4,6 @@ namespace Tests\Unit\Prtg;
 
 use App\Domain\Monitoring\PRTG\Services\PrtgService;
 use App\Domain\Monitoring\PRTG\Services\PrtgSyncService;
-use App\Enums\SyncIssueSeverity;
-use App\Enums\SyncRunStatus;
-use App\Models\SyncRun;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -16,67 +13,78 @@ class PrtgScopeAllowlistTest extends TestCase
 
     private PrtgService $prtg;
 
-    private int $rootId = 100;
+    private int $rootId = 900;
+
+    private int $clusterProbeId = 2;
+
+    private int $localProbeId = 10;
 
     private int $temporalId = 50;
 
-    private int $probeId = 10;
+    private int $oldOperadoresId = 100;
 
     private int $altoAmazonasId = 200;
 
     private int $lagunasId = 300;
 
-    private int $loretoClusterId = 900;
-
     protected function setUp(): void
     {
         parent::setUp();
         config([
-            'prtg.allowed_probe' => 'Sonda local',
-            'prtg.allowed_root_group' => 'Operadores Global Fiber página inicial',
-            'prtg.device_cid_regex' => '^CID(\\d+)',
+            'prtg.allowed_probe' => 'Sonda de clúster',
+            'prtg.allowed_root_group' => 'REGION LORETO',
+            'prtg.device_cid_regex' => '(?:^|_)CID(\\d+)',
         ]);
         $this->prtg = new PrtgService;
     }
 
     /**
+     * Árbol actual: Sonda de clúster → REGION LORETO → provincia → distrito.
+     * La rama antigua "Operadores Global Fiber…" queda fuera del scope.
+     *
      * @return array<int, array<string, mixed>>
      */
     private function groupTree(): array
     {
         return [
-            ['objid' => $this->probeId, 'group' => 'Sonda local', 'probe' => 'Sonda local', 'parentid' => 1],
-            ['objid' => $this->temporalId, 'group' => 'TEMPORAL', 'probe' => 'Sonda local', 'parentid' => $this->probeId],
-            ['objid' => 51, 'group' => 'Otro grupo', 'probe' => 'Sonda local', 'parentid' => $this->probeId],
+            ['objid' => $this->localProbeId, 'group' => 'Sonda local', 'probe' => 'Sonda local', 'parentid' => 1],
+            ['objid' => $this->clusterProbeId, 'group' => 'Sonda de clúster', 'probe' => 'Sonda de clúster', 'parentid' => 1],
+            ['objid' => $this->temporalId, 'group' => 'TEMPORAL', 'probe' => 'Sonda local', 'parentid' => $this->localProbeId],
             [
-                'objid' => $this->rootId,
+                'objid' => $this->oldOperadoresId,
                 'group' => 'Operadores Global Fiber página inicial',
                 'probe' => 'Sonda local',
-                'parentid' => $this->probeId,
+                'parentid' => $this->localProbeId,
+            ],
+            [
+                'objid' => $this->rootId,
+                'group' => 'REGION LORETO',
+                'probe' => 'Sonda de clúster',
+                'parentid' => $this->clusterProbeId,
             ],
             [
                 'objid' => $this->altoAmazonasId,
                 'group' => 'ALTO AMAZONAS',
-                'probe' => 'Sonda local',
+                'probe' => 'Sonda de clúster',
                 'parentid' => $this->rootId,
             ],
             [
                 'objid' => $this->lagunasId,
                 'group' => 'LAGUNAS',
-                'probe' => 'Sonda local',
-                'parentid' => $this->altoAmazonasId,
-            ],
-            [
-                'objid' => $this->loretoClusterId,
-                'group' => 'REGION LORETO',
                 'probe' => 'Sonda de clúster',
-                'parentid' => 2,
+                'parentid' => $this->altoAmazonasId,
             ],
             [
                 'objid' => 901,
                 'group' => 'MAYNAS',
                 'probe' => 'Sonda de clúster',
-                'parentid' => $this->loretoClusterId,
+                'parentid' => $this->rootId,
+            ],
+            [
+                'objid' => 51,
+                'group' => 'Otro grupo',
+                'probe' => 'Sonda de clúster',
+                'parentid' => $this->clusterProbeId,
             ],
         ];
     }
@@ -91,7 +99,7 @@ class PrtgScopeAllowlistTest extends TestCase
                 'objid' => 5001,
                 'device' => 'CID258509_378592_SENOR_DE_LOS_MILAGROS',
                 'parentid' => $this->lagunasId,
-                'probe' => 'Sonda local',
+                'probe' => 'Sonda de clúster',
             ]],
             [[
                 'objid' => 8001,
@@ -145,7 +153,7 @@ class PrtgScopeAllowlistTest extends TestCase
                 'objid' => 5003,
                 'device' => 'CID258509_OTHER',
                 'parentid' => 51,
-                'probe' => 'Sonda local',
+                'probe' => 'Sonda de clúster',
             ]],
             [],
             $this->rootId,
@@ -157,7 +165,7 @@ class PrtgScopeAllowlistTest extends TestCase
         $this->assertSame(1, $result['excluded_outside_scope']);
     }
 
-    public function test_case4_old_cluster_loreto_branch_is_excluded(): void
+    public function test_case4_old_operadores_branch_is_excluded(): void
     {
         $index = $this->prtg->indexGroupsById($this->groupTree());
         $sync = $this->makeSyncService();
@@ -166,8 +174,8 @@ class PrtgScopeAllowlistTest extends TestCase
             [[
                 'objid' => 5004,
                 'device' => 'CID258509_OLD',
-                'parentid' => 901,
-                'probe' => 'Sonda de clúster',
+                'parentid' => $this->oldOperadoresId,
+                'probe' => 'Sonda local',
             ]],
             [],
             $this->rootId,
@@ -189,7 +197,7 @@ class PrtgScopeAllowlistTest extends TestCase
                 'objid' => 5005,
                 'device' => 'ROUTER_SIN_CID',
                 'parentid' => $this->lagunasId,
-                'probe' => 'Sonda local',
+                'probe' => 'Sonda de clúster',
             ]],
             [],
             $this->rootId,
@@ -213,13 +221,13 @@ class PrtgScopeAllowlistTest extends TestCase
                     'objid' => 5006,
                     'device' => 'CID258509_A',
                     'parentid' => $this->lagunasId,
-                    'probe' => 'Sonda local',
+                    'probe' => 'Sonda de clúster',
                 ],
                 [
                     'objid' => 5007,
                     'device' => 'CID258509_B',
                     'parentid' => $this->lagunasId,
-                    'probe' => 'Sonda local',
+                    'probe' => 'Sonda de clúster',
                 ],
             ],
             [],
@@ -243,7 +251,7 @@ class PrtgScopeAllowlistTest extends TestCase
                     'objid' => 5008,
                     'device' => 'CID258509_OK',
                     'parentid' => $this->lagunasId,
-                    'probe' => 'Sonda local',
+                    'probe' => 'Sonda de clúster',
                 ],
                 [
                     'objid' => 5009,
@@ -270,7 +278,7 @@ class PrtgScopeAllowlistTest extends TestCase
             public function fetchTable(string $content, array $query): array
             {
                 return [
-                    ['objid' => 6495, 'group' => 'Operadores Global Fiber página inicial', 'probe' => 'Sonda de clúster', 'parentid' => 2],
+                    ['objid' => 900, 'group' => 'REGION LORETO', 'probe' => 'Sonda renombrada', 'parentid' => 2],
                     ['objid' => 1, 'group' => 'Sonda local', 'probe' => 'Sonda local', 'parentid' => 0],
                 ];
             }
@@ -278,8 +286,8 @@ class PrtgScopeAllowlistTest extends TestCase
 
         $root = $service->findAllowedRootGroup();
 
-        $this->assertSame(6495, $root['objid']);
-        $this->assertSame('Sonda de clúster', $root['probe']);
+        $this->assertSame(900, $root['objid']);
+        $this->assertSame('Sonda renombrada', $root['probe']);
     }
 
     public function test_case8_missing_root_throws_configuration_error(): void
@@ -293,7 +301,7 @@ class PrtgScopeAllowlistTest extends TestCase
             {
                 return [
                     ['objid' => 1, 'group' => 'TEMPORAL', 'probe' => 'Sonda local', 'parentid' => 0],
-                    ['objid' => 2, 'group' => 'REGION LORETO', 'probe' => 'Sonda de clúster', 'parentid' => 0],
+                    ['objid' => 2, 'group' => 'Operadores Global Fiber página inicial', 'probe' => 'Sonda local', 'parentid' => 0],
                 ];
             }
         };
@@ -304,7 +312,9 @@ class PrtgScopeAllowlistTest extends TestCase
     public function test_extract_cid_uses_configured_regex(): void
     {
         $this->assertSame('258509', $this->prtg->extractCid('CID258509_FOO'));
+        $this->assertSame('258453', $this->prtg->extractCid('367145_CID258453_1262252_763_LORETO_MAYNAS'));
         $this->assertNull($this->prtg->extractCid('XCID258509'));
+        $this->assertNull($this->prtg->extractCid('ROUTER_SIN_CID'));
     }
 
     public function test_is_descendant_helpers(): void
@@ -313,7 +323,7 @@ class PrtgScopeAllowlistTest extends TestCase
 
         $this->assertTrue($this->prtg->isDescendantOfAllowedRoot($this->lagunasId, $this->rootId, $index));
         $this->assertFalse($this->prtg->isDescendantOfAllowedRoot($this->temporalId, $this->rootId, $index));
-        $this->assertFalse($this->prtg->isDescendantOfAllowedRoot(901, $this->rootId, $index));
+        $this->assertFalse($this->prtg->isDescendantOfAllowedRoot($this->oldOperadoresId, $this->rootId, $index));
     }
 
     private function makeSyncService(): PrtgSyncService

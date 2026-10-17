@@ -4,9 +4,10 @@ return [
 
     'base_url' => env('PRTG_BASE_URL'),
     'api_token' => env('PRTG_API_TOKEN'),
-    'allowed_probe' => env('PRTG_ALLOWED_PROBE', 'Sonda local'),
-    'allowed_root_group' => env('PRTG_ALLOWED_ROOT_GROUP', 'Operadores Global Fiber página inicial'),
-    'device_cid_regex' => env('PRTG_DEVICE_CID_REGEX', '^CID(\\d+)'),
+    'allowed_probe' => env('PRTG_ALLOWED_PROBE', 'Sonda de clúster'),
+    'allowed_root_group' => env('PRTG_ALLOWED_ROOT_GROUP', 'REGION LORETO'),
+    // Acepta CID al inicio (CID258…) o embebido (367145_CID258…).
+    'device_cid_regex' => env('PRTG_DEVICE_CID_REGEX', '(?:^|_)CID(\\d+)'),
     'sync_enabled' => (bool) env('PRTG_SYNC_ENABLED', false),
     // 60s es el piso seguro: el sync completo suele tardar 30–90s; el candado evita solapes.
     'sync_interval_seconds' => (int) env('PRTG_SYNC_INTERVAL_SECONDS', 60),

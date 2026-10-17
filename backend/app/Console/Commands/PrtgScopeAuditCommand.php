@@ -10,7 +10,7 @@ class PrtgScopeAuditCommand extends Command
 {
     protected $signature = 'prtg:scope-audit';
 
-    protected $description = 'Auditoría READ-ONLY del scope PRTG allowlist (Sonda local → Operadores Global Fiber). No modifica incidencias.';
+    protected $description = 'Auditoría READ-ONLY del scope PRTG allowlist (Sonda de clúster → REGION LORETO). No modifica incidencias.';
 
     public function handle(PrtgSyncService $service): int
     {

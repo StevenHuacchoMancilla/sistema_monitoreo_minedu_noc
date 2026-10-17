@@ -9,7 +9,7 @@ class SyncPrtgCommand extends Command
 {
     protected $signature = 'prtg:sync';
 
-    protected $description = 'Sincroniza sensores PRTG (Sonda local → Operadores Global Fiber página inicial)';
+    protected $description = 'Sincroniza sensores PRTG del scope allowlist (Sonda de clúster → REGION LORETO)';
 
     public function handle(PrtgSyncService $service): int
     {

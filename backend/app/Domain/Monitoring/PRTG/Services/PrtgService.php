@@ -39,8 +39,8 @@ class PrtgService
 
     /**
      * Localiza el root allowlist. Prefiere probe + grupo exactos.
-     * Si el grupo se movió de sonda (p. ej. Sonda local → Sonda de clúster)
-     * y el nombre es único, lo usa igual para no dejar de leer las caídas.
+     * Si el grupo se movió de sonda y el nombre es único, lo usa igual
+     * para no dejar de leer las caídas (fallback de sonda).
      *
      * @return array{objid: int, name: string, probe: string, parentid: int|null}
      */
