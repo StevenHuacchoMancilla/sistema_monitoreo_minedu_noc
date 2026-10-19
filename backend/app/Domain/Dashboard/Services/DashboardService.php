@@ -71,7 +71,10 @@ class DashboardService
         $pingStatuses = \App\Domain\Monitoring\PRTG\Services\PrtgSensorQuery::statusCounts();
         $withPing = array_sum($pingStatuses);
         $outageNav = $this->outageNavCounts();
-        $concentrationCount = $this->concentrationCount();
+        // Un solo pase sobre incidencias activas (antes 2 queries pesadas → freeze percibido).
+        $zoneCounts = $this->zoneAndMassCounts();
+        $concentrationCount = $zoneCounts['concentraciones'];
+        $massOutageCount = $zoneCounts['caidas_masivas'];
         $eligible = (int) $counts->eligible;
 
         return [
@@ -102,11 +105,12 @@ class DashboardService
             ],
             'nav' => [
                 'caidas_totales' => $outageNav['totales'],
-                'caidas_activas' => $outageNav['activas'],
                 'pendientes_contacto' => $outageNav['pendientes'],
                 'en_gestion' => (int) $counts->en_gestion,
-                'recaida_gestion' => $outageNav['recaidas'],
+                'pendiente_cierre' => $outageNav['pendiente_cierre'],
+                'incidencias_graves' => $outageNav['incidencias_graves'],
                 'concentraciones' => $concentrationCount,
+                'caidas_masivas' => $massOutageCount,
                 'recuperados' => (int) $counts->recovered_today,
                 'pending_reviews' => (int) $counts->pending_reviews,
                 'tracking_abiertos' => (int) $counts->tracking_abiertos,
@@ -124,19 +128,16 @@ class DashboardService
     /**
      * Conteos del menú sin armar cada fila de la tabla.
      *
-     * @return array{totales: int, activas: int, pendientes: int, recaidas: int}
+     * @return array{totales: int, pendientes: int, pendiente_cierre: int, incidencias_graves: int}
      */
     public function outageNavCounts(): array
     {
         $row = DB::selectOne(
             "SELECT
                 COUNT(*)::int AS totales,
-                COUNT(*) FILTER (WHERE NOT reopened_from_management)::int AS activas,
-                COUNT(*) FILTER (WHERE NOT reopened_from_management AND followup_status = ?)::int AS pendientes,
-                COUNT(*) FILTER (WHERE reopened_from_management)::int AS recaidas
+                COUNT(*) FILTER (WHERE followup_status = ?)::int AS pendientes
              FROM (
                 SELECT DISTINCT ON (network_assignment_id)
-                    reopened_from_management,
                     followup_status
                 FROM incidents
                 WHERE recovered_at IS NULL
@@ -157,26 +158,362 @@ class DashboardService
             ]
         );
 
+        $pendienteCierre = (int) Incident::query()
+            ->where('followup_status', FollowupStatus::PendienteCierre)
+            ->whereNotNull('recovered_at')
+            ->count();
+
+        $graves = (int) Incident::query()
+            ->where('is_grave_incident', true)
+            ->whereNull('grave_closed_at')
+            ->count();
+
         return [
             'totales' => (int) ($row->totales ?? 0),
-            'activas' => (int) ($row->activas ?? 0),
             'pendientes' => (int) ($row->pendientes ?? 0),
-            'recaidas' => (int) ($row->recaidas ?? 0),
+            'pendiente_cierre' => $pendienteCierre,
+            'incidencias_graves' => $graves,
+            // compat legacy
+            'activas' => (int) ($row->totales ?? 0),
+            'recaidas' => 0,
         ];
     }
 
     public function concentrationCount(): int
     {
+        return $this->zoneAndMassCounts()['concentraciones'];
+    }
+
+    public function massOutageCount(): int
+    {
+        return $this->zoneAndMassCounts()['caidas_masivas'];
+    }
+
+    /**
+     * @return array{concentraciones: int, caidas_masivas: int}
+     */
+    public function zoneAndMassCounts(): array
+    {
         $zones = [];
+        $nodes = [];
         $incidents = Incident::query()->active()->with(['school', 'networkAssignment'])->get();
         foreach ($incidents as $incident) {
             $location = PrtgOperationalLocation::resolve($incident->networkAssignment, $incident->school);
-            $key = mb_strtoupper((string) ($location['province'] ?? 'SIN PROVINCIA'))
+            $zoneKey = mb_strtoupper((string) ($location['province'] ?? 'SIN PROVINCIA'))
                 .'|'.mb_strtoupper((string) ($location['district'] ?? 'SIN DISTRITO'));
-            $zones[$key] = ($zones[$key] ?? 0) + 1;
+            $zones[$zoneKey] = ($zones[$zoneKey] ?? 0) + 1;
+
+            $nodo = trim((string) ($incident->networkAssignment?->nodo_pop ?? ''));
+            if ($nodo !== '') {
+                $nodeKey = mb_strtoupper($nodo);
+                $nodes[$nodeKey] = ($nodes[$nodeKey] ?? 0) + 1;
+            }
         }
 
-        return count(array_filter($zones, fn (int $n) => $n >= 2));
+        return [
+            'concentraciones' => count(array_filter($zones, fn (int $n) => $n >= 2)),
+            'caidas_masivas' => count(array_filter($nodes, fn (int $n) => $n >= 2)),
+        ];
+    }
+
+    /**
+     * Agrupa caídas activas por Nodo/POP (≥2). Distinto de concentraciones (distrito PRTG).
+     *
+     * @return array<int, array<string, mixed>>
+     */
+    public function massOutagesByNodo(): array
+    {
+        $activeIncidents = Incident::query()
+            ->active()
+            ->with(['school', 'networkAssignment'])
+            ->get();
+
+        /** @var array<string, array<string, mixed>> $nodes */
+        $nodes = [];
+        foreach ($activeIncidents as $incident) {
+            $nodo = trim((string) ($incident->networkAssignment?->nodo_pop ?? ''));
+            if ($nodo === '') {
+                continue;
+            }
+            $key = mb_strtoupper($nodo);
+
+            if (! isset($nodes[$key])) {
+                $nodes[$key] = [
+                    'dimension' => 'nodo_pop',
+                    'label' => $nodo,
+                    'nodo_pop' => $nodo,
+                    'caidos' => 0,
+                    'school_ids' => [],
+                    'assignment_ids' => [],
+                    'distritos' => [],
+                    'tecnologias' => [],
+                    'oldest_started_at' => null,
+                ];
+            }
+
+            $nodes[$key]['caidos']++;
+            $tech = $this->technologyLabel($incident->networkAssignment?->tecnologia_acceso);
+            $nodes[$key]['tecnologias'][$tech] = ($nodes[$key]['tecnologias'][$tech] ?? 0) + 1;
+            if ($incident->school_id) {
+                $nodes[$key]['school_ids'][$incident->school_id] = true;
+            }
+            if ($incident->network_assignment_id) {
+                $nodes[$key]['assignment_ids'][$incident->network_assignment_id] = true;
+            }
+            $location = PrtgOperationalLocation::resolve($incident->networkAssignment, $incident->school);
+            $dist = trim((string) ($location['district'] ?? ''));
+            if ($dist !== '') {
+                $nodes[$key]['distritos'][$dist] = true;
+            }
+            $started = $incident->prtg_down_started_at ?? $incident->started_at;
+            if ($started !== null) {
+                $current = $nodes[$key]['oldest_started_at'];
+                if ($current === null || $started->lt($current)) {
+                    $nodes[$key]['oldest_started_at'] = $started;
+                }
+            }
+        }
+
+        $nodes = array_filter($nodes, fn (array $z) => (int) $z['caidos'] >= 2);
+
+        $out = [];
+        foreach ($nodes as $node) {
+            $nodo = (string) $node['nodo_pop'];
+
+            $assignmentQuery = NetworkAssignment::query()
+                ->where('is_active', true)
+                ->where('monitoring_eligible', true)
+                ->where('cid_status', CidStatus::Valid)
+                ->whereRaw('UPPER(TRIM(nodo_pop)) = ?', [mb_strtoupper($nodo)]);
+
+            $assignmentIds = (clone $assignmentQuery)->pluck('id');
+            $schoolIds = (clone $assignmentQuery)->whereNotNull('school_id')->distinct()->pluck('school_id');
+            $total = $schoolIds->count();
+
+            $monitored = PrtgSensor::query()
+                ->where('name', 'Ping')
+                ->whereIn('network_assignment_id', $assignmentIds)
+                ->distinct('network_assignment_id')
+                ->count('network_assignment_id');
+
+            $caidos = (int) $node['caidos'];
+            $afectados = count($node['school_ids']);
+            $operativos = max(0, $monitored - $afectados);
+            $sinMonitoreo = max(0, $total - $monitored);
+            $pct = $total > 0 ? round(($afectados / $total) * 100, 1) : 0.0;
+
+            $tecnologias = [];
+            foreach ($node['tecnologias'] as $nombre => $cantidad) {
+                $tecnologias[] = ['tecnologia' => $nombre, 'caidos' => (int) $cantidad];
+            }
+            usort($tecnologias, fn (array $a, array $b) => $b['caidos'] <=> $a['caidos']);
+
+            $distritos = array_keys($node['distritos']);
+            sort($distritos);
+
+            $out[] = [
+                'dimension' => 'nodo_pop',
+                'label' => $nodo,
+                'provincia' => null,
+                'distrito' => $distritos !== [] ? implode(', ', $distritos) : null,
+                'location_source' => 'nodo_pop',
+                'caidos' => $caidos,
+                'afectados' => $afectados,
+                'total' => $total,
+                'monitoreados' => $monitored,
+                'operativos' => $operativos,
+                'sin_monitoreo' => $sinMonitoreo,
+                'porcentaje_caidos' => $pct,
+                'nodo_pop' => $nodo,
+                'tecnologias_caidas' => $tecnologias,
+                'oldest_started_at' => $node['oldest_started_at']?->toIso8601String(),
+                'nota' => 'Varios colegios caídos del mismo Nodo/POP (posible fallo de agregación).',
+            ];
+        }
+
+        usort($out, fn ($a, $b) => $b['caidos'] <=> $a['caidos']);
+
+        return array_values($out);
+    }
+
+    /**
+     * Colegios bajo un Nodo/POP concreto.
+     *
+     * @return array{zone: array<string, mixed>, data: array<int, array<string, mixed>>}
+     */
+    public function massOutageNodo(string $nodo): array
+    {
+        $nodo = trim($nodo);
+        if ($nodo === '') {
+            return [
+                'zone' => [
+                    'provincia' => '',
+                    'distrito' => '',
+                    'label' => 'Sin Nodo/POP',
+                    'location_source' => 'nodo_pop',
+                    'nodo_pop' => '',
+                    'total' => 0,
+                    'caidos' => 0,
+                    'parciales' => 0,
+                    'operativos' => 0,
+                    'sin_monitoreo' => 0,
+                    'tecnologias' => [],
+                ],
+                'data' => [],
+            ];
+        }
+
+        $assignments = NetworkAssignment::query()
+            ->where('is_active', true)
+            ->where('monitoring_eligible', true)
+            ->where('cid_status', CidStatus::Valid)
+            ->whereRaw('UPPER(TRIM(nodo_pop)) = ?', [mb_strtoupper($nodo)])
+            ->with([
+                'school:id,local_educativo,codigo_local,current_sequence,provincia,distrito',
+                'sensors' => fn ($sensors) => $sensors->whereRaw("LOWER(name) = 'ping'"),
+            ])
+            ->get();
+
+        if ($assignments->isEmpty()) {
+            return [
+                'zone' => [
+                    'provincia' => '',
+                    'distrito' => '',
+                    'label' => $nodo,
+                    'location_source' => 'nodo_pop',
+                    'nodo_pop' => $nodo,
+                    'total' => 0,
+                    'caidos' => 0,
+                    'parciales' => 0,
+                    'operativos' => 0,
+                    'sin_monitoreo' => 0,
+                    'tecnologias' => [],
+                ],
+                'data' => [],
+            ];
+        }
+
+        $incidents = Incident::query()
+            ->active()
+            ->whereIn('network_assignment_id', $assignments->pluck('id'))
+            ->orderByDesc('id')
+            ->get()
+            ->unique('network_assignment_id')
+            ->keyBy('network_assignment_id');
+
+        $schools = [];
+        $techTotals = [];
+        $techDowns = [];
+
+        foreach ($assignments as $assignment) {
+            $school = $assignment->school;
+            $ping = $assignment->sensors->first();
+            $incident = $incidents->get($assignment->id);
+            $status = $ping?->normalized_status;
+            $manual = $incident?->isManualPartial() ?? false;
+
+            if ($status === MonitoringStatus::Caido) {
+                $estado = MonitoringStatus::Caido->value;
+            } elseif ($manual) {
+                $estado = MonitoringStatus::Parcial->value;
+            } elseif ($status === MonitoringStatus::Operativo) {
+                $estado = MonitoringStatus::Operativo->value;
+            } elseif ($ping === null) {
+                $estado = 'SIN_MONITOREO';
+            } else {
+                $estado = $status?->value ?? 'SIN_MONITOREO';
+            }
+
+            $down = in_array($estado, [MonitoringStatus::Caido->value, MonitoringStatus::Parcial->value], true);
+            $downAt = $down
+                ? ($incident?->prtg_down_started_at ?? $incident?->started_at)?->toIso8601String()
+                : null;
+
+            $tech = $this->technologyLabel($assignment->tecnologia_acceso);
+            $techTotals[$tech] = ($techTotals[$tech] ?? 0) + 1;
+            if ($down) {
+                $techDowns[$tech] = ($techDowns[$tech] ?? 0) + 1;
+            }
+
+            $location = PrtgOperationalLocation::resolve($assignment, $school);
+
+            // Solo listamos caídos/parciales (el detalle completo de 200+ operativos congelaba el UI).
+            if (! $down) {
+                continue;
+            }
+
+            $schools[] = [
+                'school_id' => $school?->id,
+                'assignment_id' => $assignment->id,
+                'incident_id' => $incident?->id,
+                'local_educativo' => $school?->local_educativo,
+                'codigo_local' => $school?->codigo_local,
+                'cid' => $assignment->cid,
+                'tss' => $school?->current_sequence,
+                'provincia' => $location['province'] ?? $school?->provincia,
+                'distrito' => $location['district'] ?? $school?->distrito,
+                'tecnologia' => trim((string) $assignment->tecnologia_acceso) !== ''
+                    ? $assignment->tecnologia_acceso
+                    : null,
+                'nodo_pop' => $assignment->nodo_pop,
+                'estado' => $estado,
+                'down_started_at' => $downAt,
+                'followup_status' => $incident?->followup_status?->value,
+            ];
+        }
+
+        // Más reciente arriba.
+        usort($schools, function (array $a, array $b): int {
+            $byTime = strcmp((string) ($b['down_started_at'] ?? ''), (string) ($a['down_started_at'] ?? ''));
+            if ($byTime !== 0) {
+                return $byTime;
+            }
+
+            return strcasecmp((string) ($a['local_educativo'] ?? ''), (string) ($b['local_educativo'] ?? ''));
+        });
+
+        $totalAssignments = $assignments->count();
+        $caidosCount = count(array_filter($schools, fn (array $row) => $row['estado'] === MonitoringStatus::Caido->value));
+        $parcialesCount = count(array_filter($schools, fn (array $row) => $row['estado'] === MonitoringStatus::Parcial->value));
+        $sinMonitoreoCount = 0;
+        $operativosCount = 0;
+        foreach ($assignments as $assignment) {
+            $ping = $assignment->sensors->first();
+            if ($ping === null) {
+                $sinMonitoreoCount++;
+            } elseif ($ping->normalized_status === MonitoringStatus::Operativo) {
+                $operativosCount++;
+            }
+        }
+        // Ajuste: operativos = monitoreados no caídos (aprox).
+        $operativosCount = max(0, $totalAssignments - $caidosCount - $parcialesCount - $sinMonitoreoCount);
+
+        $tecnologias = [];
+        foreach ($techTotals as $nombre => $totalTech) {
+            $tecnologias[] = [
+                'tecnologia' => $nombre,
+                'total' => (int) $totalTech,
+                'caidos' => (int) ($techDowns[$nombre] ?? 0),
+            ];
+        }
+        usort($tecnologias, fn (array $a, array $b) => $b['caidos'] <=> $a['caidos']);
+
+        return [
+            'zone' => [
+                'provincia' => '',
+                'distrito' => '',
+                'label' => $nodo,
+                'location_source' => 'nodo_pop',
+                'nodo_pop' => $nodo,
+                'total' => $totalAssignments,
+                'caidos' => $caidosCount,
+                'parciales' => $parcialesCount,
+                'operativos' => $operativosCount,
+                'sin_monitoreo' => $sinMonitoreoCount,
+                'tecnologias' => $tecnologias,
+            ],
+            'data' => $schools,
+        ];
     }
 
     /**
@@ -226,6 +563,7 @@ class DashboardService
             ->values();
 
         $assignmentIds = $incidents->pluck('network_assignment_id')->filter()->unique()->values();
+        $schoolIds = $incidents->pluck('school_id')->filter()->unique()->values();
 
         $reincidenteCounts = Incident::query()
             ->whereIn('network_assignment_id', $assignmentIds)
@@ -233,7 +571,15 @@ class DashboardService
             ->groupBy('network_assignment_id')
             ->pluck('total', 'network_assignment_id');
 
-        return $incidents->map(function (Incident $incident) use ($reincidenteCounts) {
+        $graveSchoolIds = Incident::query()
+            ->whereIn('school_id', $schoolIds)
+            ->where('is_grave_incident', true)
+            ->whereNull('grave_closed_at')
+            ->pluck('school_id')
+            ->unique()
+            ->flip();
+
+        return $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds) {
             $school = $incident->school;
             $assignment = $incident->networkAssignment;
             $sensor = $incident->sensor;
@@ -243,11 +589,18 @@ class DashboardService
             $location = PrtgOperationalLocation::apiFields($assignment, $school);
             $tracking = $incident->trackingRecords->first();
 
+            $downClock = $incident->prtg_down_started_at ?? $incident->started_at;
+            $durationSeconds = $downClock
+                ? max(0, now()->getTimestamp() - $downClock->getTimestamp())
+                : null;
+
             return [
                 'incident_id' => $incident->id,
                 'school_id' => $incident->school_id,
                 'assignment_id' => $incident->network_assignment_id,
                 'cid' => $assignment?->cid,
+                // TSS operativo = current_sequence del colegio (columna N° del reporte).
+                'tss' => $school?->current_sequence,
                 'local_educativo' => $school?->local_educativo,
                 'codigo_local' => $school?->codigo_local,
                 ...$location,
@@ -263,14 +616,17 @@ class DashboardService
                 'affected_wan_node' => $incident->affected_wan_node?->value,
                 'affected_wan_node_label' => $incident->affected_wan_node?->label(),
                 'is_link_outage' => $incident->isManualPartial(),
-                'duracion' => $incident->started_at?->diffForHumans(now(), true),
-                'duration_seconds' => $incident->started_at
-                    ? max(0, now()->getTimestamp() - $incident->started_at->getTimestamp())
-                    : null,
+                'duracion' => $downClock?->diffForHumans(now(), true),
+                'duration_seconds' => $durationSeconds,
+                'duration_label' => $durationSeconds !== null ? $this->formatTss($durationSeconds) : null,
+                'prtg_down_since_raw' => $sensor?->down_since,
                 'started_at' => $incident->started_at?->toIso8601String(),
-                'current_down_started_at' => ($incident->prtg_down_started_at ?? $incident->started_at)?->toIso8601String(),
+                'current_down_started_at' => $downClock?->toIso8601String(),
                 'in_management' => $incident->reopened_from_management
                     || ($incident->followup_status && in_array($incident->followup_status->value, FollowupStatus::managingValues(), true)),
+                'has_open_grave_incident' => $graveSchoolIds->has($incident->school_id)
+                    || $incident->isOpenGrave(),
+                'is_grave_incident' => $incident->isOpenGrave(),
                 'tracking' => $tracking ? [
                     'id' => $tracking->id,
                     'status' => $tracking->status?->value,
@@ -296,6 +652,23 @@ class DashboardService
                 'reopened_from_management' => (bool) $incident->reopened_from_management,
             ];
         });
+    }
+
+    private function formatTss(int $seconds): string
+    {
+        if ($seconds < 60) {
+            return $seconds.' s';
+        }
+        $m = intdiv($seconds, 60);
+        if ($m < 60) {
+            $s = $seconds % 60;
+
+            return $s > 0 ? "{$m} m {$s} s" : "{$m} m";
+        }
+        $h = intdiv($m, 60);
+        $rm = $m % 60;
+
+        return $rm > 0 ? "{$h} h {$rm} m" : "{$h} h";
     }
 
     /**

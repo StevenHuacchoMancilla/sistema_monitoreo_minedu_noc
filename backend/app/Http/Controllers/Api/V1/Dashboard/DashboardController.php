@@ -47,6 +47,25 @@ class DashboardController extends Controller
         return response()->json($this->dashboard->concentrationZone($provincia, $distrito));
     }
 
+    public function massOutages(): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->dashboard->massOutagesByNodo(),
+        ]);
+    }
+
+    public function massOutageNodo(Request $request): JsonResponse
+    {
+        $nodo = trim($request->string('nodo')->toString());
+        if ($nodo === '' || strlen($nodo) > 160) {
+            return response()->json([
+                'message' => 'Indica el Nodo/POP.',
+            ], 422);
+        }
+
+        return response()->json($this->dashboard->massOutageNodo($nodo));
+    }
+
     public function schoolHistory(Request $request): JsonResponse
     {
         return response()->json([
