@@ -2,6 +2,10 @@
 
 Sistema interno de monitoreo NOC (Laravel + React). Uso **exclusivo en LAN**; no exponer a Internet.
 
+> **Setup por PC (local, BD propia, sin nube):** ver [`docs/SETUP_LOCAL.md`](docs/SETUP_LOCAL.md).  
+> Cada máquina tiene su propio `backend/.env` / `frontend/.env` (no van a git).  
+> Las caídas se actualizan con `php artisan monitoring:watch`. El botón PRTG del UI es solo manual.
+
 ## Uso en red local
 
 Servidor LAN actual (PC con el stack):
@@ -20,19 +24,26 @@ PostgreSQL permanece en `127.0.0.1:5432` (solo Laravel en esta PC). **No** abrir
 ### Pasos en el PC servidor
 
 1. PostgreSQL activo.
-2. Backend:
+2. Backend API:
    ```bash
    cd backend
    php artisan optimize:clear
    php artisan serve --host=0.0.0.0 --port=8000
    ```
-3. Frontend:
+3. Sync PRTG (obligatorio en local; intervalo ≥ 30s). Sin este proceso las caídas no se actualizan con `artisan serve`:
+   ```bash
+   cd backend
+   php artisan monitoring:watch
+   ```
+4. Frontend:
    ```bash
    cd frontend
    pnpm dev
    ```
    (o `pnpm dev:lan` — Vite ya escucha en `0.0.0.0:5173`).
-4. Usuarios en la misma red abren: http://192.168.101.34:5173
+5. Usuarios en la misma red abren: http://192.168.101.34:5173
+
+Flujo operativo: **Caídas totales** → **En gestión** → (PRTG UP) **Pendiente de cierre** → cerrar ticket; o **Incidencias** graves. Re-caída desde pendiente de cierre abre ticket nuevo.
 
 ### Firewall (Windows, PC servidor)
 
