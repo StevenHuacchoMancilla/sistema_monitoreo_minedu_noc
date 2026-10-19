@@ -9,7 +9,6 @@ enum AuditModule: string
     case NetworkAssignments = 'NETWORK_ASSIGNMENTS';
     case Contacts = 'CONTACTS';
     case Prtg = 'PRTG';
-    case Cloudnet = 'CLOUDNET';
     case Incidents = 'INCIDENTS';
     case TrackingGeneral = 'TRACKING_GENERAL';
     case Reports = 'REPORTS';
@@ -32,7 +31,6 @@ enum AuditModule: string
             self::NetworkAssignments => 'Asignaciones de red',
             self::Contacts => 'Contactos',
             self::Prtg => 'PRTG',
-            self::Cloudnet => 'Cloudnet',
             self::Incidents => 'Incidencias',
             self::TrackingGeneral => 'Tracking General',
             self::Reports => 'Reportes',

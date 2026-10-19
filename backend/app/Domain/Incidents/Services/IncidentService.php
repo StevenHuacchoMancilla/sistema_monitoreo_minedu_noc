@@ -217,12 +217,26 @@ class IncidentService
             $observationSuffix = ' Requiere revisión operativa (estaba en gestión).';
         }
 
+        // Incidencias graves abiertas: PRTG UP no cierra ni quita el flag; solo marca recuperación técnica.
+        $isOpenGrave = (bool) $incident->is_grave_incident && $incident->grave_closed_at === null;
+
+        // Si estaba en gestión (y no es grave abierta) → Pendiente de cierre.
+        // Si no → Recuperado (flujo corto). Graves mantienen su followup.
+        if ($isOpenGrave) {
+            $afterStatus = $incident->followup_status ?? FollowupStatus::EnGestion;
+            $observationSuffix .= ' Incidencia grave permanece abierta (cierre manual).';
+        } elseif ($wasManaging) {
+            $afterStatus = FollowupStatus::PendienteCierre;
+        } else {
+            $afterStatus = FollowupStatus::Recuperado;
+        }
+
         $payload = [
             'recovered_at' => $recoveredAt,
             'current_status' => MonitoringStatus::Operativo->value,
-            'followup_status' => FollowupStatus::Recuperado,
-            'recovered_while_managing' => $needsReview,
-            'recovery_review_status' => $needsReview
+            'followup_status' => $afterStatus,
+            'recovered_while_managing' => $isOpenGrave ? false : $needsReview,
+            'recovery_review_status' => (! $isOpenGrave && $needsReview)
                 ? RecoveryReviewStatus::PendingReview->value
                 : null,
             'recovery_reviewed_at' => null,
@@ -236,11 +250,15 @@ class IncidentService
             ? ' Hora de cierre = reloj del sistema al detectar OPERATIVO.'
             : ' Hora de cierre = lastcheck − uptimesince PRTG.';
 
+        if (! $isOpenGrave && $wasManaging) {
+            $observationSuffix .= ' Pasa a Pendiente de cierre.';
+        }
+
         IncidentUpdate::query()->create([
             'incident_id' => $incident->id,
             'type' => 'SYSTEM_RECOVERY',
             'status_before' => $before,
-            'status_after' => FollowupStatus::Recuperado->value,
+            'status_after' => $afterStatus->value,
             'observation' => $observation.$observationSuffix.$clockNote,
             'created_at' => now(),
         ]);

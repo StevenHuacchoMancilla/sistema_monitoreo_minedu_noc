@@ -4,6 +4,7 @@ namespace App\Domain\Tracking\Services;
 
 use App\Enums\AuditModule;
 use App\Enums\AuditSource;
+use App\Enums\FollowupStatus;
 use App\Enums\TrackingEventType;
 use App\Enums\TrackingStatus;
 use App\Enums\TrackingTechnicalStatus;
@@ -12,6 +13,7 @@ use App\Models\TrackingRecord;
 use App\Models\TrackingUpdate;
 use App\Services\AuditLogger;
 use Illuminate\Support\Facades\DB;
+use Throwable;
 
 /**
  * Puente PRTG → Tracking General.
@@ -19,7 +21,10 @@ use Illuminate\Support\Facades\DB;
  */
 class TrackingPrtgHookService
 {
-    public function __construct(private readonly AuditLogger $audit) {}
+    public function __construct(
+        private readonly AuditLogger $audit,
+        private readonly TrackingOpenService $trackingOpen,
+    ) {}
 
     /**
      * PRTG reportó OPERATIVO: marca recuperación técnica si hay Tracking abierto.
@@ -50,7 +55,7 @@ class TrackingPrtgHookService
             TrackingUpdate::query()->create([
                 'tracking_record_id' => $tracking->id,
                 'event_type' => TrackingEventType::TechnicalRecovery,
-                'body' => 'PRTG reportó recuperación técnica (Ping OPERATIVO). El Tracking permanece abierto hasta cierre operativo.',
+                'body' => 'PRTG reportó recuperación técnica (Ping OPERATIVO). El Tracking permanece abierto (Pendiente de cierre) hasta cierre operativo.',
                 'created_by_user_id' => null,
                 'legacy_actor_name' => null,
                 'occurred_on' => $now->toDateString(),
@@ -93,12 +98,20 @@ class TrackingPrtgHookService
     }
 
     /**
-     * Nueva caída PRTG mientras hay Tracking abierto (re-caída).
-     * Vincula la nueva incidencia y deja el Tracking en seguimiento; no lo cierra ni lo resuelve.
+     * Nueva caída PRTG.
+     * - Si el ticket previo estaba en Pendiente de cierre → nuevo Tracking (ticket distinto).
+     * - Si no → relink al Tracking abierto existente.
      */
     public function onIncidentTechnicallyDown(Incident $incident): void
     {
         $tracking = $this->findOpenTrackingForAssignment($incident);
+
+        if ($tracking && $this->shouldOpenFreshTicket($tracking, $incident)) {
+            $this->openFreshTicketForRefall($incident, $tracking);
+
+            return;
+        }
+
         if (! $tracking) {
             return;
         }
@@ -168,6 +181,53 @@ class TrackingPrtgHookService
                 AuditSource::System
             );
         });
+    }
+
+    private function shouldOpenFreshTicket(TrackingRecord $tracking, Incident $newIncident): bool
+    {
+        if ((int) $tracking->incident_id === (int) $newIncident->id) {
+            return false;
+        }
+
+        $previous = $tracking->incident_id
+            ? Incident::query()->find($tracking->incident_id)
+            : null;
+
+        if (! $previous) {
+            return false;
+        }
+
+        // Ticket en pendiente de cierre (recuperado en gestión) → nuevo ticket al recaer.
+        return $previous->followup_status === FollowupStatus::PendienteCierre
+            && $previous->recovered_at !== null;
+    }
+
+    private function openFreshTicketForRefall(Incident $incident, TrackingRecord $previousTracking): void
+    {
+        $now = now();
+
+        TrackingUpdate::query()->create([
+            'tracking_record_id' => $previousTracking->id,
+            'event_type' => TrackingEventType::SystemEvent,
+            'body' => "Re-caída con ticket en Pendiente de cierre. Se abre un nuevo ticket para la incidencia #{$incident->id}. Este Tracking permanece para cierre operativo del ciclo anterior.",
+            'created_by_user_id' => null,
+            'legacy_actor_name' => null,
+            'occurred_on' => $now->toDateString(),
+            'occurred_at' => $now,
+        ]);
+
+        try {
+            $userId = (int) ($previousTracking->opened_by_user_id ?? 0);
+            if ($userId < 1) {
+                $userId = (int) (\App\Models\User::query()->orderBy('id')->value('id') ?? 0);
+            }
+            if ($userId > 0) {
+                $this->trackingOpen->openFromIncident($incident, $userId);
+            }
+        } catch (Throwable $e) {
+            // No bloquear sync PRTG si falla la apertura del ticket.
+            report($e);
+        }
     }
 
     private function findOpenTrackingForIncident(Incident $incident): ?TrackingRecord

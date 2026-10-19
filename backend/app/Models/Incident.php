@@ -32,10 +32,18 @@ class Incident extends Model
             'affected_wan_node' => AffectedWanNode::class,
             'recovered_while_managing' => 'boolean',
             'reopened_from_management' => 'boolean',
+            'is_grave_incident' => 'boolean',
+            'grave_opened_at' => 'datetime',
+            'grave_closed_at' => 'datetime',
             'recovery_reviewed_at' => 'datetime',
             'school_snapshot' => 'array',
             'network_snapshot' => 'array',
         ];
+    }
+
+    public function isOpenGrave(): bool
+    {
+        return (bool) $this->is_grave_incident && $this->grave_closed_at === null;
     }
 
     public function isManualPartial(): bool

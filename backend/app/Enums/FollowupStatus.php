@@ -10,6 +10,7 @@ enum FollowupStatus: string
     case EnEspera = 'EN_ESPERA';
     case Escalado = 'ESCALADO';
     case TecnicoEnCampo = 'TECNICO_EN_CAMPO';
+    case PendienteCierre = 'PENDIENTE_CIERRE';
     case Recuperado = 'RECUPERADO';
     case Cerrado = 'CERRADO';
 
@@ -40,12 +41,13 @@ enum FollowupStatus: string
     public function label(): string
     {
         return match ($this) {
-            self::PendienteContacto => 'Pendiente contacto',
+            self::PendienteContacto => 'Pendiente de gestión',
             self::EnGestion => 'En gestión',
             self::EnDescarte => 'En descarte',
             self::EnEspera => 'En espera',
             self::Escalado => 'Escalado',
             self::TecnicoEnCampo => 'Técnico en campo',
+            self::PendienteCierre => 'Pendiente de cierre',
             self::Recuperado => 'Recuperado',
             self::Cerrado => 'Cerrado',
         };

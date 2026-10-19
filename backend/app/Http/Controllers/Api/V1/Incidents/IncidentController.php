@@ -10,6 +10,7 @@ use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Domain\Incidents\Services\FieldDispatchService;
 use App\Domain\Incidents\Services\IncidentManagementService;
+use App\Domain\Incidents\Services\IncidentOperativeCloseService;
 use App\Domain\Incidents\Services\IncidentService;
 use App\Domain\Incidents\Services\RecoveryReviewService;
 use App\Domain\Incidents\Support\IncidentTimelineBuilder;
@@ -33,6 +34,7 @@ class IncidentController extends Controller
         private readonly IncidentService $incidents,
         private readonly RecoveryReviewService $recoveryReviews,
         private readonly FieldDispatchService $fieldDispatches,
+        private readonly IncidentOperativeCloseService $operativeClose,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -633,6 +635,150 @@ class IncidentController extends Controller
         ]);
 
         return response()->json($update, 201);
+    }
+
+    /** Cola: recuperados en gestión → pendiente de cierre operativo. */
+    public function pendienteCierre(Request $request): JsonResponse
+    {
+        $rows = Incident::query()
+            ->with(['school', 'networkAssignment', 'sensor', 'trackingRecords' => fn ($q) => $q->orderByDesc('id')])
+            ->where('followup_status', FollowupStatus::PendienteCierre)
+            ->whereNotNull('recovered_at')
+            ->orderByDesc('recovered_at')
+            ->limit(500)
+            ->get()
+            ->map(fn (Incident $i) => $this->queueRow($i));
+
+        return response()->json(['data' => $rows]);
+    }
+
+    /** Casos graves abiertos. */
+    public function graves(Request $request): JsonResponse
+    {
+        $rows = Incident::query()
+            ->with(['school', 'networkAssignment', 'sensor', 'trackingRecords' => fn ($q) => $q->orderByDesc('id')])
+            ->where('is_grave_incident', true)
+            ->whereNull('grave_closed_at')
+            ->orderByDesc('grave_opened_at')
+            ->limit(500)
+            ->get()
+            ->map(fn (Incident $i) => $this->queueRow($i));
+
+        return response()->json(['data' => $rows]);
+    }
+
+    public function markGrave(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'observation' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        if ($incident->isOpenGrave()) {
+            return response()->json($this->show($incident)->getData(true));
+        }
+
+        $before = $incident->followup_status?->value;
+        $incident->update([
+            'is_grave_incident' => true,
+            'grave_opened_at' => now(),
+            'grave_opened_by_user_id' => $request->user()?->id,
+            'grave_closed_at' => null,
+            'last_contact_at' => now(),
+        ]);
+
+        IncidentUpdate::query()->create([
+            'incident_id' => $incident->id,
+            'type' => 'MANUAL',
+            'status_before' => $before,
+            'status_after' => $before,
+            'observation' => $data['observation'] ?? 'Marcado como incidencia grave.',
+            'user_id' => $request->user()?->id,
+            'created_at' => now(),
+        ]);
+
+        return response()->json($this->show($incident->fresh())->getData(true));
+    }
+
+    public function closeGrave(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'observation' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        if (! $incident->is_grave_incident || $incident->grave_closed_at !== null) {
+            return response()->json($this->show($incident)->getData(true));
+        }
+
+        $userId = (int) ($request->user()?->id ?? 0);
+        $result = $this->operativeClose->close(
+            $incident,
+            $data['observation'] ?? 'Incidencia grave cerrada.',
+            $userId,
+        );
+
+        $closed = $result['incident'];
+        $closed->update([
+            'grave_closed_at' => now(),
+            'last_contact_at' => now(),
+        ]);
+
+        return response()->json($this->show($closed->fresh() ?? $closed)->getData(true));
+    }
+
+    /** Cierre operativo unificado: Tracking (si existe) + incidencia CERRADO. */
+    public function closeTicket(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'observation' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $userId = (int) ($request->user()?->id ?? 0);
+        $result = $this->operativeClose->close(
+            $incident,
+            $data['observation'] ?? null,
+            $userId,
+        );
+
+        return response()->json($this->show($result['incident'])->getData(true));
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
+    private function queueRow(Incident $incident): array
+    {
+        $school = $incident->school;
+        $assignment = $incident->networkAssignment;
+        $tracking = $incident->trackingRecords->first();
+        $location = PrtgOperationalLocation::apiFields($assignment, $school);
+        $downClock = $incident->prtg_down_started_at ?? $incident->started_at;
+
+        return [
+            'incident_id' => $incident->id,
+            'school_id' => $incident->school_id,
+            'assignment_id' => $incident->network_assignment_id,
+            'cid' => $assignment?->cid,
+            'tss' => $school?->current_sequence,
+            'local_educativo' => $school?->local_educativo,
+            'codigo_local' => $school?->codigo_local,
+            ...$location,
+            'tecnologia' => $assignment?->tecnologia_acceso,
+            'followup_status' => $incident->followup_status?->value,
+            'started_at' => $incident->started_at?->toIso8601String(),
+            'recovered_at' => $incident->recovered_at?->toIso8601String(),
+            'current_down_started_at' => $downClock?->toIso8601String(),
+            'is_grave_incident' => $incident->isOpenGrave(),
+            'grave_opened_at' => $incident->grave_opened_at?->toIso8601String(),
+            'estado_prtg' => $incident->current_status,
+            'responsible_area' => $incident->responsible_area,
+            'glpi_ticket' => $incident->glpi_ticket,
+            'tracking' => $tracking ? [
+                'id' => $tracking->id,
+                'status' => $tracking->status?->value,
+                'status_label' => $tracking->status?->label(),
+                'ticket' => $tracking->report_ticket ?? $tracking->ticket,
+            ] : null,
+        ];
     }
 
     private static function loopbackFromRow(int $excelRow): ?string

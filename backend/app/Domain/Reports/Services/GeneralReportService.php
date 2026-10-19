@@ -140,7 +140,7 @@ class GeneralReportService
     public function columns(): array
     {
         return [
-            ['key' => 'n', 'label' => 'N°'],
+            ['key' => 'n', 'label' => 'TSS'],
             ['key' => 'cid', 'label' => 'CID'],
             ['key' => 'local_educativo', 'label' => 'LOCAL EDUCATIVO'],
             ['key' => 'provincia', 'label' => 'PROVINCIA'],

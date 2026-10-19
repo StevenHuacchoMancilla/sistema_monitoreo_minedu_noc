@@ -52,7 +52,7 @@ class OperationalReportService
     public static function officialColumns(): array
     {
         return [
-            'N°',
+            'TSS',
             'CID',
             'LOCAL EDUCATIVO',
             'PRESENTACION NOMBRE PRTG',
