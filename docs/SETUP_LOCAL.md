@@ -14,7 +14,8 @@ Cursor / otro agente: leer este archivo **antes** de tocar `.env` o asumir una b
 2. Los archivos **`backend/.env` y `frontend/.env` NO se suben a git**.  
    Solo existen las plantillas `backend/.env.example` y `frontend/.env.example`.
 3. Los datos de caídas vienen de **PRTG → `php artisan monitoring:watch` → PostgreSQL local**.  
-   El navegador **no** hace sync automático (congela Chrome). El botón **PRTG** es solo manual.
+   **En el navegador el sync NO es automático:** solo cuando pulsas el botón **PRTG** (manual).  
+   No hay sync periódico desde Chrome (se desactivó porque congelaba la página).
 4. El frontend lee la API local (`/api` o `http://127.0.0.1:8000/api`).
 
 ---
@@ -141,16 +142,23 @@ Abrir: http://localhost:5173
 
 ---
 
-## Sync PRTG: automático vs botón
+## Sync PRTG: watch (auto) vs botón en la UI (manual)
+
+**Regla actual del producto:** en la interfaz web el sync es **solo por botón**. No corre solo en el browser.
 
 | Mecanismo | Qué hace | Estado |
 |-----------|----------|--------|
-| `monitoring:watch` | Lee PRTG cada ≥30s y escribe en la BD local | **Automático (backend)** |
-| Botón **PRTG** en la UI | Un sync puntual vía API | **Manual (cuando lo pidas)** |
-| Sync automático en el navegador | Antes pedía sync cada X segundos | **Desactivado** (congelaba la página) |
+| `monitoring:watch` (terminal) | Lee PRTG cada ≥30s y escribe en la BD local | **Automático en el backend** (obligatorio) |
+| Botón **PRTG** en la barra de la UI | Un sync puntual vía API | **Solo manual** — úsalo cuando lo necesites |
+| Sync automático desde el navegador | Pedía sync cada X segundos sin que lo pidas | **Desactivado a propósito** (congelaba Chrome) |
 
-Flujo correcto: PRTG → watch → BD → dashboard (refresco de queries).  
-No hace falta sync continuo desde Chrome.
+Flujo correcto del día a día:
+
+1. Dejas corriendo `php artisan monitoring:watch` → las caídas se actualizan solas en la BD.  
+2. El dashboard solo lee la BD (no dispara sync solo).  
+3. Si quieres forzar un sync ya, pulsas el botón **PRTG** en la UI.
+
+En la otra PC: no esperes sync automático del browser; arranca el **watch** y usa el botón solo si hace falta.
 
 ---
 
