@@ -1,8 +1,12 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { PrtgDashboardPage } from '../features/dashboard-prtg/pages/PrtgDashboardPage'
 import { ActiveIncidentsPage } from '../features/incidents/pages/ActiveIncidentsPage'
+import { IncidentQueuePage } from '../features/incidents/pages/IncidentQueuePage'
 import { ConcentrationsPage } from '../features/incidents/pages/ConcentrationsPage'
 import { ConcentrationZonePage } from '../features/incidents/pages/ConcentrationZonePage'
+import { MassOutagesPage } from '../features/incidents/pages/MassOutagesPage'
+import { MassOutageNodoPage } from '../features/incidents/pages/MassOutageNodoPage'
+import { MassOutagesReportPage } from '../features/incidents/pages/MassOutagesReportPage'
 import { SchoolHistoryIndexPage } from '../features/history/pages/SchoolHistoryIndexPage'
 import { SchoolHistoryDetailPage } from '../features/history/pages/SchoolHistoryDetailPage'
 import { IncidentCaseFilePage } from '../features/history/pages/IncidentCaseFilePage'
@@ -13,10 +17,6 @@ import { SchoolDetailPage } from '../features/schools/pages/SchoolDetailPage'
 import { SchoolsListPage } from '../features/schools/pages/SchoolsListPage'
 import { OperationalReportPage } from '../features/reports/pages/OperationalReportPage'
 import { GeneralReportPage } from '../features/reports/pages/GeneralReportPage'
-import { TicketeraPage } from '../features/ticketera/pages/TicketeraPage'
-import { TrackingListPage } from '../features/tracking/pages/TrackingListPage'
-import { TrackingDetailPage } from '../features/tracking/pages/TrackingDetailPage'
-import { TrackingReportPage } from '../features/tracking/pages/TrackingReportPage'
 import { LoginPage } from '../features/auth/pages/LoginPage'
 import { ProfilePage } from '../features/auth/pages/ProfilePage'
 import { RequireAuth } from '../features/auth/components/RequireAuth'
@@ -58,7 +58,7 @@ export function AppRouter() {
                 <ActiveIncidentsPage
                   key="incidents-total"
                   title="Caídas totales"
-                  description="Todas las caídas que PRTG reporta en este momento, incluidas las que ya estaban en gestión. La hora y la duración son de esta caída (downtime actual), no del historial de la incidencia."
+                  description="Todas las caídas que PRTG reporta en este momento, incluidas las que ya estaban en gestión. TSS = N° del colegio (mismo del reporte operativo)."
                   tableTitle="Caídas actuales en PRTG"
                   emptyTitle="No hay caídas en PRTG."
                   emptyDescription="Ningún local monitoreado está caído en este momento."
@@ -68,22 +68,17 @@ export function AppRouter() {
                 />
               }
             />
+            <Route path="/incidents/active" element={<Navigate to="/incidents/total" replace />} />
+            <Route path="/incidents/pending" element={<Navigate to="/incidents/pendiente-gestion" replace />} />
             <Route
-              path="/incidents/active"
+              path="/incidents/pendiente-gestion"
               element={
                 <ActiveIncidentsPage
-                  key="incidents-active"
-                  filter={(row) => !row.reopened_from_management}
-                />
-              }
-            />
-            <Route
-              path="/incidents/pending"
-              element={
-                <ActiveIncidentsPage
-                  key="incidents-pending"
-                  title="Pendientes de contacto"
-                  filter={(row) => row.followup_status === 'PENDIENTE_CONTACTO' && !row.reopened_from_management}
+                  key="incidents-pendiente-gestion"
+                  title="Pendientes de gestión"
+                  description="Colegios caídos que aún no tienen ticket en gestión. Desde aquí (o desde Caídas totales) se inicia el seguimiento."
+                  filter={(row) => row.followup_status === 'PENDIENTE_CONTACTO'}
+                  durationSource="current_down"
                 />
               }
             />
@@ -93,28 +88,23 @@ export function AppRouter() {
                 <ActiveIncidentsPage
                   key="incidents-managing"
                   title="En gestión"
-                  description="Incidencias en seguimiento operativo. Incluye colegios que se recuperaron durante gestión y volvieron a caer (mismo historial)."
+                  description="Seguimiento operativo del ticket. Si PRTG recupera, pasan a Pendiente de cierre. Puedes pasar el caso a Incidencias."
                   filter={(row) => MANAGING.has(row.followup_status ?? '')}
-                  showReopenedFilter
+                  durationSource="current_down"
                 />
               }
             />
+            <Route path="/incidents/reopened-managing" element={<Navigate to="/incidents/managing" replace />} />
             <Route
-              path="/incidents/reopened-managing"
-              element={
-                <ActiveIncidentsPage
-                  key="incidents-reopened-managing"
-                  title="Recaída en gestión"
-                  description="Colegios que estaban en gestión, se recuperaron durante el seguimiento y volvieron a caer. Conservan el mismo historial y Tracking; no entran como caída nueva."
-                  tableTitle="Recaídas con historial en gestión"
-                  emptyTitle="Sin recaídas en gestión"
-                  emptyDescription="No hay colegios en gestión que se hayan recuperado y vuelto a caer."
-                  filter={(row) => Boolean(row.reopened_from_management)}
-                />
-              }
+              path="/incidents/pendiente-cierre"
+              element={<IncidentQueuePage key="pendiente-cierre" kind="pendiente-cierre" />}
             />
+            <Route path="/incidents/graves" element={<IncidentQueuePage key="graves" kind="graves" />} />
             <Route path="/concentrations" element={<ConcentrationsPage />} />
             <Route path="/concentrations/zone" element={<ConcentrationZonePage />} />
+            <Route path="/mass-outages" element={<MassOutagesPage />} />
+            <Route path="/mass-outages/nodo" element={<MassOutageNodoPage />} />
+            <Route path="/mass-outages/report" element={<MassOutagesReportPage />} />
           </Route>
 
           <Route element={<RequirePermission permission={P.recoveriesView} />}>
@@ -134,9 +124,9 @@ export function AppRouter() {
           </Route>
 
           <Route element={<RequirePermission permission={P.trackingView} />}>
-            <Route path="/tracking" element={<TrackingListPage />} />
-            <Route path="/tracking/report" element={<TrackingReportPage />} />
-            <Route path="/tracking/:id" element={<TrackingDetailPage />} />
+            <Route path="/tracking" element={<Navigate to="/incidents/managing" replace />} />
+            <Route path="/tracking/report" element={<Navigate to="/reports/operational" replace />} />
+            <Route path="/tracking/:id" element={<Navigate to="/incidents/managing" replace />} />
           </Route>
 
           <Route element={<RequirePermission permission={P.schoolsView} />}>
@@ -148,7 +138,7 @@ export function AppRouter() {
             <Route path="/reports" element={<Navigate to="/reports/operational" replace />} />
             <Route path="/reports/operational" element={<OperationalReportPage />} />
             <Route path="/reports/general" element={<GeneralReportPage />} />
-            <Route path="/reports/ticketera" element={<TicketeraPage />} />
+            <Route path="/reports/ticketera" element={<Navigate to="/reports/operational" replace />} />
           </Route>
 
           <Route element={<RequirePermission permission={P.adminView} />}>

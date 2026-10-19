@@ -8,7 +8,7 @@ export function LiveSyncBootstrap() {
   const { user, loading } = useAuth()
   const { can } = usePermissions()
   useLiveMonitoringSync({
-    prtgMs: 30_000,
+    prtgMs: 45_000,
     enabled: !loading && user !== null && can(P.syncRun),
   })
   return null

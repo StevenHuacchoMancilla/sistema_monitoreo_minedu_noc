@@ -55,7 +55,7 @@ export function PrtgKpis({ data }: { data: PrtgDashboard }) {
         <KpiCard accent="prtg" label="Incidencias activas" value={kpis.active_incidents} tone="danger" to={links.downs} />
         <KpiCard
           accent="prtg"
-          label="Pendientes de contacto"
+          label="Pendientes de gestión"
           value={kpis.pending_contact}
           tone="warn"
           to={links.pending_contact}

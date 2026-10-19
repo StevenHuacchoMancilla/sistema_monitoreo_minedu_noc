@@ -42,6 +42,9 @@ export const endpoints = {
     apiGet<ConcentrationZone>(
       `/dashboard/concentrations/zone${toQuery({ provincia, distrito })}`,
     ),
+  massOutages: () => apiGet<{ data: Concentration[] }>('/dashboard/mass-outages'),
+  massOutageNodo: (nodo: string) =>
+    apiGet<ConcentrationZone>(`/dashboard/mass-outages/nodo${toQuery({ nodo })}`),
   schools: (params: Record<string, string | undefined | null> = {}) =>
     apiGet<SchoolListResponse>(`/schools${toQuery(params)}`),
   schoolDetail: (id: number) => apiGet<SchoolDetail>(`/schools/${id}`),
@@ -107,6 +110,29 @@ export const endpoints = {
   ticketeraTimeline: (cid: string, from: string, to: string) =>
     apiGet<TicketeraTimeline>(`/ticketera/timeline${toQuery({ cid, from, to })}`),
   syncPrtg: () => apiPost<Record<string, unknown>>('/sync/prtg', undefined, { timeoutMs: 30_000 }),
+  incidentsPendienteCierre: () =>
+    apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/pendiente-cierre'),
+  incidentsGraves: () => apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/graves'),
+  markIncidentGrave: (id: number, observation?: string) =>
+    apiPost(`/incidents/${id}/mark-grave`, { observation }),
+  closeIncidentGrave: (id: number, observation?: string) =>
+    apiPost(`/incidents/${id}/close-grave`, { observation }),
+  closeIncidentTicket: (id: number, observation?: string) =>
+    apiPost(`/incidents/${id}/close-ticket`, { observation }),
+  assignmentPrtgSensors: (assignmentId: number) =>
+    apiGet<{
+      assignment_id: number
+      cid: string | null
+      data: Array<{
+        id: number
+        name: string
+        sensor_role: string | null
+        last_value: string | null
+        unit: string | null
+        normalized_status: string | null
+        down_since: string | null
+      }>
+    }>(`/assignments/${assignmentId}/prtg-sensors`),
   prtgProvinces: () =>
     apiGet<{
       data: Array<{ name: string; district_count: number; assignment_count: number }>

@@ -1,8 +1,8 @@
 import { useState } from 'react'
+import { inputClassName } from '../../../lib/uiTokens'
 import type { SchoolGeneralPayload } from '../types/school'
 
-const inputClass =
-  'w-full rounded-xl border border-noc-border bg-white px-3 py-2 text-sm text-noc-text shadow-sm outline-none'
+const inputClass = `${inputClassName} !h-auto rounded-xl py-2`
 
 const FIELDS: Array<{ key: keyof SchoolGeneralPayload; label: string }> = [
   { key: 'current_sequence', label: 'N° (secuencia)' },
@@ -42,10 +42,10 @@ export function SchoolGeneralForm({
     >
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {FIELDS.map(({ key, label }) => (
-          <label key={key} className="text-xs font-semibold text-noc-muted">
+          <label key={key} className="text-xs font-semibold text-slate-500 dark:text-slate-400">
             {label}
             <input
-              className={`${inputClass} mt-1 ${readOnly ? 'cursor-not-allowed bg-slate-50 dark:bg-slate-800' : ''}`}
+              className={`${inputClass} mt-1 ${readOnly ? 'cursor-not-allowed bg-slate-50 dark:bg-slate-900' : ''}`}
               value={form[key] == null ? '' : String(form[key])}
               readOnly={readOnly}
               disabled={readOnly}

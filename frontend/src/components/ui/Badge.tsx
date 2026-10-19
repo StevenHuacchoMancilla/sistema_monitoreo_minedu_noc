@@ -15,20 +15,23 @@ const variants: Record<string, string> = {
   EN_ESPERA: 'bg-violet-100 text-violet-800',
   ESCALADO: 'bg-fuchsia-100 text-fuchsia-800',
   TECNICO_EN_CAMPO: 'bg-cyan-100 text-cyan-800',
+  PENDIENTE_CIERRE: 'bg-teal-100 text-teal-800',
   RECUPERADO: 'bg-green-100 text-green-800',
   RECUPERADA: 'bg-green-100 text-green-800',
   CERRADO: 'bg-slate-100 text-slate-600',
   ACTIVA: 'bg-red-100 text-red-700',
   REINCIDENTE: 'bg-amber-100 text-amber-900',
+  EN_INCIDENCIA: 'bg-rose-100 text-rose-800',
 }
 
 export const FOLLOWUP_LABELS: Record<string, string> = {
-  PENDIENTE_CONTACTO: 'Pendiente contacto',
+  PENDIENTE_CONTACTO: 'Pendiente de gestión',
   EN_GESTION: 'En gestión',
   EN_DESCARTE: 'En descarte',
   EN_ESPERA: 'En espera',
   ESCALADO: 'Escalado',
   TECNICO_EN_CAMPO: 'Técnico en campo',
+  PENDIENTE_CIERRE: 'Pendiente de cierre',
   RECUPERADO: 'Recuperado',
   CERRADO: 'Cerrado',
 }

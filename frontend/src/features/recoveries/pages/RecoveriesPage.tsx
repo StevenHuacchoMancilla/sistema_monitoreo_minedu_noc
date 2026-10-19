@@ -72,6 +72,7 @@ export function RecoveriesPage() {
   const { can } = usePermissions()
   const canOpenHistory = can(P.historyView)
   const { prtg } = useManualSync()
+  const now = useNow(30_000)
 
   const reviewFromUrl = searchParams.get('review_status') || ''
 
@@ -417,7 +418,7 @@ export function RecoveriesPage() {
                 </thead>
                 <tbody>
                   {rows.map((row) => (
-                    <RecoveryRow key={row.id} row={row} canOpenHistory={canOpenHistory} />
+                    <RecoveryRow key={row.id} row={row} canOpenHistory={canOpenHistory} now={now} />
                   ))}
                 </tbody>
               </table>
@@ -452,8 +453,15 @@ export function RecoveriesPage() {
   )
 }
 
-function RecoveryRow({ row, canOpenHistory }: { row: RecoveredRow; canOpenHistory: boolean }) {
-  const now = useNow(30_000)
+function RecoveryRow({
+  row,
+  canOpenHistory,
+  now,
+}: {
+  row: RecoveredRow
+  canOpenHistory: boolean
+  now: number
+}) {
   const showOutcome = row.management_classification && CONTACT_OUTCOMES.has(row.management_classification)
   const localSubtext = [row.codigo_local, row.tecnologia, row.distrito].filter(Boolean).join(' · ') || '—'
   const recoveredMs = row.recovered_at ? new Date(row.recovered_at.replace(' ', 'T')).getTime() : NaN

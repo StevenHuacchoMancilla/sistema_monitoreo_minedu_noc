@@ -42,7 +42,7 @@ export const P = {
 export function homePathForPermissions(permissions: string[] | undefined | null): string {
   const set = new Set(permissions ?? [])
   if (set.has(P.dashboardPrtg)) return '/dashboard/prtg'
-  if (set.has(P.incidentsView)) return '/incidents/active'
+  if (set.has(P.incidentsView)) return '/incidents/total'
   if (set.has(P.recoveriesView)) return '/recoveries'
   if (set.has(P.trackingView)) return '/tracking'
   return '/profile'

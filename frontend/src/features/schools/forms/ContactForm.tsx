@@ -1,8 +1,8 @@
 import { useState } from 'react'
+import { inputClassName } from '../../../lib/uiTokens'
 import type { ContactPayload } from '../types/school'
 
-const inputClass =
-  'w-full rounded-xl border border-noc-border bg-white px-3 py-2 text-sm text-noc-text shadow-sm outline-none'
+const inputClass = `${inputClassName} !h-auto rounded-xl py-2`
 
 export function ContactForm({
   initial,
@@ -27,7 +27,7 @@ export function ContactForm({
 
   return (
     <form
-      className="space-y-3 rounded-xl border border-noc-border/70 bg-[#f5f5f7]/50 p-3"
+      className="space-y-3 rounded-xl border border-slate-200 bg-slate-50/80 p-3 dark:border-slate-700 dark:bg-slate-900/60"
       onSubmit={(e) => {
         e.preventDefault()
         if (readOnly) return
@@ -38,7 +38,7 @@ export function ContactForm({
       }}
     >
       <div className="grid gap-3 sm:grid-cols-2">
-        <label className="text-xs font-semibold text-noc-muted">
+        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
           Orden (1–3)
           <select
             className={`${inputClass} mt-1`}
@@ -51,7 +51,7 @@ export function ContactForm({
             <option value={3}>3</option>
           </select>
         </label>
-        <label className="text-xs font-semibold text-noc-muted">
+        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
           Teléfono (texto)
           <input
             className={`${inputClass} mt-1`}
@@ -62,7 +62,7 @@ export function ContactForm({
             inputMode="tel"
           />
         </label>
-        <label className="text-xs font-semibold text-noc-muted">
+        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
           Nombre
           <input
             className={`${inputClass} mt-1`}
@@ -72,7 +72,7 @@ export function ContactForm({
             onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))}
           />
         </label>
-        <label className="text-xs font-semibold text-noc-muted">
+        <label className="text-xs font-semibold text-slate-500 dark:text-slate-400">
           Cargo
           <input
             className={`${inputClass} mt-1`}

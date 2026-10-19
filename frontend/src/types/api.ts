@@ -49,11 +49,14 @@ export type DashboardSummary = {
   kpis: DashboardKpis
   nav?: {
     caidas_totales?: number
-    caidas_activas: number
+    caidas_activas?: number
     pendientes_contacto: number
     en_gestion: number
+    pendiente_cierre?: number
+    incidencias_graves?: number
     recaida_gestion?: number
     concentraciones: number
+    caidas_masivas?: number
     recuperados: number
     pending_reviews?: number
     tracking_abiertos?: number
@@ -97,12 +100,18 @@ export type OutageRow = {
   nodo_pop: string | null
   estado_prtg: string | null
   estado_prtg_text: string | null
+  /** TSS del colegio (= current_sequence / N° del reporte operativo). */
+  tss?: number | string | null
   duracion: string | null
   duration_seconds?: number | null
+  duration_label?: string | null
+  prtg_down_since_raw?: string | null
   started_at: string | null
   /** Inicio del downtime actual en PRTG (la caída de ahora, no el historial de la incidencia). */
   current_down_started_at?: string | null
   in_management?: boolean
+  has_open_grave_incident?: boolean
+  is_grave_incident?: boolean
   tracking?: {
     id: number
     status: string | null
@@ -158,6 +167,10 @@ export type ConcentrationZoneSchool = {
   local_educativo: string | null
   codigo_local: string | null
   cid: string | null
+  /** N° / current_sequence del colegio (TSS operativo). */
+  tss?: number | string | null
+  provincia?: string | null
+  distrito?: string | null
   tecnologia: string | null
   nodo_pop: string | null
   estado: string

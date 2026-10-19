@@ -1,4 +1,5 @@
 import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, ClipboardList, ExternalLink, MapPin, Phone, Radio, X } from 'lucide-react'
@@ -11,19 +12,22 @@ import { FormField, Select } from '../../../components/ui/FormControls'
 import { ErrorState, LoadingState } from '../../../components/ui/States'
 import { inputClassName } from '../../../lib/uiTokens'
 import { formatDateTime, formatDuration } from '../../../lib/datetime'
+import { useBodyScrollLock } from '../../../lib/useBodyScrollLock'
 import { useNow } from '../../../lib/useNow'
 import type { ManagementPayload } from '../../reports/types/operationalReport'
+import { TrackingFollowUpSection } from '../../tracking/components/TrackingFollowUpSection'
 import { trackingStatusTone } from '../../tracking/lib/trackingStatus'
 import { incidentCaseFilePath } from '../../history/api/historyApi'
 import { VoiceDictationButton } from '../../voice/components/VoiceDictationButton'
 import { FieldDispatchPanel } from './FieldDispatchPanel'
 import type { IncidentDetail } from '../../../types/api'
 
-type TabKey = 'summary' | 'management' | 'dispatch' | 'history'
+type TabKey = 'summary' | 'management' | 'seguimiento' | 'dispatch' | 'history'
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'summary', label: 'Resumen' },
   { key: 'management', label: 'Contacto y gestión' },
+  { key: 'seguimiento', label: 'Seguimiento' },
   { key: 'dispatch', label: 'Desplazamiento' },
   { key: 'history', label: 'Historial' },
 ]
@@ -148,20 +152,25 @@ export function IncidentManageModal({
     onCloseRef.current = onClose
   }, [onClose])
 
+  useBodyScrollLock(true)
+
   // Solo al montar: el padre recrea onClose en cada refresco y no debe robar el foco.
   useEffect(() => {
     closeRef.current?.focus()
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onCloseRef.current()
     }
-    const previousOverflow = document.body.style.overflow
-    document.body.style.overflow = 'hidden'
     window.addEventListener('keydown', onKey)
-    return () => {
-      window.removeEventListener('keydown', onKey)
-      document.body.style.overflow = previousOverflow
-    }
+    return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  const invalidateOps = async () => {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' }),
+      client.invalidateQueries({ queryKey: ['incidents', 'queue'], refetchType: 'active' }),
+      client.invalidateQueries({ queryKey: ['incidents', incidentId], refetchType: 'active' }),
+    ])
+  }
 
   const save = useMutation({
     mutationFn: () => {
@@ -187,20 +196,46 @@ export function IncidentManageModal({
       )
       hydrated.current = false
       client.setQueryData(['incidents', incidentId], data)
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ['dashboard'] }),
-        client.invalidateQueries({ queryKey: ['reports'] }),
-        client.invalidateQueries({ queryKey: ['tracking'] }),
-      ])
+      await invalidateOps()
       window.setTimeout(() => setSavedMsg(null), 3500)
     },
   })
+
+  const markGrave = useMutation({
+    mutationFn: () => endpoints.markIncidentGrave(incidentId, observation || undefined),
+    onSuccess: async () => {
+      setSavedMsg('Marcado como incidencia grave')
+      await invalidateOps()
+      window.setTimeout(() => setSavedMsg(null), 3000)
+    },
+  })
+
+  const closeTicket = useMutation({
+    mutationFn: () => endpoints.closeIncidentTicket(incidentId, observation || undefined),
+    onSuccess: async () => {
+      setSavedMsg('Ticket cerrado')
+      await invalidateOps()
+      window.setTimeout(() => {
+        setSavedMsg(null)
+        onClose()
+      }, 1200)
+    },
+  })
+
+  const trackingId = detail.data?.active_tracking?.id ?? null
+
+  // Tras guardar gestión, ir a Seguimiento si ya hay Tracking.
+  useEffect(() => {
+    if (savedMsg?.includes('Tracking') && trackingId) {
+      setTab('seguimiento')
+    }
+  }, [savedMsg, trackingId])
 
   const data = detail.data
   const seconds = data ? durationSeconds(data.estado, now) : null
   const recovered = Boolean(data?.estado.recovered_at)
 
-  return (
+  const modal = (
     <div className="fixed inset-0 z-50 flex justify-end">
       <button
         type="button"
@@ -285,7 +320,7 @@ export function IncidentManageModal({
           {detail.isLoading ? <LoadingState /> : null}
           {detail.isError ? <ErrorState message={detail.error instanceof Error ? detail.error.message : 'Error'} /> : null}
 
-          {data && tab === 'summary' ? <SummaryTab data={data} onNavigate={onClose} /> : null}
+          {data && tab === 'summary' ? <SummaryTab data={data} /> : null}
 
           {data && tab === 'management' ? (
             <div className="space-y-4">
@@ -391,6 +426,27 @@ export function IncidentManageModal({
             </div>
           ) : null}
 
+          {data && tab === 'seguimiento' ? (
+            trackingId ? (
+              <TrackingFollowUpSection
+                trackingId={trackingId}
+                onChanged={() => {
+                  void client.invalidateQueries({ queryKey: ['incidents', incidentId], refetchType: 'active' })
+                }}
+              />
+            ) : (
+              <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-[13px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
+                <p className="font-semibold text-slate-900 dark:text-slate-100">Sin Tracking vinculado</p>
+                <p className="mt-1">
+                  Guarda una gestión TIPO 1, 2 o 3 en <strong>Contacto y gestión</strong> para abrir el seguimiento.
+                </p>
+                <Button variant="secondary" className="mt-4" onClick={() => setTab('management')}>
+                  Ir a Contacto y gestión
+                </Button>
+              </div>
+            )
+          ) : null}
+
           {data && tab === 'dispatch' ? (
             <FieldDispatchPanel
               incidentId={incidentId}
@@ -421,14 +477,37 @@ export function IncidentManageModal({
             {readOnly ? 'Cerrar' : 'Cancelar'}
           </Button>
           {!readOnly ? (
-            <Button variant="primary" disabled={!data || !classification} loading={save.isPending} onClick={() => save.mutate()}>
-              Guardar gestión
-            </Button>
+            <>
+              <Button
+                variant="secondary"
+                disabled={!data || markGrave.isPending}
+                loading={markGrave.isPending}
+                onClick={() => markGrave.mutate()}
+                title="Pasa el caso al apartado Incidencias graves"
+              >
+                Pasar a incidencia
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!data || closeTicket.isPending}
+                loading={closeTicket.isPending}
+                onClick={() => {
+                  if (window.confirm('¿Cerrar este ticket operativamente?')) closeTicket.mutate()
+                }}
+              >
+                Cerrar ticket
+              </Button>
+              <Button variant="primary" disabled={!data || !classification} loading={save.isPending} onClick={() => save.mutate()}>
+                Guardar gestión
+              </Button>
+            </>
           ) : null}
         </footer>
       </div>
     </div>
   )
+
+  return createPortal(modal, document.body)
 }
 
 function SummaryBand({ data }: { data: IncidentDetail }) {
@@ -460,7 +539,7 @@ function SummaryBand({ data }: { data: IncidentDetail }) {
   )
 }
 
-function SummaryTab({ data, onNavigate }: { data: IncidentDetail; onNavigate: () => void }) {
+function SummaryTab({ data }: { data: IncidentDetail }) {
   const c = data.colegio
   const prtgProvince = c.prtg_province ?? c.provincia
   const prtgDistrict = c.prtg_district ?? c.distrito
@@ -532,29 +611,21 @@ function SummaryTab({ data, onNavigate }: { data: IncidentDetail; onNavigate: ()
         </Panel>
       ) : null}
 
-      <Panel title="Tracking General" icon={<ClipboardList className="h-4 w-4 text-slate-500" aria-hidden />}>
+      <Panel title="Seguimiento" icon={<ClipboardList className="h-4 w-4 text-slate-500" aria-hidden />}>
         {data.active_tracking ? (
-          <div className="flex items-center justify-between gap-3">
-            <div className="min-w-0">
-              <p className="truncate text-[13px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-                {data.active_tracking.report_ticket ?? data.active_tracking.ticket ?? `#${data.active_tracking.incident_number ?? data.active_tracking.id}`}
-              </p>
-              <p className="text-[12px] text-slate-500 dark:text-slate-400">
-                {data.active_tracking.status_label ?? data.active_tracking.status}
-                {data.active_tracking.opened_by_name ? ` · ${data.active_tracking.opened_by_name}` : ''}
-              </p>
-            </div>
-            <Link
-              to={`/tracking/${data.active_tracking.id}`}
-              onClick={onNavigate}
-              className="inline-flex shrink-0 items-center gap-1 rounded-lg px-2.5 py-1.5 text-[12px] font-semibold text-blue-700 hover:bg-blue-50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300 dark:hover:bg-blue-950/40"
-            >
-              Ver Tracking <ExternalLink className="h-3.5 w-3.5" aria-hidden />
-            </Link>
+          <div className="min-w-0">
+            <p className="truncate text-[13px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
+              {data.active_tracking.report_ticket ?? data.active_tracking.ticket ?? `#${data.active_tracking.incident_number ?? data.active_tracking.id}`}
+            </p>
+            <p className="text-[12px] text-slate-500 dark:text-slate-400">
+              {data.active_tracking.status_label ?? data.active_tracking.status}
+              {data.active_tracking.opened_by_name ? ` · ${data.active_tracking.opened_by_name}` : ''}
+              {' · pestaña Seguimiento'}
+            </p>
           </div>
         ) : (
           <p className="text-[12px] text-slate-500 dark:text-slate-400">
-            Se abre automáticamente al guardar la primera gestión.
+            Se abre automáticamente al guardar la primera gestión (TIPO 1/2/3).
           </p>
         )}
       </Panel>

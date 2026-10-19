@@ -1,9 +1,10 @@
 import { useEffect, useRef } from 'react'
-import { useQueryClient } from '@tanstack/react-query'
 import { endpoints } from '../../../api/endpoints'
 
 const TAB_LOCK_KEY = 'noc:live-sync-leader'
 const TAB_LOCK_TTL_MS = 45_000
+/** Producto: no menos de 45s entre disparos (antes 30s agravaba el freeze). */
+const MIN_PRTG_MS = 45_000
 
 const tabId =
   typeof crypto !== 'undefined' && 'randomUUID' in crypto
@@ -43,16 +44,15 @@ function sleep(ms: number): Promise<void> {
 }
 
 /**
- * Equivalente web a `php artisan monitoring:watch` (sin Cron de pago).
- * Solo sync PRTG. Una pestaña dispara; el servidor responde al instante y termina
- * el trabajo en background (evita timeout del proxy Vercel).
+ * Sync PRTG en vivo. Pausa total con pestaña oculta (vuelves de Cursor → no dispara sync).
+ * No invalida React Query: las páginas ya hacen refetchInterval propio.
  */
 export function useLiveMonitoringSync(options?: {
   prtgMs?: number
   enabled?: boolean
 }) {
-  const client = useQueryClient()
-  const prtgMs = options?.prtgMs ?? 30_000
+  // Default 45s; LiveSyncBootstrap puede pedir 30s — respetamos el mínimo.
+  const prtgMs = Math.max(MIN_PRTG_MS, options?.prtgMs ?? MIN_PRTG_MS)
   const enabled = options?.enabled ?? true
   const prtgBusy = useRef(false)
 
@@ -60,53 +60,69 @@ export function useLiveMonitoringSync(options?: {
     if (!enabled) return
 
     let cancelled = false
+    let wake: (() => void) | null = null
 
-    const invalidate = async () => {
-      await client.invalidateQueries({ queryKey: ['dashboard'] })
+    const waitWhileHidden = async () => {
+      while (!cancelled && document.hidden) {
+        await new Promise<void>((resolve) => {
+          wake = resolve
+          const onVis = () => {
+            if (!document.hidden) {
+              document.removeEventListener('visibilitychange', onVis)
+              wake?.()
+              wake = null
+            }
+          }
+          document.addEventListener('visibilitychange', onVis)
+        })
+        // Al volver a la pestaña, esperar un poco para no saturar el hilo principal.
+        if (!cancelled) await sleep(4_000)
+      }
     }
 
     const syncPrtg = async () => {
-      if (prtgBusy.current || cancelled) return
-      if (!tryClaimTabLeadership()) {
-        await invalidate()
-        return
-      }
+      if (prtgBusy.current || cancelled || document.hidden) return
+      if (!tryClaimTabLeadership()) return
+
       renewTabLeadership()
       prtgBusy.current = true
+      const hangTimer = window.setTimeout(() => {
+        prtgBusy.current = false
+      }, 25_000)
+
       try {
         await endpoints.syncPrtg()
-        await sleep(8_000)
-        if (!cancelled) await invalidate()
       } catch {
-        // silencioso: el próximo ciclo reintentará
+        // silencioso
       } finally {
+        window.clearTimeout(hangTimer)
         prtgBusy.current = false
       }
     }
 
-    const runPrtgLoop = async () => {
-      await sleep(1_500)
+    const runLoop = async () => {
+      await sleep(5_000)
       while (!cancelled) {
+        await waitWhileHidden()
+        if (cancelled) break
         await syncPrtg()
         if (cancelled) break
         await sleep(prtgMs)
       }
     }
 
-    const refreshTimer = window.setInterval(() => {
-      void invalidate()
-    }, 20_000)
-
     const heartbeat = window.setInterval(() => {
+      if (document.hidden) return
       if (tryClaimTabLeadership()) renewTabLeadership()
-    }, 15_000)
+    }, 25_000)
 
-    void runPrtgLoop()
+    void runLoop()
 
     return () => {
       cancelled = true
-      window.clearInterval(refreshTimer)
+      wake?.()
       window.clearInterval(heartbeat)
+      prtgBusy.current = false
     }
-  }, [client, prtgMs, enabled])
+  }, [prtgMs, enabled])
 }

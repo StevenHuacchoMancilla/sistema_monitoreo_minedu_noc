@@ -4,11 +4,14 @@ import type { PrtgDashboard } from '../types/prtgDashboard'
 
 const KEY = ['dashboard', 'prtg'] as const
 
-export function usePrtgDashboard(refetchInterval = 60_000) {
+export function usePrtgDashboard(refetchInterval = 90_000) {
   return useQuery<PrtgDashboard>({
     queryKey: KEY,
     queryFn: endpoints.dashboardPrtg,
     refetchInterval,
+    staleTime: 45_000,
+    refetchIntervalInBackground: false,
+    refetchOnWindowFocus: false,
   })
 }
 
@@ -17,7 +20,7 @@ export function useForcePrtgSync() {
   return useMutation({
     mutationFn: endpoints.syncPrtg,
     onSuccess: async () => {
-      await client.invalidateQueries({ queryKey: ['dashboard'] })
+      await client.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' })
     },
   })
 }

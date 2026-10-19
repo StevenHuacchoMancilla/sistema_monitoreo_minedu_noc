@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
-import { useSearchParams, useNavigate } from 'react-router-dom'
-import { Clock3, Eye, Hourglass, Network, RefreshCw, Sparkles, SquarePen, TriangleAlert, Wrench } from 'lucide-react'
+import { Link, useSearchParams } from 'react-router-dom'
+import { Clock3, Eye, History, Hourglass, Network, RefreshCw, Sparkles, SquarePen, TriangleAlert, Wrench } from 'lucide-react'
 import { useAuth } from '../../auth/context/AuthContext'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
@@ -32,7 +32,6 @@ import { formatDuration, formatTime, limaDateKey } from '../../../lib/datetime'
 import { useDashboardSummary, useManualSync, useOutages } from '../../dashboard/hooks/useDashboard'
 import { PrtgLocationFilterFields } from '../../locations/components/PrtgLocationFilterFields'
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
-import { trackingStatusTone } from '../../tracking/lib/trackingStatus'
 import { IncidentManageModal } from '../components/IncidentManageModal'
 import { RegisterLinkOutageModal } from '../components/RegisterLinkOutageModal'
 import type { OutageRow } from '../../../types/api'
@@ -121,7 +120,6 @@ export function ActiveIncidentsPage({
   showManagementFilter?: boolean
 }) {
   const [searchParams] = useSearchParams()
-  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(25)
@@ -323,7 +321,7 @@ export function ActiveIncidentsPage({
           <FormField label="Estado gestión">
             <Select
               value={followup}
-              disabled={title === 'Pendientes de contacto' || title === 'Recaída en gestión'}
+              disabled={title === 'Pendientes de gestión' || title === 'Pendientes de contacto' || title === 'Recaída en gestión'}
               onChange={(e) => withPageReset(setFollowup)(e.target.value)}
             >
               {FOLLOWUP_FILTERS.map((f) => (
@@ -422,12 +420,12 @@ export function ActiveIncidentsPage({
                   <col className="w-[4.75rem]" />
                   <col className="w-[14rem]" />
                   <col className="w-[9rem]" />
+                  <col className="w-[4.5rem]" />
                   <col className="w-[6.5rem]" />
-                  <col className="w-[5.5rem]" />
+                  <col className="w-[6.5rem]" />
                   <col className="w-[10.5rem]" />
-                  <col className="w-[7rem]" />
-                  <col className="w-[8.5rem]" />
-                  <col className="w-[4rem]" />
+                  <col className="w-[9rem]" />
+                  <col className="w-[4.5rem]" />
                 </colgroup>
                 <thead className={theadClassName}>
                   <tr>
@@ -436,13 +434,19 @@ export function ActiveIncidentsPage({
                     <th className={thClassName}>Local</th>
                     <th className={thClassName}>Ubicación</th>
                     <th className={thClassName}>
+                      <span className="block">TSS</span>
+                      <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">N° colegio</span>
+                    </th>
+                    <th className={thClassName}>
                       <span className="block">{durationSource === 'current_down' ? 'Caída actual' : 'Caída'}</span>
                       <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
                     </th>
-                    <th className={thClassName}>Duración</th>
+                    <th className={thClassName}>
+                      <span className="block">Duración</span>
+                      <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">Fallo por PRTG</span>
+                    </th>
                     <th className={thClassName}>Seguimiento</th>
-                    <th className={thClassName}>Responsable</th>
-                    <th className={thClassName}>Tracking</th>
+                    <th className={thClassName}>Nodo/POP</th>
                     <th
                       className={`${thClassName} sticky right-0 z-10 bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}
                     >
@@ -488,8 +492,7 @@ export function ActiveIncidentsPage({
           onClose={() => {
             setManageId(null)
             refresh()
-            void client.invalidateQueries({ queryKey: ['reports'] })
-            void client.invalidateQueries({ queryKey: ['tracking'] })
+            void client.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' })
           }}
         />
       ) : null}
@@ -497,15 +500,8 @@ export function ActiveIncidentsPage({
       <RegisterLinkOutageModal
         open={linkOutageOpen}
         onClose={() => setLinkOutageOpen(false)}
-        onCreated={({ incidentId, classification, trackingId }) => {
+        onCreated={({ incidentId }) => {
           refresh()
-          if (
-            (classification === 'LINK_OUTAGE' || classification === 'NO_RESPONSE') &&
-            trackingId
-          ) {
-            navigate(`/tracking/${trackingId}`)
-            return
-          }
           setManageId(incidentId)
         }}
       />
@@ -564,11 +560,21 @@ function OutageTableRow({
           <LocationMismatchBadge info={row} compact />
         </span>
       </td>
+      <td className={`${outageTd} font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
+        {row.tss ?? '—'}
+      </td>
       <td className={outageTd}>
         <IsoDateTimeCell value={clock} />
       </td>
       <td className={`${outageTd} font-semibold tabular-nums ${DURATION_CLASS[bucket]}`}>
-        <span className="block truncate whitespace-nowrap">{formatDuration(seconds)}</span>
+        <span className="block truncate whitespace-nowrap" title={row.prtg_down_since_raw ?? undefined}>
+          {row.duration_label ?? formatDuration(seconds)}
+        </span>
+        {row.prtg_down_since_raw ? (
+          <span className="block truncate text-[10px] font-normal text-slate-400" title="Texto PRTG Fallo por">
+            PRTG: {row.prtg_down_since_raw}
+          </span>
+        ) : null}
       </td>
       <td className={outageTd}>
         <div className="flex min-w-0 flex-col items-start gap-1">
@@ -578,6 +584,15 @@ function OutageTableRow({
               classification={row.management_classification}
               label={row.management_classification_label}
             />
+            {row.has_open_grave_incident ? (
+              <Badge
+                tone="danger"
+                title="Este colegio tiene una incidencia grave abierta"
+                className="!text-[10px] !font-medium"
+              >
+                En incidencia
+              </Badge>
+            ) : null}
             {bucket === 'new' ? (
               <Badge tone="info" title={`Esta caída lleva menos de ${NEW_MINUTES} minutos`} className="!text-[10px] !font-medium">
                 {durationSource === 'current_down' ? 'Reciente' : 'Nueva'}
@@ -590,15 +605,6 @@ function OutageTableRow({
                 className="!text-[10px] !font-medium"
               >
                 {managing ? 'En gestión' : 'Sin gestión'}
-              </Badge>
-            ) : null}
-            {row.reopened_from_management ? (
-              <Badge
-                tone="warning"
-                title="Se recuperó durante gestión y volvió a caer; continúa el mismo historial"
-                className="!text-[10px] !font-medium"
-              >
-                Recaída gestión
               </Badge>
             ) : null}
             {reincidencias > 1 ? (
@@ -614,32 +620,30 @@ function OutageTableRow({
         </div>
       </td>
       <td className={outageTd}>
-        <Truncate title={row.responsible_area} className="text-slate-600 dark:text-slate-300">
-          {row.responsible_area ?? '—'}
+        <Truncate title={row.nodo_pop ?? undefined} className="text-[12px] font-medium text-slate-700 dark:text-slate-200">
+          {row.nodo_pop?.trim() ? row.nodo_pop : '—'}
         </Truncate>
       </td>
-      <td className={outageTd}>
-        {row.tracking ? (
-          <span className="flex min-w-0 flex-col items-start gap-0.5">
-            <Truncate className="text-[12px] font-medium tabular-nums" title={row.tracking.ticket}>
-              {row.tracking.ticket ?? 'Sin ticket'}
-            </Truncate>
-            <Badge tone={trackingStatusTone(row.tracking.status)} className="!text-[10px]">
-              {row.tracking.status_label ?? row.tracking.status}
-            </Badge>
-          </span>
-        ) : (
-          <span className="text-slate-400">—</span>
-        )}
-      </td>
       <td className="sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 !align-top text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
-        <IconButton
-          label={canManage ? 'Gestionar' : 'Ver detalle'}
-          onClick={() => onManage(row.incident_id)}
-          className="h-8 w-8 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
-        >
-          {canManage ? <SquarePen className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
-        </IconButton>
+        <div className="inline-flex items-center justify-end gap-0.5">
+          {row.school_id ? (
+            <Link
+              to={`/history/schools/${row.school_id}`}
+              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+              title="Historial del colegio"
+              aria-label="Historial del colegio"
+            >
+              <History className="h-4 w-4" aria-hidden />
+            </Link>
+          ) : null}
+          <IconButton
+            label={canManage ? 'Gestionar' : 'Ver detalle'}
+            onClick={() => onManage(row.incident_id)}
+            className="h-8 w-8 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
+          >
+            {canManage ? <SquarePen className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+          </IconButton>
+        </div>
       </td>
     </tr>
   )

@@ -95,11 +95,9 @@ export function NotificationBell() {
       const alert = visible.find((a) => a.incident_id === incidentId)
       if (alert) dismiss(alert.id)
       await Promise.all([
-        client.invalidateQueries({ queryKey: ['notifications'] }),
-        client.invalidateQueries({ queryKey: ['recoveries'] }),
-        client.invalidateQueries({ queryKey: ['dashboard'] }),
-        client.invalidateQueries({ queryKey: ['reports'] }),
-        client.invalidateQueries({ queryKey: ['tracking'] }),
+        client.invalidateQueries({ queryKey: ['notifications'], refetchType: 'active' }),
+        client.invalidateQueries({ queryKey: ['recoveries'], refetchType: 'active' }),
+        client.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' }),
       ])
     },
     onSettled: () => setBusyId(null),

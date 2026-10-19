@@ -6,8 +6,10 @@ import { ThemeProvider } from '../features/theme/ThemeProvider'
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 15_000,
+      staleTime: 45_000,
       refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      refetchIntervalInBackground: false,
       retry: 1,
     },
   },

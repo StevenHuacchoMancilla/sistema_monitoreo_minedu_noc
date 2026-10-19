@@ -1,8 +1,8 @@
 import { useState } from 'react'
+import { inputClassName } from '../../../lib/uiTokens'
 import type { NetworkAssignmentPayload } from '../types/school'
 
-const inputClass =
-  'w-full rounded-xl border border-noc-border bg-white px-3 py-2 text-sm text-noc-text shadow-sm outline-none'
+const inputClass = `${inputClassName} !h-auto rounded-xl py-2`
 
 const FIELDS: Array<{ key: keyof NetworkAssignmentPayload; label: string }> = [
   { key: 'cid', label: 'CID' },
@@ -44,7 +44,7 @@ export function NetworkAssignmentForm({
       }}
     >
       {!readOnly ? (
-        <p className="text-xs text-noc-muted">
+        <p className="text-xs text-slate-500 dark:text-slate-400">
           {mode === 'correct'
             ? 'Corrección tipográfica / técnica (audita el mismo assignment).'
             : 'Reasignación histórica: cierra el CID actual y crea uno nuevo.'}
@@ -52,10 +52,10 @@ export function NetworkAssignmentForm({
       ) : null}
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
         {FIELDS.map(({ key, label }) => (
-          <label key={key} className="text-xs font-semibold text-noc-muted">
+          <label key={key} className="text-xs font-semibold text-slate-500 dark:text-slate-400">
             {label}
             <input
-              className={`${inputClass} mt-1 ${readOnly ? 'cursor-not-allowed bg-slate-50' : ''}`}
+              className={`${inputClass} mt-1 ${readOnly ? 'cursor-not-allowed bg-slate-50 dark:bg-slate-900' : ''}`}
               value={(form[key] as string | null | undefined) ?? ''}
               readOnly={readOnly}
               disabled={readOnly}
