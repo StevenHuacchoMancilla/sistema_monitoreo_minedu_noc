@@ -5,7 +5,7 @@ import { formatOutageDisplay, type ReportRow } from '../types/operationalReport'
 
 /** Mismo orden que ClosingReportService / officialColumns(). */
 export const FINAL_REPORT_IMAGE_COLUMNS = [
-  'N°',
+  'TSS',
   'CID',
   'LOCAL EDUCATIVO',
   'PRESENTACION NOMBRE PRTG',

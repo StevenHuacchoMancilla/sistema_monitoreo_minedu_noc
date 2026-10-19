@@ -78,7 +78,7 @@ export function ReportDataTable({
       <table className="w-full min-w-[1600px] border-collapse text-left text-slate-800 dark:text-slate-200">
         <thead className="sticky top-0 z-20 border-b border-slate-700 bg-slate-800 text-white dark:border-slate-700 dark:bg-slate-950">
           <tr>
-            <th className={`${th} sticky left-0 z-30 w-[70px] bg-slate-800 dark:bg-slate-950`}>N°</th>
+            <th className={`${th} sticky left-0 z-30 w-[70px] bg-slate-800 dark:bg-slate-950`}>TSS</th>
             <th
               className={`${th} sticky left-[70px] z-30 w-[100px] bg-slate-800 shadow-[4px_0_8px_-6px_rgba(0,0,0,0.35)] dark:bg-slate-950`}
             >
