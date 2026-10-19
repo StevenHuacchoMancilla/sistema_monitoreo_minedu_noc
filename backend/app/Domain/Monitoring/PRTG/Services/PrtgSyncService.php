@@ -998,17 +998,21 @@ class PrtgSyncService
     ): array {
         $statusRaw = isset($sensorRow['status_raw']) ? (int) $sensorRow['status_raw'] : null;
         $normalized = MonitoringStatus::fromPrtgRaw($statusRaw);
+        $sensorName = (string) ($sensorRow['sensor'] ?? '');
+        $sensorType = $sensorRow['type'] ?? null;
+        $role = \App\Enums\PrtgSensorRole::fromSensorName($sensorName, is_string($sensorType) ? $sensorType : null);
         $payload = [
             'network_assignment_id' => $assignmentId,
             'prtg_device_id' => (string) ($device['objid'] ?? ($sensorRow['parentid'] ?? '')),
             'device_name' => $device['device'] ?? ($sensorRow['device'] ?? null),
-            'name' => (string) ($sensorRow['sensor'] ?? ''),
-            'type' => $sensorRow['type'] ?? null,
+            'name' => $sensorName,
+            'type' => $sensorType,
+            'sensor_role' => $role->value,
             'status_raw' => $statusRaw,
             'status_text' => strip_tags((string) ($sensorRow['status'] ?? '')),
             'normalized_status' => $normalized,
             'last_value' => $sensorRow['lastvalue'] ?? null,
-            'unit' => null,
+            'unit' => $this->extractSensorUnit($sensorRow),
             'last_check' => PrtgTimestamps::checkAt($sensorRow, now())['at'] ?? now(),
             'down_since' => $sensorRow['downtimesince'] ?? null,
             'last_synced_at' => now(),
@@ -1021,13 +1025,14 @@ class PrtgSyncService
                 'prtg_district_group' => $location['district'] ?? null,
                 'prtg_device_id' => (string) ($device['objid'] ?? ''),
                 'prtg_device_name' => $device['device'] ?? null,
+                'sensor_role' => $role->value,
             ],
         ];
 
         $sensorId = (string) ($sensorRow['objid'] ?? '');
         $existing = $sensorId !== '' ? $this->sensorIndex?->get($sensorId) : null;
         if ($existing) {
-            if (! $this->sensorNeedsWrite($existing, $statusRaw, $sensorRow, $payload['metadata']['source_scope'] ?? null)) {
+            if (! $this->sensorNeedsWrite($existing, $statusRaw, $sensorRow, $payload, $role)) {
                 return ['created' => 0, 'updated' => 0];
             }
             $existing->fill($payload)->save();
@@ -1046,16 +1051,18 @@ class PrtgSyncService
     }
 
     /**
-     * El lastvalue del Ping cambia en cada lectura. Persistimos si cambia el estado,
-     * el inicio de caída, o el scope (cambio de rama PRTG).
+     * Ping: solo estado / down_since / scope.
+     * Tráfico (TRANSMISION/RECEPCION/OTHER): también last_value y last_check.
      *
      * @param  array<string, mixed>  $sensorRow
+     * @param  array<string, mixed>  $payload
      */
     private function sensorNeedsWrite(
         PrtgSensor $existing,
         ?int $statusRaw,
         array $sensorRow,
-        ?string $newScope = null,
+        array $payload,
+        \App\Enums\PrtgSensorRole $role,
     ): bool {
         if ((int) $existing->status_raw !== (int) $statusRaw) {
             return true;
@@ -1066,8 +1073,38 @@ class PrtgSyncService
         }
 
         $existingScope = (string) ($existing->metadata['source_scope'] ?? '');
+        $newScope = (string) ($payload['metadata']['source_scope'] ?? '');
+        if ($newScope !== '' && $existingScope !== $newScope) {
+            return true;
+        }
 
-        return $newScope !== null && $existingScope !== $newScope;
+        if ((string) ($existing->sensor_role ?? '') !== $role->value) {
+            return true;
+        }
+
+        // Tráfico / otros: persistir cambios de valor para reportes de consumo.
+        if ($role !== \App\Enums\PrtgSensorRole::Ping) {
+            if ((string) ($existing->last_value ?? '') !== (string) ($payload['last_value'] ?? '')) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /**
+     * @param  array<string, mixed>  $sensorRow
+     */
+    private function extractSensorUnit(array $sensorRow): ?string
+    {
+        $raw = (string) ($sensorRow['lastvalue'] ?? '');
+        if ($raw !== '' && preg_match('/([A-Za-zµ%\/]+)\s*$/u', $raw, $m)) {
+            return $m[1];
+        }
+
+        $unit = $sensorRow['unit'] ?? $sensorRow['value_lookup'] ?? null;
+
+        return is_string($unit) && $unit !== '' ? $unit : null;
     }
 
     /**

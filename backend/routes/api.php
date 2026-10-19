@@ -8,6 +8,7 @@ use App\Http\Controllers\Api\V1\History\SchoolHistoryController;
 use App\Http\Controllers\Api\V1\Incidents\IncidentController;
 use App\Http\Controllers\Api\V1\Incidents\RecoveredIncidentController;
 use App\Http\Controllers\Api\V1\Monitoring\PrtgLocationController;
+use App\Http\Controllers\Api\V1\Monitoring\PrtgSensorController;
 use App\Http\Controllers\Api\V1\Monitoring\SyncController;
 use App\Http\Controllers\Api\V1\Notifications\OperationalNotificationController;
 use App\Http\Controllers\Api\V1\Profile\ProfileController;
@@ -42,6 +43,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/dashboard/outages', [DashboardController::class, 'outages']);
         Route::get('/dashboard/concentrations', [DashboardController::class, 'concentrations']);
         Route::get('/dashboard/concentrations/zone', [DashboardController::class, 'concentrationZone']);
+        Route::get('/dashboard/mass-outages', [DashboardController::class, 'massOutages']);
+        Route::get('/dashboard/mass-outages/nodo', [DashboardController::class, 'massOutageNodo']);
         Route::get('/dashboard/school-history', [DashboardController::class, 'schoolHistory']);
     });
 
@@ -68,8 +71,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     Route::middleware('permission:'.PermissionCatalog::INCIDENTS_VIEW)->group(function () {
         Route::get('/incidents', [IncidentController::class, 'index']);
+        Route::get('/incidents/queues/pendiente-cierre', [IncidentController::class, 'pendienteCierre']);
+        Route::get('/incidents/queues/graves', [IncidentController::class, 'graves']);
         Route::get('/notifications/operational', [OperationalNotificationController::class, 'index']);
         Route::get('/incidents/{incident}', [IncidentController::class, 'show']);
+        Route::get('/assignments/{assignment}/prtg-sensors', [PrtgSensorController::class, 'byAssignment']);
     });
 
     Route::middleware('permission:'.PermissionCatalog::REPORTS_VIEW)->group(function () {
@@ -132,6 +138,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('/incidents/{incident}/managements', [IncidentController::class, 'storeManagement']);
             Route::post('/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);
             Route::post('/incidents/{incident}/field-dispatches', [IncidentController::class, 'fieldDispatch']);
+            Route::post('/incidents/{incident}/mark-grave', [IncidentController::class, 'markGrave']);
+            Route::post('/incidents/{incident}/close-grave', [IncidentController::class, 'closeGrave']);
+            Route::post('/incidents/{incident}/close-ticket', [IncidentController::class, 'closeTicket']);
         });
 
     Route::middleware('permission:'.PermissionCatalog::RECOVERIES_MANAGE)->group(function () {

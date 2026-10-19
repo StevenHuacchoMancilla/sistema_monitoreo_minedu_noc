@@ -71,50 +71,6 @@ return new class extends Migration
             $table->timestamp('created_at')->nullable();
         });
 
-        Schema::create('cloudnet_sites', function (Blueprint $table) {
-            $table->id();
-            $table->string('shop_id')->unique();
-            $table->string('site_name')->nullable();
-            $table->string('cid_detected')->nullable()->index();
-            $table->string('codigo_local_detected')->nullable()->index();
-            $table->foreignId('network_assignment_id')->nullable()->constrained()->nullOnDelete();
-            $table->foreignId('school_id')->nullable()->constrained()->nullOnDelete();
-            $table->string('address')->nullable();
-            $table->string('match_status')->nullable();
-            $table->timestamp('last_synced_at')->nullable();
-            $table->json('metadata')->nullable();
-            $table->timestamps();
-        });
-
-        Schema::create('cloudnet_devices', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('cloudnet_site_id')->constrained()->cascadeOnDelete();
-            $table->string('serial')->nullable()->index();
-            $table->string('model')->nullable();
-            $table->string('status')->nullable();
-            $table->string('ip')->nullable();
-            $table->string('mac')->nullable();
-            $table->timestamp('online_time')->nullable();
-            $table->timestamp('last_synced_at')->nullable();
-            $table->json('metadata')->nullable();
-            $table->timestamps();
-        });
-
-        Schema::create('cloudnet_aps', function (Blueprint $table) {
-            $table->id();
-            $table->foreignId('cloudnet_site_id')->constrained()->cascadeOnDelete();
-            $table->foreignId('cloudnet_device_id')->nullable()->constrained()->nullOnDelete();
-            $table->string('serial')->nullable()->index();
-            $table->string('model')->nullable();
-            $table->string('status')->nullable();
-            $table->string('mac')->nullable();
-            $table->string('ip')->nullable();
-            $table->unsignedInteger('clients')->nullable();
-            $table->timestamp('last_synced_at')->nullable();
-            $table->json('metadata')->nullable();
-            $table->timestamps();
-        });
-
         $driver = Schema::getConnection()->getDriverName();
         if ($driver === 'pgsql') {
             DB::statement('
@@ -133,9 +89,6 @@ return new class extends Migration
 
     public function down(): void
     {
-        Schema::dropIfExists('cloudnet_aps');
-        Schema::dropIfExists('cloudnet_devices');
-        Schema::dropIfExists('cloudnet_sites');
         Schema::dropIfExists('incident_updates');
         Schema::dropIfExists('incidents');
         Schema::dropIfExists('prtg_events');

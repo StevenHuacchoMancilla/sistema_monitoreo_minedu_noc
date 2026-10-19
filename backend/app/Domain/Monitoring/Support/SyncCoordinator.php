@@ -30,6 +30,32 @@ final class SyncCoordinator
         return 'monitoring:sync:'.strtolower($source);
     }
 
+    public static function watchHeartbeatKey(string $source): string
+    {
+        return 'monitoring:watch:heartbeat:'.strtolower($source);
+    }
+
+    public static function touchWatchHeartbeat(string $source): void
+    {
+        Cache::put(
+            self::watchHeartbeatKey($source),
+            now()->getTimestamp(),
+            now()->addSeconds(max(60, (int) config('prtg.watch_heartbeat_ttl_seconds', 90)) * 2)
+        );
+    }
+
+    public static function watchIsAlive(string $source): bool
+    {
+        $ts = Cache::get(self::watchHeartbeatKey($source));
+        if (! is_numeric($ts)) {
+            return false;
+        }
+
+        $ttl = max(60, (int) config('prtg.watch_heartbeat_ttl_seconds', 90));
+
+        return (now()->getTimestamp() - (int) $ts) <= $ttl;
+    }
+
     /**
      * Cierra solo runs colgados (p. ej. worker muerto). No mata syncs activos.
      */

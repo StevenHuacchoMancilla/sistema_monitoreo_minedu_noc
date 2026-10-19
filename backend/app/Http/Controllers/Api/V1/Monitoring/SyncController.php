@@ -16,8 +16,7 @@ class SyncController extends Controller
      * Dispara sync PRTG.
      *
      * Por defecto corre DESPUÉS de responder HTTP (afterResponse): evita que el
-     * proxy de Vercel corte el sync largo (30–90s). Sin Cron de pago: el navegador
-     * dispara y Render termina el trabajo en background.
+     * proxy de Vercel corte el sync largo (30–90s).
      *
      * ?wait=1 fuerza modo síncrono (solo útil en local / debug).
      */
@@ -31,14 +30,26 @@ class SyncController extends Controller
             }
         }
 
-        // php artisan serve es un solo proceso: un sync de ~1 min dentro de afterResponse
-        // deja colgado el run y bloquea la API. En esta PC lo hace monitoring:watch.
+        // php artisan serve: si monitoring:watch está vivo, él hace el sync.
+        // Si no hay watch, spawneamos `prtg:sync` en background para no mentir al UI.
         if (PHP_SAPI === 'cli-server' && config('prtg.sync_enabled')) {
+            if (SyncCoordinator::watchIsAlive('PRTG')) {
+                return response()->json([
+                    'accepted' => true,
+                    'status' => 'WATCH',
+                    'source' => 'PRTG',
+                    'watch_alive' => true,
+                ]);
+            }
+
+            $spawned = $this->spawnCliSync();
+
             return response()->json([
                 'accepted' => true,
-                'status' => 'WATCH',
+                'status' => $spawned ? 'SPAWNED' : 'SPAWN_FAILED',
                 'source' => 'PRTG',
-            ]);
+                'watch_alive' => false,
+            ], $spawned ? 202 : 500);
         }
 
         return $this->enqueue('PRTG', fn () => $service->sync());
@@ -74,5 +85,32 @@ class SyncController extends Controller
             'status' => 'QUEUED',
             'source' => $source,
         ]);
+    }
+
+    private function spawnCliSync(): bool
+    {
+        $probe = SyncCoordinator::acquire('PRTG', 5);
+        if (! $probe) {
+            return true; // ya corre
+        }
+        $probe->release();
+
+        $php = PHP_BINARY ?: 'php';
+        $artisan = base_path('artisan');
+        $cmd = escapeshellarg($php).' '.escapeshellarg($artisan).' prtg:sync > /dev/null 2>&1 &';
+
+        try {
+            if (stripos(PHP_OS, 'WIN') === 0) {
+                pclose(popen('start /B '.$php.' '.$artisan.' prtg:sync', 'r'));
+            } else {
+                exec($cmd);
+            }
+
+            return true;
+        } catch (Throwable $e) {
+            Log::error('PRTG spawn sync failed', ['message' => $e->getMessage()]);
+
+            return false;
+        }
     }
 }

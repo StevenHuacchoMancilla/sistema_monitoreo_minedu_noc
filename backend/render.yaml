@@ -11,10 +11,6 @@ services:
         value: "true"
       - key: PRTG_SYNC_INTERVAL_SECONDS
         value: "120"
-      - key: CLOUDNET_SYNC_ENABLED
-        value: "true"
-      - key: CLOUDNET_SYNC_INTERVAL_MINUTES
-        value: "5"
 
   - type: cron
     name: noc-schedule
