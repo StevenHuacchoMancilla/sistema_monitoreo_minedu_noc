@@ -18,12 +18,22 @@ return [
     |
     */
 
-    'stateful' => explode(',', env('SANCTUM_STATEFUL_DOMAINS', sprintf(
-        '%s%s',
-        'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
-        Sanctum::currentApplicationUrlWithPort(),
-        // Sanctum::currentRequestHost(),
-    ))),
+    'stateful' => array_values(array_filter(array_unique(array_merge(
+        array_map('trim', explode(',', (string) env('SANCTUM_STATEFUL_DOMAINS', sprintf(
+            '%s%s',
+            'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
+            Sanctum::currentApplicationUrlWithPort(),
+        )))),
+        // Acceso LAN (Vite :5173): Sanctum exige el host del Origin, no solo localhost.
+        [
+            '192.168.10.60:5173',
+            '192.168.10.240:5173',
+            'localhost:5173',
+            '127.0.0.1:5173',
+            'localhost:8000',
+            '127.0.0.1:8000',
+        ],
+    )))),
 
     /*
     |--------------------------------------------------------------------------

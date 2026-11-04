@@ -212,7 +212,7 @@ class IncidentTimezoneTest extends TestCase
         $this->assertNotSame($managed->id, $fresh->id);
         $this->assertSame('09:00', OperationalTime::format($managed->fresh()->started_at, 'H:i'));
         $this->assertSame('10:15', OperationalTime::format($managed->fresh()->recovered_at, 'H:i'));
-        $this->assertSame(FollowupStatus::Recuperado, $managed->fresh()->followup_status);
+        $this->assertSame(FollowupStatus::PendienteCierre, $managed->fresh()->followup_status);
         $this->assertSame('10:40', OperationalTime::format($fresh->fresh()->started_at, 'H:i'));
         $this->assertNull($fresh->fresh()->recovered_at);
         $this->assertFalse((bool) $fresh->fresh()->reopened_from_management);

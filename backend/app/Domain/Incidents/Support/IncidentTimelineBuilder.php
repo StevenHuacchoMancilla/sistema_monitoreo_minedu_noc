@@ -141,8 +141,9 @@ final class IncidentTimelineBuilder
     private static function isNoisySystemUpdate(IncidentUpdate $u): bool
     {
         $type = strtoupper((string) $u->type);
-        if (! in_array($type, ['SYSTEM', 'SYSTEM_NOTE'], true)) {
-            return false;
+        // Avisos automáticos del sistema no van al historial del ticket.
+        if (in_array($type, ['SYSTEM', 'SYSTEM_NOTE'], true)) {
+            return true;
         }
 
         $observation = mb_strtolower((string) ($u->observation ?? ''));

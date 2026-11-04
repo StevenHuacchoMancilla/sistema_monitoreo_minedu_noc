@@ -65,7 +65,7 @@ enum ManagementClassification: string
             self::ContactConfirmed => 'red',
             self::LinkOutage => 'orange',
             self::NoResponse => 'yellow',
-            self::NewOutage => 'slate',
+            self::NewOutage => 'yellow',
             self::Complaint => 'blue',
             self::Unclassified => 'slate',
         };

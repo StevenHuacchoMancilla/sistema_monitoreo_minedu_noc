@@ -220,15 +220,13 @@ class IncidentService
         // Incidencias graves abiertas: PRTG UP no cierra ni quita el flag; solo marca recuperación técnica.
         $isOpenGrave = (bool) $incident->is_grave_incident && $incident->grave_closed_at === null;
 
-        // Si estaba en gestión (y no es grave abierta) → Pendiente de cierre.
-        // Si no → Recuperado (flujo corto). Graves mantienen su followup.
+        // Incidencia grave: se queda en Incidencias hasta el cierre manual, aunque PRTG ya esté UP.
+        // El resto pasa a Pendiente de cierre. Una nueva caída abre otro ticket.
         if ($isOpenGrave) {
             $afterStatus = $incident->followup_status ?? FollowupStatus::EnGestion;
             $observationSuffix .= ' Incidencia grave permanece abierta (cierre manual).';
-        } elseif ($wasManaging) {
-            $afterStatus = FollowupStatus::PendienteCierre;
         } else {
-            $afterStatus = FollowupStatus::Recuperado;
+            $afterStatus = FollowupStatus::PendienteCierre;
         }
 
         $payload = [
@@ -250,8 +248,8 @@ class IncidentService
             ? ' Hora de cierre = reloj del sistema al detectar OPERATIVO.'
             : ' Hora de cierre = lastcheck − uptimesince PRTG.';
 
-        if (! $isOpenGrave && $wasManaging) {
-            $observationSuffix .= ' Pasa a Pendiente de cierre.';
+        if (! $isOpenGrave) {
+            $observationSuffix .= ' Pasa a Pendiente de cierre. Una nueva caída abre otro ticket.';
         }
 
         IncidentUpdate::query()->create([
@@ -521,6 +519,71 @@ class IncidentService
             'status_before' => null,
             'status_after' => FollowupStatus::PendienteContacto->value,
             'observation' => "Incidencia manual: caída de enlace ({$nodeLabel}). Colegio puede seguir OPERATIVO en Ping. Cierre vía Tracking o al caer ambos enlaces.",
+            'user_id' => $userId,
+            'created_at' => now(),
+        ]);
+
+        return $incident->fresh() ?? $incident;
+    }
+
+    /**
+     * Ticket abierto a mano (CID o TSS) cuando la caída no llega por PRTG.
+     * Si el colegio ya tiene una caída abierta, se devuelve esa.
+     */
+    public function openManualReported(
+        NetworkAssignment $assignment,
+        int $userId,
+        ?string $detail = null,
+        ?CarbonInterface $startedAt = null,
+    ): Incident {
+        if ($userId < 1) {
+            throw new InvalidArgumentException('Se requiere un usuario autenticado.');
+        }
+
+        $assignment->loadMissing(['school', 'sensors']);
+        $existing = Incident::query()
+            ->where('network_assignment_id', $assignment->id)
+            ->whereNull('recovered_at')
+            ->orderByDesc('id')
+            ->first();
+        if ($existing) {
+            return $existing;
+        }
+
+        $sensor = $assignment->sensors
+            ->first(fn (PrtgSensor $s) => strcasecmp((string) $s->name, 'Ping') === 0)
+            ?? $assignment->sensors->first();
+        if ($sensor === null) {
+            throw new InvalidArgumentException('Ese colegio no tiene sensor en PRTG para abrir el ticket.');
+        }
+
+        $school = $assignment->school;
+        $incident = Incident::query()->create([
+            'school_id' => $assignment->school_id,
+            'network_assignment_id' => $assignment->id,
+            'prtg_sensor_id' => $sensor->id,
+            'detection_source' => 'MANUAL',
+            'started_at' => $startedAt ? OperationalTime::toStorage($startedAt) : now(),
+            'current_status' => MonitoringStatus::Caido->value,
+            'followup_status' => FollowupStatus::PendienteContacto,
+            'management_classification' => ManagementClassification::NewOutage,
+            'detail_text' => $detail,
+            'school_snapshot' => $school?->only([
+                'id', 'current_sequence', 'legacy_reference', 'codigo_local', 'codigo_modular',
+                'local_educativo', 'departamento', 'provincia', 'distrito', 'centro_poblado', 'clasificacion',
+            ]),
+            'network_snapshot' => $assignment->only([
+                'id', 'cid', 'cid_status', 'prtg_device_name', 'capacidad_mbps', 'tecnologia_acceso',
+                'nodo_pop', 'ip_publica', 'ip_loopback', 'ip_wan_principal', 'ip_lan',
+            ]),
+        ]);
+
+        IncidentUpdate::query()->create([
+            'incident_id' => $incident->id,
+            'type' => 'SYSTEM',
+            'status_before' => null,
+            'status_after' => FollowupStatus::PendienteContacto->value,
+            'observation' => 'Ticket manual. La caída se registró fuera de PRTG.',
             'user_id' => $userId,
             'created_at' => now(),
         ]);

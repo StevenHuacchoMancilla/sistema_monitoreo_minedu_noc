@@ -77,17 +77,15 @@ class OperationalAlertService
         $local = $incident->school?->local_educativo;
 
         $title = $hasActiveDispatch
-            ? 'Recuperado con personal movilizado'
-            : 'Recuperado durante gestión';
+            ? 'Pendiente de cierre con personal movilizado'
+            : 'Pendiente de cierre';
 
         $bodyParts = array_values(array_filter([
             $cid ? 'CID '.$cid : null,
             $local,
             $hasActiveDispatch
-                ? 'Hay desplazamiento activo ('.($active?->status instanceof FieldDispatchStatus
-                    ? $active->status->label()
-                    : (string) $active?->status).').'
-                : 'Requiere decisión operativa del NOC.',
+                ? 'Estaba en gestión, ya se recuperó y hay desplazamiento activo. Quedó en pendiente de cierre.'
+                : 'Estaba en gestión y ya se recuperó. Quedó en pendiente de cierre.',
         ]));
 
         $trackingId = $incident->activeTracking->first()?->id
@@ -113,9 +111,7 @@ class OperationalAlertService
             'tracking_id' => $trackingId ? (int) $trackingId : null,
             'management_classification' => $incident->management_classification?->value,
             'management_classification_label' => $incident->management_classification?->label(),
-            'href' => $trackingId
-                ? '/tracking/'.$trackingId
-                : '/history/incidents/'.$incident->id,
+            'href' => '/history/incidents/'.$incident->id,
         ];
     }
 }

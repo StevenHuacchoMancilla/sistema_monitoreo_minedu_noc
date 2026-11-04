@@ -25,7 +25,7 @@ class ClosingReportService
         return [
             'total' => count($rows),
             'rows' => $rows,
-            'note' => 'TIPO 1 (CONTACT_CONFIRMED): activas, o recuperadas con “Seguir en reporte”.',
+            'note' => 'Rojos: incidencias graves abiertas (siguen aunque PRTG ya subió). Amarillos: caídas totales todavía activas.',
             'columns' => OperationalReportService::officialColumns(),
         ];
     }
@@ -65,9 +65,10 @@ class ClosingReportService
             $sheet->setCellValue([10, $r], $row['distrito']);
             $sheet->setCellValueExplicit([11, $r], (string) ($row['codigo_local'] ?? ''), DataType::TYPE_STRING);
 
+            $fill = ($row['color_key'] ?? '') === 'red' ? 'FECACA' : 'FDE68A';
             $sheet->getStyle("A{$r}:K{$r}")->getFill()
                 ->setFillType(Fill::FILL_SOLID)
-                ->getStartColor()->setRGB('FEE2E2');
+                ->getStartColor()->setRGB($fill);
         }
 
         $lastRow = max(1, count($rows) + 1);

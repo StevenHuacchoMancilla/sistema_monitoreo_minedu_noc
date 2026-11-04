@@ -31,14 +31,17 @@ class WatchMonitoringCommand extends Command
         while (true) {
             $now = time();
 
-            if ($now >= $nextPrtg && config('prtg.sync_enabled')) {
+            // El watch SIEMPRE sincroniza. PRTG_SYNC_ENABLED=false solo apaga el
+            // scheduler HTTP/cron; no debe dejar este bucle inactivo (docs/SETUP_LOCAL).
+            if ($now >= $nextPrtg) {
                 SyncCoordinator::touchWatchHeartbeat('PRTG');
                 try {
                     $summary = $prtg->sync();
                     if (! empty($summary['skipped'])) {
                         $this->line(now()->toTimeString().' PRTG SKIP · already_running');
                     } else {
-                        $this->line(now()->toTimeString().' PRTG OK · procesados '.($summary['processed_count'] ?? 0));
+                        $this->line(now()->toTimeString().' PRTG OK · procesados '.($summary['processed_count'] ?? 0)
+                            .' · downs '.($summary['downs'] ?? 0));
                     }
                 } catch (Throwable $e) {
                     $this->error(now()->toTimeString().' PRTG ERROR: '.$e->getMessage());

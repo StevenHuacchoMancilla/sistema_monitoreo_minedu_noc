@@ -4,6 +4,8 @@ namespace App\Http\Controllers\Api\V1\Reports;
 
 use App\Domain\Reports\Services\ClosingReportService;
 use App\Domain\Reports\Services\GeneralReportService;
+use App\Domain\Reports\Services\InternetUsageReportService;
+use App\Domain\Reports\Services\MineduAttendanceReportService;
 use App\Domain\Reports\Services\OperationalReportService;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
@@ -19,6 +21,8 @@ class ReportController extends Controller
         private readonly OperationalReportService $operational,
         private readonly ClosingReportService $closing,
         private readonly GeneralReportService $general,
+        private readonly MineduAttendanceReportService $minedu,
+        private readonly InternetUsageReportService $usage,
     ) {}
 
     public function operational(Request $request): JsonResponse
@@ -71,5 +75,33 @@ class ReportController extends Controller
     public function closingXlsx(): StreamedResponse
     {
         return $this->closing->downloadXlsx();
+    }
+
+    public function mineduPreview(): JsonResponse
+    {
+        return response()->json($this->minedu->preview());
+    }
+
+    public function mineduXlsx(): StreamedResponse
+    {
+        return $this->minedu->downloadXlsx();
+    }
+
+    public function usagePreview(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        return response()->json($this->usage->preview($data['search'] ?? null));
+    }
+
+    public function usageXlsx(Request $request): StreamedResponse
+    {
+        $data = $request->validate([
+            'search' => ['nullable', 'string', 'max:120'],
+        ]);
+
+        return $this->usage->downloadXlsx($data['search'] ?? null);
     }
 }

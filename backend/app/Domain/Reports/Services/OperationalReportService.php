@@ -39,7 +39,7 @@ class OperationalReportService
                 ['key' => ManagementClassification::ContactConfirmed->value, 'color' => 'red', 'label' => 'TIPO 1 · Para reporte'],
                 ['key' => ManagementClassification::LinkOutage->value, 'color' => 'orange', 'label' => 'TIPO 2 · Enlace P2P'],
                 ['key' => ManagementClassification::NoResponse->value, 'color' => 'yellow', 'label' => 'TIPO 3 · En espera / energía'],
-                ['key' => ManagementClassification::NewOutage->value, 'color' => 'slate', 'label' => 'Nueva caída (auto)'],
+                ['key' => ManagementClassification::NewOutage->value, 'color' => 'yellow', 'label' => 'Amarillo · Caída activa'],
             ],
             'filters_applied' => $filters,
             'columns' => self::officialColumns(),
@@ -77,12 +77,17 @@ class OperationalReportService
             ->with(['school', 'networkAssignment', 'sensor'])
             ->when($activeOnly, function (Builder $q) {
                 $q->where(function (Builder $inner) {
+                    // Amarillo: caída todavía activa. Rojo: incidencia grave abierta aunque PRTG ya subió.
                     $inner->whereNull('recovered_at')
-                        ->orWhere('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value);
+                        ->orWhere('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value)
+                        ->orWhere(function (Builder $grave) {
+                            $grave->where('is_grave_incident', true)->whereNull('grave_closed_at');
+                        });
                 });
             })
             ->whereNotNull('management_classification')
             ->where('management_classification', '!=', ManagementClassification::Unclassified->value)
+            ->orderByRaw('CASE WHEN is_grave_incident = true AND grave_closed_at IS NULL THEN 0 ELSE 1 END')
             ->orderBy('started_at');
 
         if (! empty($filters['classification'])) {
@@ -171,6 +176,29 @@ class OperationalReportService
                 : $prefix;
         }
 
+        if (filled($incident->cause)) {
+            $causeLine = trim((string) ($incident->root_cause_code ? $incident->root_cause_code.' · ' : '').$incident->cause);
+            if ($causeLine !== '' && ! str_contains((string) $detail, $causeLine)) {
+                $detail = $detail ? $detail.' · '.$causeLine : $causeLine;
+            }
+        }
+
+        if ($incident->relationLoaded('managements')) {
+            $lines = [];
+            foreach ($incident->managements as $management) {
+                foreach ([$management->detail, $management->observation] as $bit) {
+                    $bit = trim((string) $bit);
+                    if ($bit === '' || str_contains((string) $detail, $bit) || in_array($bit, $lines, true)) {
+                        continue;
+                    }
+                    $lines[] = $bit;
+                }
+            }
+            if ($lines !== []) {
+                $detail = $detail ? $detail.' · '.implode(' · ', $lines) : implode(' · ', $lines);
+            }
+        }
+
         return [
             'n' => $school?->current_sequence,
             'ordinal' => $ordinal,
@@ -199,7 +227,9 @@ class OperationalReportService
             'codigo_local' => $school?->codigo_local ?? ($snapshotSchool['codigo_local'] ?? null),
             'management_classification' => $classification?->value,
             'management_classification_label' => $classification?->label(),
-            'color_key' => $classification?->colorKey() ?? 'slate',
+            'color_key' => $incident->isOpenGrave()
+                ? 'red'
+                : ($incident->recovered_at === null ? 'yellow' : ($classification?->colorKey() ?? 'yellow')),
             'followup_status' => $incident->followup_status?->value,
             'started_at' => $incident->started_at?->toIso8601String(),
             'recovered_at' => $incident->recovered_at?->toIso8601String(),
@@ -213,12 +243,32 @@ class OperationalReportService
     public function closingRows(): Collection
     {
         $incidents = Incident::query()
-            ->forClosingReport()
-            ->with(['school', 'networkAssignment', 'sensor'])
+            ->with([
+                'school',
+                'networkAssignment',
+                'sensor',
+                'managements' => fn ($q) => $q->orderBy('id'),
+            ])
+            ->where(function (Builder $q) {
+                $q->where(function (Builder $grave) {
+                    $grave->where('is_grave_incident', true)->whereNull('grave_closed_at');
+                })->orWhere(function (Builder $active) {
+                    $active->whereNull('recovered_at')
+                        ->where(function (Builder $notGrave) {
+                            $notGrave->where('is_grave_incident', false)->orWhereNull('is_grave_incident');
+                        });
+                });
+            })
+            ->orderByRaw('CASE WHEN is_grave_incident = true AND grave_closed_at IS NULL THEN 0 ELSE 1 END')
             ->orderBy('started_at')
             ->get();
 
-        return $incidents->values()->map(fn (Incident $incident, int $index) => $this->mapRow($incident, $index + 1));
+        return $incidents->values()->map(function (Incident $incident, int $index) {
+            $row = $this->mapRow($incident, $index + 1);
+            $row['color_key'] = $incident->isOpenGrave() ? 'red' : 'yellow';
+
+            return $row;
+        });
     }
 
     public function normalizeTechnology(?string $raw): ?string

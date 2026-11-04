@@ -261,6 +261,16 @@ class PrtgIncidentReconciliationService
             }
         }
 
+        // Incidencia huérfana (sin fingerprint) con Fallo PRTG cercano: típico cierre por prune
+        // con wall-clock. Permite alinear recovered_at al OK real en dry-run/apply.
+        if (
+            $incident->prtg_down_fingerprint === null
+            && $startDelta <= 6 * 3600
+            && (int) ($incident->managements_count ?? $incident->managements()->count()) === 0
+        ) {
+            return ['kind' => 'start', 'score' => 20_000 + $startDelta];
+        }
+
         return null;
     }
 

@@ -6,6 +6,7 @@ use App\Enums\AffectedWanNode;
 use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
+use App\Enums\MineduReason;
 use App\Enums\RecoveryReviewStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -35,6 +36,10 @@ class Incident extends Model
             'is_grave_incident' => 'boolean',
             'grave_opened_at' => 'datetime',
             'grave_closed_at' => 'datetime',
+            'minedu_reason' => MineduReason::class,
+            'clock_paused_at' => 'datetime',
+            'clock_pause_seconds' => 'integer',
+            'clock_pauses' => 'array',
             'recovery_reviewed_at' => 'datetime',
             'school_snapshot' => 'array',
             'network_snapshot' => 'array',

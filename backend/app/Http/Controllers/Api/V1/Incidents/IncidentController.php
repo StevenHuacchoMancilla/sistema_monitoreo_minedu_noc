@@ -8,11 +8,15 @@ use App\Enums\ContactResult;
 use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
+use App\Enums\MineduReason;
 use App\Domain\Incidents\Services\FieldDispatchService;
 use App\Domain\Incidents\Services\IncidentManagementService;
 use App\Domain\Incidents\Services\IncidentOperativeCloseService;
 use App\Domain\Incidents\Services\IncidentService;
 use App\Domain\Incidents\Services\RecoveryReviewService;
+use App\Domain\Incidents\Services\SameHourOutageService;
+use App\Domain\Incidents\Services\SlaClockService;
+use App\Models\School;
 use App\Domain\Incidents\Support\IncidentTimelineBuilder;
 use App\Domain\Incidents\Support\OutageDuration;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
@@ -35,6 +39,8 @@ class IncidentController extends Controller
         private readonly RecoveryReviewService $recoveryReviews,
         private readonly FieldDispatchService $fieldDispatches,
         private readonly IncidentOperativeCloseService $operativeClose,
+        private readonly SlaClockService $slaClock,
+        private readonly SameHourOutageService $sameHour,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -238,8 +244,17 @@ class IncidentController extends Controller
                 'diagnosis' => $incident->diagnosis,
                 'evidence_observations' => $incident->evidence_observations,
                 'cause' => $incident->cause,
+                'root_cause_group_code' => $incident->root_cause_group_code,
+                'root_cause_code' => $incident->root_cause_code,
+                'minedu_reason' => $incident->minedu_reason instanceof \App\Enums\MineduReason
+                    ? $incident->minedu_reason->value
+                    : $incident->minedu_reason,
+                'minedu_reason_label' => $incident->minedu_reason instanceof \App\Enums\MineduReason
+                    ? $incident->minedu_reason->label()
+                    : null,
                 'last_contact_at' => $incident->last_contact_at?->toIso8601String(),
             ],
+            'sla' => $this->slaClock->snapshot($incident),
             'managements' => $incident->managements->map(fn ($m) => [
                 'id' => $m->id,
                 'classification' => $m->classification?->value,
@@ -414,10 +429,17 @@ class IncidentController extends Controller
             'observation' => ['nullable', 'string', 'max:5000'],
             'contact_id' => ['nullable', 'integer'],
             'contact_attempted_at' => ['nullable', 'date'],
+            'root_cause_group_code' => ['nullable', 'string', 'max:8'],
+            'root_cause_code' => ['nullable', 'string', 'max:16'],
+            'cause' => ['nullable', 'string', 'max:500'],
+            'minedu_reason' => ['nullable', Rule::in(array_merge([''], MineduReason::values()))],
         ]);
 
         if (($data['scope'] ?? null) === '') {
             $data['scope'] = null;
+        }
+        if (($data['minedu_reason'] ?? null) === '') {
+            $data['minedu_reason'] = null;
         }
 
         $userId = $request->user()?->id;
@@ -440,6 +462,147 @@ class IncidentController extends Controller
         return response()->json($payload);
     }
 
+    public function lookupSchool(Request $request): JsonResponse
+    {
+        $q = trim((string) $request->query('q', ''));
+        $digits = preg_replace('/\D+/', '', $q) ?? '';
+        if ($q === '') {
+            return response()->json(['data' => null]);
+        }
+
+        $assignment = NetworkAssignment::query()
+            ->with('school')
+            ->where('is_active', true)
+            ->where(function ($query) use ($q, $digits) {
+                $query->where('cid', $q);
+                if ($digits !== '') {
+                    $query->orWhere('cid', $digits);
+                }
+            })
+            ->orderByDesc('id')
+            ->first();
+
+        if ($assignment === null && $digits !== '' && ctype_digit($digits)) {
+            $school = School::query()->where('current_sequence', (int) $digits)->orderByDesc('id')->first();
+            if ($school) {
+                $assignment = NetworkAssignment::query()
+                    ->where('school_id', $school->id)
+                    ->where('is_active', true)
+                    ->orderByDesc('id')
+                    ->first();
+                $assignment?->setRelation('school', $school);
+            }
+        }
+
+        if ($assignment === null) {
+            return response()->json(['data' => null]);
+        }
+
+        $school = $assignment->school;
+
+        return response()->json(['data' => [
+            'school_id' => $school?->id,
+            'assignment_id' => $assignment->id,
+            'cid' => $assignment->cid,
+            'tss' => $school?->current_sequence,
+            'local_educativo' => $school?->local_educativo,
+            'codigo_local' => $school?->codigo_local,
+            'provincia' => $school?->provincia,
+            'distrito' => $school?->distrito,
+        ]]);
+    }
+
+    public function storeManual(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['required', 'string', 'max:40'],
+            'detail' => ['nullable', 'string', 'max:5000'],
+            'minedu_reason' => ['nullable', Rule::in(MineduReason::values())],
+        ]);
+        $userId = (int) ($request->user()?->id ?? 0);
+        if ($userId < 1) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        $lookup = $this->lookupSchool($request->duplicate(['q' => $data['q']]))->getData(true);
+        $found = is_array($lookup) ? ($lookup['data'] ?? null) : null;
+        if (! is_array($found) || empty($found['assignment_id'])) {
+            return response()->json(['message' => 'No hay un colegio activo con ese CID o TSS.'], 422);
+        }
+
+        $assignment = NetworkAssignment::query()->find((int) $found['assignment_id']);
+        if ($assignment === null) {
+            return response()->json(['message' => 'No hay un colegio activo con ese CID o TSS.'], 422);
+        }
+
+        try {
+            $incident = $this->incidents->openManualReported($assignment, $userId, $data['detail'] ?? null);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        if (! empty($data['minedu_reason'])) {
+            $incident->minedu_reason = MineduReason::from((string) $data['minedu_reason']);
+            $incident->save();
+        }
+
+        return $this->show($incident->fresh() ?? $incident);
+    }
+
+    public function sameHour(Request $request): JsonResponse
+    {
+        $window = (int) $request->query('window', 15);
+
+        return response()->json([
+            'window_minutes' => max(5, min($window, 60)),
+            'data' => $this->sameHour->clusters($window),
+        ]);
+    }
+
+    public function applySameHour(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'incident_ids' => ['required', 'array', 'min:2'],
+            'incident_ids.*' => ['integer'],
+            'minedu_reason' => ['required', Rule::in(MineduReason::values())],
+            'detail' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        try {
+            $count = $this->sameHour->applyReason(
+                $data['incident_ids'],
+                MineduReason::from((string) $data['minedu_reason']),
+                $data['detail'] ?? null,
+            );
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json([
+            'updated' => $count,
+            'data' => $this->sameHour->clusters(15),
+        ]);
+    }
+
+    public function clockStop(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'action' => ['required', Rule::in(['start', 'end'])],
+        ]);
+
+        try {
+            if ($data['action'] === 'start') {
+                $this->slaClock->startPause($incident);
+            } else {
+                $this->slaClock->endPause($incident);
+            }
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return $this->show($incident->fresh() ?? $incident);
+    }
+
     public function update(Request $request, Incident $incident): JsonResponse
     {
         $data = $request->validate([
@@ -451,6 +614,8 @@ class IncidentController extends Controller
             'diagnosis' => ['nullable', 'string'],
             'evidence_observations' => ['nullable', 'string'],
             'cause' => ['nullable', 'string'],
+            'root_cause_group_code' => ['nullable', 'string', 'max:8'],
+            'root_cause_code' => ['nullable', 'string', 'max:16'],
         ]);
 
         if (array_key_exists('contact_status', $data) && $data['contact_status'] === '') {
@@ -458,6 +623,22 @@ class IncidentController extends Controller
         }
         if (array_key_exists('contact_result', $data) && $data['contact_result'] === '') {
             $data['contact_result'] = null;
+        }
+
+        $groupCode = trim((string) ($data['root_cause_group_code'] ?? ''));
+        $causeCode = trim((string) ($data['root_cause_code'] ?? ''));
+        if ($groupCode !== '' || $causeCode !== '') {
+            try {
+                $legend = \App\Domain\Incidents\Support\RootCauseLegend::requirePair($groupCode, $causeCode);
+            } catch (InvalidArgumentException $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+            $data['root_cause_group_code'] = $legend['group_code'];
+            $data['root_cause_code'] = $legend['code'];
+            $data['cause'] = $legend['cause'];
+            if (in_array($legend['attention'] ?? null, ['PEXT', 'PINT'], true)) {
+                $data['management_scope'] = $legend['attention'];
+            }
         }
 
         $before = $incident->followup_status?->value;

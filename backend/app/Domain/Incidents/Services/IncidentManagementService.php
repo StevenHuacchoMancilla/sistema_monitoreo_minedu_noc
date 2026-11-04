@@ -2,12 +2,14 @@
 
 namespace App\Domain\Incidents\Services;
 
+use App\Domain\Incidents\Support\RootCauseLegend;
 use App\Domain\Tracking\Services\TrackingFromManagementService;
 use App\Enums\AuditModule;
 use App\Enums\AuditSource;
 use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
+use App\Enums\MineduReason;
 use App\Models\Incident;
 use App\Models\IncidentManagement;
 use App\Models\IncidentUpdate;
@@ -34,7 +36,10 @@ class IncidentManagementService
      *   observation?: ?string,
      *   contact_id?: ?int,
      *   contact_attempted_at?: ?string,
-     *   created_by?: ?int
+     *   created_by?: ?int,
+     *   root_cause_group_code?: ?string,
+     *   root_cause_code?: ?string,
+     *   cause?: ?string
      * }  $payload
      * @return array{
      *   management: IncidentManagement,
@@ -75,7 +80,24 @@ class IncidentManagementService
             }
         }
 
-        return DB::transaction(function () use ($incident, $payload, $classification, $scope, $contact, $userId) {
+        $rootCause = null;
+        $groupCode = trim((string) ($payload['root_cause_group_code'] ?? ''));
+        $causeCode = trim((string) ($payload['root_cause_code'] ?? ''));
+        if ($groupCode !== '' || $causeCode !== '') {
+            $rootCause = RootCauseLegend::requirePair($groupCode, $causeCode);
+            if (in_array($rootCause['attention'] ?? null, ['PEXT', 'PINT'], true)) {
+                $scope = ManagementScope::from((string) $rootCause['attention']);
+            }
+        }
+
+        $minedu = array_key_exists('minedu_reason', $payload)
+            ? (($payload['minedu_reason'] ?? '') !== '' && $payload['minedu_reason'] !== null
+                ? MineduReason::from((string) $payload['minedu_reason'])
+                : null)
+            : null;
+        $mineduProvided = array_key_exists('minedu_reason', $payload);
+
+        return DB::transaction(function () use ($incident, $payload, $classification, $scope, $contact, $userId, $rootCause, $minedu, $mineduProvided) {
             $before = [
                 'management_classification' => $incident->management_classification?->value,
                 'management_scope' => $incident->management_scope?->value,
@@ -132,6 +154,10 @@ class IncidentManagementService
                 'last_managed_contact_id' => $contact?->id ?? $incident->last_managed_contact_id,
                 'followup_status' => $followup,
                 'last_contact_at' => now(),
+                'root_cause_group_code' => $rootCause !== null ? $rootCause['group_code'] : $incident->root_cause_group_code,
+                'root_cause_code' => $rootCause !== null ? $rootCause['code'] : $incident->root_cause_code,
+                'cause' => $rootCause !== null ? $rootCause['cause'] : ($payload['cause'] ?? $incident->cause),
+                'minedu_reason' => $mineduProvided ? $minedu : $incident->minedu_reason,
             ])->save();
 
             IncidentUpdate::query()->create([

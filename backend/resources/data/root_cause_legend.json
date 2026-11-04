@@ -1,0 +1,450 @@
+[
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "MN01",
+    "cause": "Falla del equipo activo del mininodo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "MN02",
+    "cause": "Falla de SFP / transceiver del mininodo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "MN03",
+    "cause": "Falla de alimentación del mininodo (fuente o POE)",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "MN04",
+    "cause": "Interrupción del suministro eléctrico en el mininodo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "MN05",
+    "cause": "Falla del sistema solar o de baterías del mininodo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "MN06",
+    "cause": "Robo de equipos o componentes del mininodo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "MN07",
+    "cause": "Gabinete del mininodo deteriorado (humedad, corrosión, calor)",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "ND01",
+    "cause": "Falla de OLT o tarjeta PON",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "ND02",
+    "cause": "Falla de módulo óptico SFP / transceiver en el nodo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "ND03",
+    "cause": "Falla de switch o equipo de agregación del nodo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "ND04",
+    "cause": "Falla de ODF o patch cord en el nodo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "ND05",
+    "cause": "Interrupción del suministro eléctrico en el nodo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "ND06",
+    "cause": "Falla del respaldo energético del nodo (baterías, UPS o rectificador)",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "ND07",
+    "cause": "Falla del grupo electrógeno del nodo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G1",
+    "group_name": "01 · Infraestructura de Red",
+    "code": "ND08",
+    "cause": "Falla de climatización del nodo (sobretemperatura)",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G2",
+    "group_name": "02 · Planta Externa - Transporte",
+    "code": "TR01",
+    "cause": "Corte de FO troncal por obras o trabajos de terceros",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G2",
+    "group_name": "02 · Planta Externa - Transporte",
+    "code": "TR02",
+    "cause": "Corte de FO troncal por vandalismo o robo de cable",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G2",
+    "group_name": "02 · Planta Externa - Transporte",
+    "code": "TR03",
+    "cause": "Daño por roedores o fauna en la red troncal",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G2",
+    "group_name": "02 · Planta Externa - Transporte",
+    "code": "TR04",
+    "cause": "Caída o reubicación de postes de la concesionaria",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G2",
+    "group_name": "02 · Planta Externa - Transporte",
+    "code": "TR05",
+    "cause": "Caída de árboles o ramas sobre el tendido troncal",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G2",
+    "group_name": "02 · Planta Externa - Transporte",
+    "code": "TR06",
+    "cause": "Atenuación elevada en mufa troncal",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G2",
+    "group_name": "02 · Planta Externa - Transporte",
+    "code": "TR07",
+    "cause": "Atenuación elevada en tramo de cable troncal",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G2",
+    "group_name": "02 · Planta Externa - Transporte",
+    "code": "TR08",
+    "cause": "Instalación deficiente en la troncal (vano bajo, herrajes)",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G2",
+    "group_name": "02 · Planta Externa - Transporte",
+    "code": "TR09",
+    "cause": "Falla de equipo DWDM / transporte",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G2",
+    "group_name": "02 · Planta Externa - Transporte",
+    "code": "TR10",
+    "cause": "Degradación en la red del proveedor de transporte",
+    "attention": null
+  },
+  {
+    "group_code": "G3",
+    "group_name": "02 · Planta Externa - Distribución",
+    "code": "RD01",
+    "cause": "Corte de FO de distribución por obras o terceros",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G3",
+    "group_name": "02 · Planta Externa - Distribución",
+    "code": "RD02",
+    "cause": "Corte de FO de distribución por vandalismo",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G3",
+    "group_name": "02 · Planta Externa - Distribución",
+    "code": "RD03",
+    "cause": "Daño por roedores o fauna en la red de distribución",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G3",
+    "group_name": "02 · Planta Externa - Distribución",
+    "code": "RD04",
+    "cause": "Caída de árboles o reubicación de postes en la distribución",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G3",
+    "group_name": "02 · Planta Externa - Distribución",
+    "code": "RD05",
+    "cause": "Atenuación elevada en mufa o empalme de distribución",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G3",
+    "group_name": "02 · Planta Externa - Distribución",
+    "code": "RD06",
+    "cause": "Atenuación elevada en tramo de cable de distribución",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G3",
+    "group_name": "02 · Planta Externa - Distribución",
+    "code": "RD07",
+    "cause": "Falla de caja NAP o splitter",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G3",
+    "group_name": "02 · Planta Externa - Distribución",
+    "code": "RD08",
+    "cause": "Instalación deficiente de la distribución (vano bajo)",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G4",
+    "group_name": "03 · Planta Externa - Acometida",
+    "code": "UM01",
+    "cause": "Corte de FO de acometida por obras o terceros",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G4",
+    "group_name": "03 · Planta Externa - Acometida",
+    "code": "UM02",
+    "cause": "Corte de FO de acometida por vandalismo o robo de cable",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G4",
+    "group_name": "03 · Planta Externa - Acometida",
+    "code": "UM03",
+    "cause": "Daño por roedores o fauna en la acometida",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G4",
+    "group_name": "03 · Planta Externa - Acometida",
+    "code": "UM04",
+    "cause": "Caída de árboles o reubicación de postes en la acometida",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G4",
+    "group_name": "03 · Planta Externa - Acometida",
+    "code": "UM05",
+    "cause": "Atenuación elevada en empalme o conector de la acometida",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G4",
+    "group_name": "03 · Planta Externa - Acometida",
+    "code": "UM06",
+    "cause": "Atenuación elevada en tramo de cable de acometida",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G4",
+    "group_name": "03 · Planta Externa - Acometida",
+    "code": "UM07",
+    "cause": "Instalación deficiente de la acometida (vano bajo, sin tensores)",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G4",
+    "group_name": "03 · Planta Externa - Acometida",
+    "code": "UM08",
+    "cause": "Falla del conector del drop en el puerto de la NAP",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G4",
+    "group_name": "03 · Planta Externa - Acometida",
+    "code": "UM09",
+    "cause": "Falla de la roseta óptica",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE01",
+    "cause": "Falla de ONU / ONT",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE02",
+    "cause": "Falla de router",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE03",
+    "cause": "Falla de punto de acceso (AP)",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE04",
+    "cause": "Falla de patch cord óptico o UTP interno",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE05",
+    "cause": "Corte de energía en el local educativo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE06",
+    "cause": "Falla de la instalación eléctrica interna del local",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE07",
+    "cause": "Manipulación indebida - desconexión",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE08",
+    "cause": "Manipulación indebida - daño del equipo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE09",
+    "cause": "Falla de equipos propios del local (switch, AP, PC)",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE10",
+    "cause": "Robo de equipos en el local educativo",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G5",
+    "group_name": "04 · Cliente",
+    "code": "LE11",
+    "cause": "Local cerrado o acceso restringido",
+    "attention": "PINT"
+  },
+  {
+    "group_code": "G6",
+    "group_name": "05 · Servicio y Red Lógica",
+    "code": "SV01",
+    "cause": "Falla de configuración de OLT / ONU",
+    "attention": null
+  },
+  {
+    "group_code": "G6",
+    "group_name": "05 · Servicio y Red Lógica",
+    "code": "SV02",
+    "cause": "Configuración NAT / firewall",
+    "attention": null
+  },
+  {
+    "group_code": "G6",
+    "group_name": "05 · Servicio y Red Lógica",
+    "code": "SV03",
+    "cause": "Saturación de red Wi-Fi (2.4 / 5 GHz)",
+    "attention": null
+  },
+  {
+    "group_code": "G6",
+    "group_name": "05 · Servicio y Red Lógica",
+    "code": "SV04",
+    "cause": "Interferencia de canal Wi-Fi",
+    "attention": null
+  },
+  {
+    "group_code": "G6",
+    "group_name": "05 · Servicio y Red Lógica",
+    "code": "SV05",
+    "cause": "Baja cobertura Wi-Fi",
+    "attention": null
+  },
+  {
+    "group_code": "G6",
+    "group_name": "05 · Servicio y Red Lógica",
+    "code": "SV06",
+    "cause": "Saturación del enlace (capacidad)",
+    "attention": null
+  },
+  {
+    "group_code": "G6",
+    "group_name": "05 · Servicio y Red Lógica",
+    "code": "SV07",
+    "cause": "Degradación en última milla (latencia / pérdida de paquetes)",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G6",
+    "group_name": "05 · Servicio y Red Lógica",
+    "code": "SV08",
+    "cause": "Falla de firmware o software de equipos",
+    "attention": null
+  },
+  {
+    "group_code": "G7",
+    "group_name": "07 · Gestión y Casos Especiales",
+    "code": "GS01",
+    "cause": "Mantenimiento programado o migración de tecnología",
+    "attention": "PEXT"
+  },
+  {
+    "group_code": "G7",
+    "group_name": "07 · Gestión y Casos Especiales",
+    "code": "GS02",
+    "cause": "Sin falla detectada / falsa avería",
+    "attention": null
+  },
+  {
+    "group_code": "G7",
+    "group_name": "07 · Gestión y Casos Especiales",
+    "code": "GS03",
+    "cause": "Causa no determinada (comentario obligatorio)",
+    "attention": "PEXT"
+  }
+]

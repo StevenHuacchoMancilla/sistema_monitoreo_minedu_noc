@@ -4,6 +4,9 @@ namespace App\Domain\Monitoring\PRTG\Services;
 
 use App\Domain\Incidents\Services\IncidentService;
 use App\Domain\Monitoring\PRTG\Support\PrtgTimestamps;
+use App\Domain\Monitoring\PRTG\Support\TrafficValue;
+use App\Enums\PrtgSensorRole;
+use App\Models\PrtgTrafficSample;
 use App\Domain\Monitoring\Support\SyncCoordinator;
 use App\Enums\CidStatus;
 use App\Enums\MonitoringStatus;
@@ -33,6 +36,9 @@ class PrtgSyncService
 
     /** @var Collection<string, Incident>|null */
     private ?Collection $openIncidents = null;
+
+    /** @var Collection<int|string, mixed>|null */
+    private ?Collection $trafficSampledAt = null;
 
     /**
      * @return array<string, mixed>
@@ -1033,9 +1039,13 @@ class PrtgSyncService
         $existing = $sensorId !== '' ? $this->sensorIndex?->get($sensorId) : null;
         if ($existing) {
             if (! $this->sensorNeedsWrite($existing, $statusRaw, $sensorRow, $payload, $role)) {
+                $existing->last_value = $payload['last_value'];
+                $this->recordTrafficSample($existing);
+
                 return ['created' => 0, 'updated' => 0];
             }
             $existing->fill($payload)->save();
+            $this->recordTrafficSample($existing->fresh() ?? $existing);
 
             return ['created' => 0, 'updated' => 1];
         }
@@ -1046,8 +1056,39 @@ class PrtgSyncService
         if ($sensorId !== '') {
             $this->sensorIndex?->put($sensorId, $created);
         }
+        $this->recordTrafficSample($created);
 
         return ['created' => 1, 'updated' => 0];
+    }
+
+    private function recordTrafficSample(PrtgSensor $sensor): void
+    {
+        $role = (string) $sensor->sensor_role;
+        if (! in_array($role, [PrtgSensorRole::Transmision->value, PrtgSensorRole::Recepcion->value], true)) {
+            return;
+        }
+        $mbps = TrafficValue::toMbps($sensor->last_value);
+        if ($mbps === null) {
+            return;
+        }
+
+        $this->trafficSampledAt ??= PrtgTrafficSample::query()
+            ->selectRaw('prtg_sensor_id, max(sampled_at) as sampled_at')
+            ->groupBy('prtg_sensor_id')
+            ->pluck('sampled_at', 'prtg_sensor_id');
+
+        $last = $this->trafficSampledAt->get($sensor->id);
+        if ($last !== null && \Illuminate\Support\Carbon::parse($last)->greaterThan(now()->subMinutes(15))) {
+            return;
+        }
+
+        $at = now();
+        PrtgTrafficSample::query()->create([
+            'prtg_sensor_id' => $sensor->id,
+            'sampled_at' => $at,
+            'mbps' => $mbps,
+        ]);
+        $this->trafficSampledAt->put($sensor->id, $at->toDateTimeString());
     }
 
     /**

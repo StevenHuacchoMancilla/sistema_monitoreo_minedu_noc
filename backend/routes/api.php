@@ -73,6 +73,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/incidents', [IncidentController::class, 'index']);
         Route::get('/incidents/queues/pendiente-cierre', [IncidentController::class, 'pendienteCierre']);
         Route::get('/incidents/queues/graves', [IncidentController::class, 'graves']);
+        Route::get('/incidents/lookup', [IncidentController::class, 'lookupSchool']);
+        Route::get('/incidents/same-hour', [IncidentController::class, 'sameHour']);
         Route::get('/notifications/operational', [OperationalNotificationController::class, 'index']);
         Route::get('/incidents/{incident}', [IncidentController::class, 'show']);
         Route::get('/assignments/{assignment}/prtg-sensors', [PrtgSensorController::class, 'byAssignment']);
@@ -82,11 +84,15 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/reports/operational', [ReportController::class, 'operational']);
         Route::get('/reports/general', [ReportController::class, 'general']);
         Route::get('/reports/closing-preview', [ReportController::class, 'closingPreview']);
+        Route::get('/reports/minedu', [ReportController::class, 'mineduPreview']);
+        Route::get('/reports/usage', [ReportController::class, 'usagePreview']);
     });
 
     Route::middleware('permission:'.PermissionCatalog::REPORTS_EXPORT)->group(function () {
         Route::get('/reports/closing.xlsx', [ReportController::class, 'closingXlsx']);
         Route::get('/reports/general.xlsx', [ReportController::class, 'generalXlsx']);
+        Route::get('/reports/minedu.xlsx', [ReportController::class, 'mineduXlsx']);
+        Route::get('/reports/usage.xlsx', [ReportController::class, 'usageXlsx']);
     });
 
     Route::middleware('permission:'.PermissionCatalog::TRACKING_VIEW)->group(function () {
@@ -134,6 +140,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
         Route::middleware('permission:'.PermissionCatalog::INCIDENTS_MANAGE)->group(function () {
             Route::post('/incidents/manual-partial', [IncidentController::class, 'storeManualPartial']);
+            Route::post('/incidents/manual', [IncidentController::class, 'storeManual']);
+            Route::post('/incidents/same-hour', [IncidentController::class, 'applySameHour']);
             Route::put('/incidents/{incident}', [IncidentController::class, 'update']);
             Route::post('/incidents/{incident}/managements', [IncidentController::class, 'storeManagement']);
             Route::post('/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);
@@ -141,6 +149,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('/incidents/{incident}/mark-grave', [IncidentController::class, 'markGrave']);
             Route::post('/incidents/{incident}/close-grave', [IncidentController::class, 'closeGrave']);
             Route::post('/incidents/{incident}/close-ticket', [IncidentController::class, 'closeTicket']);
+            Route::post('/incidents/{incident}/clock-stop', [IncidentController::class, 'clockStop']);
         });
 
     Route::middleware('permission:'.PermissionCatalog::RECOVERIES_MANAGE)->group(function () {
