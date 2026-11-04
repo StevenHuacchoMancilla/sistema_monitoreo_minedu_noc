@@ -15,14 +15,22 @@ export function FormField({
   className?: string
   action?: ReactNode
 }) {
+  const captionClass = labelClassName.replace(/^mb-1\.5\s+/, '')
+
   return (
-    <label htmlFor={htmlFor} className={`block ${className}`}>
+    <div className={`block ${className}`}>
       <span className="mb-1.5 flex items-center justify-between gap-2">
-        <span className={labelClassName.replace(/^mb-1\.5\s+/, '')}>{label}</span>
+        {htmlFor ? (
+          <label htmlFor={htmlFor} className={captionClass}>
+            {label}
+          </label>
+        ) : (
+          <span className={captionClass}>{label}</span>
+        )}
         {action}
       </span>
       {children}
-    </label>
+    </div>
   )
 }
 

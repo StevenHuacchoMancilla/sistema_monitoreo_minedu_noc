@@ -1,6 +1,7 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { PrtgDashboardPage } from '../features/dashboard-prtg/pages/PrtgDashboardPage'
 import { ActiveIncidentsPage } from '../features/incidents/pages/ActiveIncidentsPage'
+import { SameHourOutagesPage } from '../features/incidents/pages/SameHourOutagesPage'
 import { IncidentQueuePage } from '../features/incidents/pages/IncidentQueuePage'
 import { ConcentrationsPage } from '../features/incidents/pages/ConcentrationsPage'
 import { ConcentrationZonePage } from '../features/incidents/pages/ConcentrationZonePage'
@@ -17,6 +18,8 @@ import { SchoolDetailPage } from '../features/schools/pages/SchoolDetailPage'
 import { SchoolsListPage } from '../features/schools/pages/SchoolsListPage'
 import { OperationalReportPage } from '../features/reports/pages/OperationalReportPage'
 import { GeneralReportPage } from '../features/reports/pages/GeneralReportPage'
+import { MineduReportPage } from '../features/reports/pages/MineduReportPage'
+import { InternetUsageReportPage } from '../features/reports/pages/InternetUsageReportPage'
 import { LoginPage } from '../features/auth/pages/LoginPage'
 import { ProfilePage } from '../features/auth/pages/ProfilePage'
 import { RequireAuth } from '../features/auth/components/RequireAuth'
@@ -69,6 +72,7 @@ export function AppRouter() {
               }
             />
             <Route path="/incidents/active" element={<Navigate to="/incidents/total" replace />} />
+            <Route path="/incidents/same-hour" element={<SameHourOutagesPage />} />
             <Route path="/incidents/pending" element={<Navigate to="/incidents/pendiente-gestion" replace />} />
             <Route
               path="/incidents/pendiente-gestion"
@@ -137,6 +141,8 @@ export function AppRouter() {
           <Route element={<RequirePermission permission={P.reportsView} />}>
             <Route path="/reports" element={<Navigate to="/reports/operational" replace />} />
             <Route path="/reports/operational" element={<OperationalReportPage />} />
+            <Route path="/reports/minedu" element={<MineduReportPage />} />
+            <Route path="/reports/usage" element={<InternetUsageReportPage />} />
             <Route path="/reports/general" element={<GeneralReportPage />} />
             <Route path="/reports/ticketera" element={<Navigate to="/reports/operational" replace />} />
           </Route>

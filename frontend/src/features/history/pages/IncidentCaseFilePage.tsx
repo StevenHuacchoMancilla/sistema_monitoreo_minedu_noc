@@ -35,7 +35,6 @@ import {
 } from '../../../components/monitoring/StatusBadges'
 import { formatDate, formatDateTime, formatTime } from '../../../lib/datetime'
 import type { StatusTone } from '../../../lib/uiTokens'
-import { trackingStatusTone } from '../../tracking/lib/trackingStatus'
 import { RecoveryReviewPanel } from '../../recoveries/components/RecoveryReviewPanel'
 import { FieldDispatchPanel } from '../../incidents/components/FieldDispatchPanel'
 import { fetchIncidentCaseFile } from '../api/historyApi'
@@ -44,7 +43,6 @@ import type { CaseTimelineEvent, CaseTimelineGroup, IncidentCaseFile } from '../
 const GROUPS: Array<{ value: CaseTimelineGroup | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'Todo' },
   { value: 'GESTION', label: 'Gestión' },
-  { value: 'TRACKING', label: 'Tracking' },
   { value: 'CAMPO', label: 'Campo' },
   { value: 'REVISION', label: 'Revisión' },
   { value: 'SISTEMA', label: 'Sistema' },
@@ -156,11 +154,6 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
                 Historial del colegio
               </HeaderLink>
             ) : null}
-            {tracking ? (
-              <HeaderLink to={`/tracking/${tracking.id}`} icon={<Ticket className="h-3.5 w-3.5" />}>
-                Abrir Tracking
-              </HeaderLink>
-            ) : null}
             {schoolId ? (
               <HeaderLink to={`/schools/${schoolId}`} icon={<School className="h-3.5 w-3.5" />}>
                 Ficha maestra
@@ -193,16 +186,6 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
           <span className="ml-1.5">
             <ContactOutcomeBadge classification={gestion.classification} label={gestion.classification_label} />
           </span>
-        </SummaryTile>
-        <SummaryTile label="Tracking" icon={<Ticket className="h-4 w-4" />} tone="indigo">
-          {tracking ? (
-            <span className="flex flex-col gap-1">
-              <span className="truncate font-semibold tabular-nums">{tracking.ticket ?? 'Sin ticket'}</span>
-              <Badge tone={trackingStatusTone(tracking.status)}>{tracking.status_label ?? tracking.status}</Badge>
-            </span>
-          ) : (
-            <span className="text-slate-400">Sin Tracking</span>
-          )}
         </SummaryTile>
         <SummaryTile label="Cerrado por" icon={<Lock className="h-4 w-4" />}>
           {tracking?.closed_at ? (
@@ -245,29 +228,6 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
               </ul>
             )}
           </Panel>
-
-          {tracking ? (
-            <Panel title="Tracking" icon={<Ticket className="h-4 w-4" />}>
-              <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
-                <Field label="Ticket" value={tracking.ticket} />
-                <Field label="Caso" value={tracking.case_code} />
-                <Field
-                  label="Estado"
-                  value={<Badge tone={trackingStatusTone(tracking.status)}>{tracking.status_label}</Badge>}
-                />
-                <Field label="Seguimientos" value={String(tracking.updates_count)} />
-                <Field label="Abierto por" value={tracking.opened_by_name} />
-                <Field label="Apertura (fecha · hora)" value={formatDateTime(tracking.opened_at)} />
-                <Field label="Cerrado por" value={tracking.closed_by_name} />
-                <Field label="Cierre (fecha · hora)" value={tracking.closed_at ? formatDateTime(tracking.closed_at) : null} />
-              </dl>
-              {tracking.closing_note ? (
-                <div className="mt-3">
-                  <Note label="Nota de cierre" text={tracking.closing_note} />
-                </div>
-              ) : null}
-            </Panel>
-          ) : null}
 
           <Panel title="Colegio y red" icon={<School className="h-4 w-4" />}>
             <dl className="grid grid-cols-2 gap-x-3 gap-y-2">

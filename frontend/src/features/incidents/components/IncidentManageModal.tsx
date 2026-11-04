@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ClipboardList, ExternalLink, MapPin, Phone, Radio, X } from 'lucide-react'
+import { Check, ExternalLink, MapPin, Phone, Radio, Timer, X } from 'lucide-react'
 import { endpoints } from '../../../api/endpoints'
 import { ClassificationBadge, FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
 import { Badge } from '../../../components/ui/SoftBadge'
@@ -14,20 +14,18 @@ import { inputClassName } from '../../../lib/uiTokens'
 import { formatDateTime, formatDuration } from '../../../lib/datetime'
 import { useBodyScrollLock } from '../../../lib/useBodyScrollLock'
 import { useNow } from '../../../lib/useNow'
-import type { ManagementPayload } from '../../reports/types/operationalReport'
-import { TrackingFollowUpSection } from '../../tracking/components/TrackingFollowUpSection'
-import { trackingStatusTone } from '../../tracking/lib/trackingStatus'
+import type { ManagementPayload, MineduReason } from '../../reports/types/operationalReport'
 import { incidentCaseFilePath } from '../../history/api/historyApi'
 import { VoiceDictationButton } from '../../voice/components/VoiceDictationButton'
 import { FieldDispatchPanel } from './FieldDispatchPanel'
 import type { IncidentDetail } from '../../../types/api'
+import rootCauseLegend from '../data/rootCauseLegend.json' with { type: 'json' }
 
-type TabKey = 'summary' | 'management' | 'seguimiento' | 'dispatch' | 'history'
+type TabKey = 'summary' | 'management' | 'dispatch' | 'history'
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'summary', label: 'Resumen' },
   { key: 'management', label: 'Contacto y gestión' },
-  { key: 'seguimiento', label: 'Seguimiento' },
   { key: 'dispatch', label: 'Desplazamiento' },
   { key: 'history', label: 'Historial' },
 ]
@@ -40,27 +38,31 @@ const RESULT_OPTIONS: Array<{
   hint: string
   selected: string
   radio: string
+  dot: string
 }> = [
   {
     value: 'CONTACT_CONFIRMED',
     label: 'TIPO 1',
     hint: 'Para reporte',
-    selected: 'border-red-600 bg-red-50 ring-2 ring-red-500/30 dark:border-red-500 dark:bg-red-950/50',
+    selected: 'border-red-500 bg-red-50 shadow-sm dark:border-red-500 dark:bg-red-950/40',
     radio: 'text-red-600',
+    dot: 'bg-red-500',
   },
   {
     value: 'LINK_OUTAGE',
     label: 'TIPO 2',
     hint: 'Caída solo de un enlace en P2P',
-    selected: 'border-orange-500 bg-orange-50 ring-2 ring-orange-500/30 dark:border-orange-400 dark:bg-orange-950/40',
-    radio: 'text-orange-600',
+    selected: 'border-orange-400 bg-orange-50 shadow-sm dark:border-orange-400 dark:bg-orange-950/35',
+    radio: 'text-orange-500',
+    dot: 'bg-orange-500',
   },
   {
     value: 'NO_RESPONSE',
     label: 'TIPO 3',
-    hint: 'Equipos apagados, corte de energía, sin respuesta, etc.',
-    selected: 'border-yellow-500 bg-yellow-50 ring-2 ring-yellow-500/30 dark:border-yellow-400 dark:bg-yellow-950/30',
-    radio: 'text-yellow-600',
+    hint: 'Equipos apagados, corte de energía, sin respuesta',
+    selected: 'border-yellow-400 bg-yellow-50 shadow-sm dark:border-yellow-400 dark:bg-yellow-950/30',
+    radio: 'text-yellow-500',
+    dot: 'bg-yellow-400',
   },
 ]
 
@@ -87,9 +89,9 @@ function Panel({ title, icon, action, children }: { title: string; icon?: ReactN
 
 function KeyValue({ label, children }: { label: string; children: ReactNode }) {
   return (
-    <div className="min-w-0">
-      <dt className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</dt>
-      <dd className="mt-0.5 truncate text-[13px] text-slate-900 dark:text-slate-100">{children ?? '—'}</dd>
+    <div className="min-w-0 bg-slate-50 px-3 py-2 dark:bg-slate-950">
+      <dt className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</dt>
+      <dd className="mt-0.5 truncate text-[13px] font-medium text-slate-900 dark:text-slate-100">{children ?? '—'}</dd>
     </div>
   )
 }
@@ -129,6 +131,10 @@ export function IncidentManageModal({
   const [contactId, setContactId] = useState<number | ''>('')
   const [detailText, setDetailText] = useState('')
   const [observation, setObservation] = useState('')
+  const [causeGroup, setCauseGroup] = useState('')
+  const [causeCode, setCauseCode] = useState('')
+  const [causeText, setCauseText] = useState('')
+  const [mineduReason, setMineduReason] = useState<'' | MineduReason>('')
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
 
   // Hidratar una sola vez: los refetch traen duraciones nuevas y no deben pisar lo que se escribe.
@@ -145,6 +151,14 @@ export function IncidentManageModal({
     setContactId(g.last_managed_contact_id ?? '')
     setDetailText(g.detail_text ?? '')
     setObservation('')
+    setCauseGroup(g.root_cause_group_code ?? '')
+    setCauseCode(g.root_cause_code ?? '')
+    setCauseText(g.cause ?? '')
+    setMineduReason(
+      g.minedu_reason === 'CAIDA_ENLACE' || g.minedu_reason === 'CAIDA_ENERGIA' || g.minedu_reason === 'REQUERIMIENTO'
+        ? g.minedu_reason
+        : '',
+    )
   }, [detail.data])
 
   const onCloseRef = useRef(onClose)
@@ -172,6 +186,15 @@ export function IncidentManageModal({
     ])
   }
 
+  const clockStop = useMutation({
+    mutationFn: (action: 'start' | 'end') => endpoints.clockStop(incidentId, action),
+    onSuccess: async (data) => {
+      setSavedMsg(data.sla?.clock_paused ? 'Parada de reloj iniciada' : 'Reloj reanudado')
+      client.setQueryData(['incidents', incidentId], data)
+      window.setTimeout(() => setSavedMsg(null), 3000)
+    },
+  })
+
   const save = useMutation({
     mutationFn: () => {
       if (!classification) throw new Error('Selecciona un resultado de gestión')
@@ -182,18 +205,14 @@ export function IncidentManageModal({
         detail: detailText || null,
         observation: observation || null,
         contact_id: contactId === '' ? null : Number(contactId),
+        root_cause_group_code: causeGroup || null,
+        root_cause_code: causeCode || null,
+        cause: causeText || null,
+        minedu_reason: mineduReason || null,
       })
     },
     onSuccess: async (data) => {
-      const sync = data.tracking_sync
-      const ref = sync ? `#${sync.incident_number ?? sync.tracking_id}` : ''
-      setSavedMsg(
-        sync?.created
-          ? `Gestión registrada · Tracking ${ref} abierto`
-          : sync
-            ? `Gestión registrada · Tracking ${ref} actualizado`
-            : 'Gestión registrada',
-      )
+      setSavedMsg('Gestión registrada')
       hydrated.current = false
       client.setQueryData(['incidents', incidentId], data)
       await invalidateOps()
@@ -222,15 +241,6 @@ export function IncidentManageModal({
     },
   })
 
-  const trackingId = detail.data?.active_tracking?.id ?? null
-
-  // Tras guardar gestión, ir a Seguimiento si ya hay Tracking.
-  useEffect(() => {
-    if (savedMsg?.includes('Tracking') && trackingId) {
-      setTab('seguimiento')
-    }
-  }, [savedMsg, trackingId])
-
   const data = detail.data
   const seconds = data ? durationSeconds(data.estado, now) : null
   const recovered = Boolean(data?.estado.recovered_at)
@@ -241,14 +251,14 @@ export function IncidentManageModal({
         type="button"
         tabIndex={-1}
         aria-label="Cerrar panel"
-        className="absolute inset-0 cursor-default bg-slate-950/40 backdrop-blur-[2px]"
+        className="absolute inset-0 cursor-default bg-slate-950/50"
         onClick={onClose}
       />
       <div
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 flex h-full w-full flex-col border-l border-slate-200 bg-slate-50 shadow-2xl sm:w-[min(900px,90vw)] dark:border-slate-800 dark:bg-slate-950"
+        className="relative z-10 flex h-full w-full flex-col border-l border-slate-200 bg-slate-100 shadow-2xl sm:w-[min(1040px,94vw)] dark:border-slate-800 dark:bg-slate-950"
       >
         <header className="shrink-0 border-b border-slate-200 bg-white px-5 py-3.5 dark:border-slate-800 dark:bg-slate-900">
           <div className="flex items-start justify-between gap-3">
@@ -265,15 +275,6 @@ export function IncidentManageModal({
                   <Badge tone={recovered ? 'success' : 'danger'} title={recovered ? 'Duración total de la caída' : 'Tiempo caído hasta ahora'}>
                     {recovered ? 'Duró' : 'Caído'} {formatDuration(seconds)}
                   </Badge>
-                  {data.active_tracking ? (
-                    <Badge tone={trackingStatusTone(data.active_tracking.status)} title="Estado del Tracking vinculado">
-                      Tracking · {data.active_tracking.status_label ?? data.active_tracking.status}
-                    </Badge>
-                  ) : (
-                    <Badge tone="neutral" title="Se abre al guardar la primera gestión">
-                      Sin Tracking
-                    </Badge>
-                  )}
                 </div>
               ) : null}
             </div>
@@ -289,7 +290,16 @@ export function IncidentManageModal({
 
           {data ? <SummaryBand data={data} /> : null}
 
-          <div role="tablist" aria-label="Secciones de la incidencia" className="-mb-3.5 mt-3 flex gap-1 overflow-x-auto">
+          {data?.sla ? (
+            <ClockStopBar
+              sla={data.sla}
+              disabled={readOnly}
+              pending={clockStop.isPending}
+              onClock={(action) => clockStop.mutate(action)}
+            />
+          ) : null}
+
+          <div role="tablist" aria-label="Secciones de la incidencia" className="mt-3 flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 dark:bg-slate-950">
             {TABS.map((t) => (
               <button
                 key={t.key}
@@ -299,10 +309,10 @@ export function IncidentManageModal({
                 aria-selected={tab === t.key}
                 aria-controls={`${titleId}-panel`}
                 onClick={() => setTab(t.key)}
-                className={`shrink-0 border-b-2 px-3 py-2 text-[13px] font-semibold whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
+                className={`shrink-0 rounded-md px-3 py-1.5 text-[13px] font-semibold whitespace-nowrap transition-colors focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none ${
                   tab === t.key
-                    ? 'border-blue-600 text-blue-700 dark:border-blue-400 dark:text-blue-300'
-                    : 'border-transparent text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+                    ? 'bg-white text-slate-950 shadow-sm dark:bg-slate-800 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
                 }`}
               >
                 {t.label}
@@ -324,7 +334,11 @@ export function IncidentManageModal({
 
           {data && tab === 'management' ? (
             <div className="space-y-4">
-              <ContactsPanel contacts={data.contactos} />
+              <ContactsPanel
+                contacts={data.contactos}
+                selectedId={contactId}
+                onSelect={(id) => setContactId(id)}
+              />
               {readOnly ? (
                 <Panel title="Gestión">
                   <p className="text-[13px] text-slate-600 dark:text-slate-300">
@@ -338,31 +352,115 @@ export function IncidentManageModal({
                 <>
               <Panel title="Resultado de gestión">
                 <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Resultado de gestión">
-                  {RESULT_OPTIONS.map((opt) => (
-                    <label
-                      key={opt.value}
-                      className={`flex cursor-pointer items-start gap-2.5 rounded-lg border px-3 py-2.5 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 ${
-                        classification === opt.value
-                          ? opt.selected
-                          : 'border-slate-200 bg-white hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <input
-                        type="radio"
-                        className={`mt-0.5 ${opt.radio}`}
-                        name={`${titleId}-result`}
-                        checked={classification === opt.value}
-                        onChange={() => setClassification(opt.value)}
-                      />
-                      <span className="min-w-0">
-                        <span className="block text-[13px] font-bold tracking-wide text-slate-900 dark:text-slate-100">{opt.label}</span>
-                        <span className="mt-0.5 block text-[11px] leading-snug text-slate-600 dark:text-slate-400">{opt.hint}</span>
-                      </span>
-                    </label>
-                  ))}
+                  {RESULT_OPTIONS.map((opt) => {
+                    const on = classification === opt.value
+                    return (
+                      <label
+                        key={opt.value}
+                        className={`flex cursor-pointer items-start gap-3 rounded-xl border px-3 py-3 transition-colors has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-blue-500 ${
+                          on
+                            ? opt.selected
+                            : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-900'
+                        }`}
+                      >
+                        <input
+                          type="radio"
+                          className={`mt-1 ${opt.radio}`}
+                          name={`${titleId}-result`}
+                          checked={on}
+                          onChange={() => setClassification(opt.value)}
+                        />
+                        <span className="min-w-0">
+                          <span className="flex items-center gap-2 text-[13px] font-bold tracking-wide text-slate-900 dark:text-slate-100">
+                            <span className={`h-2 w-2 rounded-full ${opt.dot}`} aria-hidden />
+                            {opt.label}
+                          </span>
+                          <span className="mt-1 block text-[12px] leading-snug text-slate-600 dark:text-slate-400">{opt.hint}</span>
+                        </span>
+                      </label>
+                    )
+                  })}
                 </div>
+              </Panel>
 
-                <div className="mt-4 grid gap-3 sm:grid-cols-2">
+              <Panel title="Causa raíz">
+                <div className="grid gap-3 md:grid-cols-3">
+                  <FormField label="Código de grupo">
+                    <Select
+                      value={causeGroup}
+                      onChange={(e) => {
+                        const next = e.target.value
+                        setCauseGroup(next)
+                        const still = rootCauseLegend.find((row) => row.group_code === next && row.code === causeCode)
+                        if (!still) {
+                          setCauseCode('')
+                          setCauseText('')
+                          setScope('')
+                        }
+                      }}
+                    >
+                      <option value="">— Sin definir —</option>
+                      {Array.from(new Map(rootCauseLegend.map((row) => [row.group_code, row.group_name])).entries()).map(
+                        ([code, name]) => (
+                          <option key={code} value={code}>
+                            {code} · {name}
+                          </option>
+                        ),
+                      )}
+                    </Select>
+                  </FormField>
+                  <FormField label="Código">
+                    <Select
+                      value={causeCode}
+                      disabled={!causeGroup}
+                      onChange={(e) => {
+                        const next = e.target.value
+                        setCauseCode(next)
+                        const row = rootCauseLegend.find((item) => item.group_code === causeGroup && item.code === next)
+                        setCauseText(row?.cause ?? '')
+                        setScope(row?.attention === 'PEXT' || row?.attention === 'PINT' ? row.attention : '')
+                      }}
+                    >
+                      <option value="">— Elige el código —</option>
+                      {rootCauseLegend
+                        .filter((row) => row.group_code === causeGroup)
+                        .map((row) => (
+                          <option key={row.code} value={row.code}>
+                            {row.code} · {row.cause}
+                          </option>
+                        ))}
+                    </Select>
+                  </FormField>
+                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950">
+                    <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">PEXT / PINT</p>
+                    <p className={`mt-1 text-sm font-semibold ${scope ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
+                      {scope || 'Se registra al elegir el código'}
+                    </p>
+                  </div>
+                </div>
+                <div
+                  className={`mt-3 rounded-xl border px-3 py-2.5 ${
+                    causeText
+                      ? 'border-emerald-500/30 bg-emerald-500/10'
+                      : 'border-dashed border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-950'
+                  }`}
+                >
+                  <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Causa raíz</p>
+                  <p className={`mt-1 text-sm ${causeText ? 'font-medium text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
+                    {causeText || 'Se completa al elegir el grupo y el código'}
+                  </p>
+                </div>
+              </Panel>
+
+              <MineduPanel
+                reason={mineduReason}
+                onChange={setMineduReason}
+                sla={detail.data?.sla}
+                disabled={readOnly}
+              />
+
+              <Panel title="Detalle de la atención">
+                <div className="grid gap-3">
                   <FormField label="Contacto utilizado">
                     <Select value={contactId} onChange={(e) => setContactId(e.target.value ? Number(e.target.value) : '')}>
                       <option value="">— Sin seleccionar —</option>
@@ -373,16 +471,8 @@ export function IncidentManageModal({
                       ))}
                     </Select>
                   </FormField>
-                  <FormField label="PEXT / PINT">
-                    <Select value={scope} onChange={(e) => setScope(e.target.value as '' | 'PEXT' | 'PINT')}>
-                      <option value="">— Sin definir —</option>
-                      <option value="PEXT">PEXT (externo)</option>
-                      <option value="PINT">PINT (interno)</option>
-                    </Select>
-                  </FormField>
                   <FormField
                     label="Detalle (reporte)"
-                    className="sm:col-span-2"
                     action={
                       <VoiceDictationButton
                         lang="es-PE"
@@ -401,7 +491,6 @@ export function IncidentManageModal({
                   </FormField>
                   <FormField
                     label="Observación adicional"
-                    className="sm:col-span-2"
                     action={
                       <VoiceDictationButton
                         lang="es-PE"
@@ -424,27 +513,6 @@ export function IncidentManageModal({
                 </>
               )}
             </div>
-          ) : null}
-
-          {data && tab === 'seguimiento' ? (
-            trackingId ? (
-              <TrackingFollowUpSection
-                trackingId={trackingId}
-                onChanged={() => {
-                  void client.invalidateQueries({ queryKey: ['incidents', incidentId], refetchType: 'active' })
-                }}
-              />
-            ) : (
-              <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-8 text-center text-[13px] text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300">
-                <p className="font-semibold text-slate-900 dark:text-slate-100">Sin Tracking vinculado</p>
-                <p className="mt-1">
-                  Guarda una gestión TIPO 1, 2 o 3 en <strong>Contacto y gestión</strong> para abrir el seguimiento.
-                </p>
-                <Button variant="secondary" className="mt-4" onClick={() => setTab('management')}>
-                  Ir a Contacto y gestión
-                </Button>
-              </div>
-            )
           ) : null}
 
           {data && tab === 'dispatch' ? (
@@ -510,10 +578,179 @@ export function IncidentManageModal({
   return createPortal(modal, document.body)
 }
 
+function limaYmd(ms: number): { y: number; m: number; d: number } {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'America/Lima',
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date(ms))
+  const pick = (type: string) => Number(parts.find((part) => part.type === type)?.value)
+  return { y: pick('year'), m: pick('month'), d: pick('day') }
+}
+
+/** Segundos entre las 08:00 y las 16:00, hora de Lima. */
+function businessSeconds(startMs: number, endMs: number): number {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return 0
+  const endDay = limaYmd(endMs)
+  let { y, m, d } = limaYmd(startMs)
+  let total = 0
+  for (let guard = 0; guard < 400; guard += 1) {
+    const midnight = Date.UTC(y, m - 1, d, 5, 0, 0)
+    const open = midnight + 8 * 3_600_000
+    const close = midnight + 16 * 3_600_000
+    const segStart = Math.max(startMs, open)
+    const segEnd = Math.min(endMs, close)
+    if (segEnd > segStart) total += segEnd - segStart
+    if (y === endDay.y && m === endDay.m && d === endDay.d) break
+    const next = new Date(Date.UTC(y, m - 1, d + 1))
+    y = next.getUTCFullYear()
+    m = next.getUTCMonth() + 1
+    d = next.getUTCDate()
+  }
+  return Math.floor(total / 1000)
+}
+
+function liveClock(sla: NonNullable<IncidentDetail['sla']>, now: number) {
+  const started = sla.started_at ? Date.parse(sla.started_at) : Number.NaN
+  const recovered = sla.recovered_at ? Date.parse(sla.recovered_at) : Number.NaN
+  const end = Number.isFinite(recovered) ? recovered : now
+  const total = Number.isFinite(started) ? Math.max(0, Math.floor((end - started) / 1000)) : sla.incident_elapsed_seconds
+  const pauses = sla.pauses ?? []
+  let pauseBusiness = 0
+  let pauseWall = 0
+  for (const pause of pauses) {
+    const from = Date.parse(pause.started_at)
+    const to = pause.ended_at ? Date.parse(pause.ended_at) : now
+    if (!Number.isFinite(from) || !Number.isFinite(to)) continue
+    pauseWall += Math.max(0, Math.floor((to - from) / 1000))
+    pauseBusiness += businessSeconds(from, to)
+  }
+  const effective = Number.isFinite(started)
+    ? Math.max(0, businessSeconds(started, end) - pauseBusiness)
+    : sla.incident_effective_seconds
+  const others = sla.applies ? sla.used_seconds - sla.incident_net_seconds : sla.used_seconds
+  const used = sla.applies ? Math.max(0, others) + effective : sla.used_seconds
+  return {
+    total,
+    effective,
+    pause: pauseWall,
+    remaining: sla.monthly_cap_seconds - used,
+  }
+}
+
+function ClockStopBar({
+  sla,
+  disabled,
+  pending,
+  onClock,
+}: {
+  sla: NonNullable<IncidentDetail['sla']>
+  disabled: boolean
+  pending: boolean
+  onClock: (action: 'start' | 'end') => void
+}) {
+  const now = useNow(1000)
+  const live = liveClock(sla, now)
+  return (
+    <section className="mt-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div>
+          <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Parada de reloj</p>
+          <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
+            Total 24 h {formatClock(live.total)} · Efectiva 8:00–16:00 {formatClock(live.effective)} · Parada {formatClock(live.pause)}
+          </p>
+          {sla.applies ? (
+            <p className={`mt-0.5 text-sm font-semibold ${live.remaining < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>
+              SLA del mes {formatClock(live.remaining)} · {sla.zone_label}
+            </p>
+          ) : (
+            <p className="mt-0.5 text-[12px] text-slate-500">El SLA del mes se descuenta cuando la caída tiene razón MINEDU.</p>
+          )}
+        </div>
+        {!disabled ? (
+          <Button
+            type="button"
+            variant={sla.clock_paused ? 'secondary' : 'primary'}
+            loading={pending}
+            onClick={() => onClock(sla.clock_paused ? 'end' : 'start')}
+          >
+            <Timer className="h-4 w-4" aria-hidden />
+            {sla.clock_paused ? 'Reanudar reloj' : 'Iniciar parada de reloj'}
+          </Button>
+        ) : null}
+      </div>
+    </section>
+  )
+}
+
+const MINEDU_OPTIONS: Array<{ value: MineduReason; label: string; className: string }> = [
+  { value: 'CAIDA_ENLACE', label: 'Caída de enlace', className: 'border-sky-300 bg-sky-50 text-sky-900' },
+  { value: 'CAIDA_ENERGIA', label: 'Caída de energía', className: 'border-amber-300 bg-amber-50 text-amber-900' },
+  { value: 'REQUERIMIENTO', label: 'Requerimiento', className: 'border-slate-300 bg-slate-100 text-slate-900' },
+]
+
+function formatClock(seconds: number): string {
+  const sign = seconds < 0 ? '−' : ''
+  const total = Math.abs(Math.floor(seconds))
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  return `${sign}${hours} h ${String(minutes).padStart(2, '0')} min ${String(secs).padStart(2, '0')} s`
+}
+
+function MineduPanel({
+  reason,
+  onChange,
+  sla,
+  disabled,
+}: {
+  reason: '' | MineduReason
+  onChange: (value: '' | MineduReason) => void
+  sla: IncidentDetail['sla']
+  disabled: boolean
+}) {
+  const now = useNow(1000)
+  const live = useMemo(() => (sla ? liveClock(sla, now) : null), [now, sla])
+
+  return (
+    <Panel title="Reporte MINEDU" icon={<Timer className="h-4 w-4" aria-hidden />}>
+      <p className="mb-3 text-[12px] text-slate-500">
+        Elige una sola razón para el Anexo 30. El SLA del mes usa el tiempo efectivo, de 8:00 a 16:00.
+      </p>
+      <div className="grid gap-2 sm:grid-cols-3">
+        {MINEDU_OPTIONS.map((opt) => {
+          const selected = reason === opt.value
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              disabled={disabled}
+              onClick={() => onChange(selected ? '' : opt.value)}
+              className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
+                selected ? opt.className : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
+              }`}
+            >
+              {opt.label}
+            </button>
+          )
+        })}
+      </div>
+      {reason && sla && live ? (
+        <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
+          Total 24 h {formatClock(live.total)}. Efectiva {formatClock(live.effective)}. Quedan {formatClock(live.remaining)} del mes.
+          La parada de reloj está arriba del ticket, junto al resumen.
+        </p>
+      ) : null}
+    </Panel>
+  )
+}
+
 function SummaryBand({ data }: { data: IncidentDetail }) {
   const reincidencia = data.antecedentes.reincidencia
   return (
-    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-2 rounded-lg bg-slate-50 px-3 py-2.5 sm:grid-cols-3 lg:grid-cols-5 dark:bg-slate-950/60">
+    <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 lg:grid-cols-5 dark:border-slate-800 dark:bg-slate-800">
       <KeyValue label="Caída">{data.estado.fecha_caida ? formatDateTime(data.estado.fecha_caida) : '—'}</KeyValue>
       <KeyValue label={data.estado.recovered_at ? 'Recuperado' : 'Último check'}>
         {data.estado.recovered_at
@@ -611,53 +848,49 @@ function SummaryTab({ data }: { data: IncidentDetail }) {
         </Panel>
       ) : null}
 
-      <Panel title="Seguimiento" icon={<ClipboardList className="h-4 w-4 text-slate-500" aria-hidden />}>
-        {data.active_tracking ? (
-          <div className="min-w-0">
-            <p className="truncate text-[13px] font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-              {data.active_tracking.report_ticket ?? data.active_tracking.ticket ?? `#${data.active_tracking.incident_number ?? data.active_tracking.id}`}
-            </p>
-            <p className="text-[12px] text-slate-500 dark:text-slate-400">
-              {data.active_tracking.status_label ?? data.active_tracking.status}
-              {data.active_tracking.opened_by_name ? ` · ${data.active_tracking.opened_by_name}` : ''}
-              {' · pestaña Seguimiento'}
-            </p>
-          </div>
-        ) : (
-          <p className="text-[12px] text-slate-500 dark:text-slate-400">
-            Se abre automáticamente al guardar la primera gestión (TIPO 1/2/3).
-          </p>
-        )}
-      </Panel>
     </div>
   )
 }
 
-function ContactsPanel({ contacts }: { contacts: IncidentDetail['contactos'] }) {
+function ContactsPanel({
+  contacts,
+  selectedId,
+  onSelect,
+}: {
+  contacts: IncidentDetail['contactos']
+  selectedId?: number | ''
+  onSelect?: (id: number) => void
+}) {
   return (
     <Panel title="Contactos del local" icon={<Phone className="h-4 w-4 text-slate-500" aria-hidden />}>
       {contacts.length === 0 ? (
         <p className="text-[13px] text-slate-500 dark:text-slate-400">Sin contactos registrados.</p>
       ) : (
         <ul className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-          {contacts.map((c, idx) => (
-            <li key={c.id} className="rounded-lg border border-slate-200 px-3 py-2 dark:border-slate-700">
-              <p className="truncate text-[13px] font-semibold text-slate-900 dark:text-slate-100">
-                {idx + 1}. {c.nombre ?? '—'}
-              </p>
-              <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">{c.cargo ?? 'Sin cargo'}</p>
-              {c.telefono ? (
-                <a
-                  href={`tel:${c.telefono}`}
-                  className="mt-0.5 inline-block text-[13px] font-medium text-blue-700 tabular-nums hover:underline dark:text-blue-300"
+          {contacts.map((c, idx) => {
+            const selected = selectedId === c.id
+            return (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => onSelect?.(c.id)}
+                  className={`w-full rounded-xl border px-3 py-2.5 text-left transition ${
+                    selected
+                      ? 'border-blue-500 bg-blue-50 ring-2 ring-blue-500/20 dark:border-blue-400 dark:bg-blue-950/40'
+                      : 'border-slate-200 bg-slate-50 hover:border-slate-300 hover:bg-white dark:border-slate-700 dark:bg-slate-950 dark:hover:bg-slate-900'
+                  }`}
                 >
-                  {c.telefono}
-                </a>
-              ) : (
-                <p className="mt-0.5 text-[13px] text-slate-400">—</p>
-              )}
-            </li>
-          ))}
+                  <p className="truncate text-[13px] font-semibold text-slate-900 dark:text-slate-100">
+                    {idx + 1}. {c.nombre ?? '—'}
+                  </p>
+                  <p className="truncate text-[11px] text-slate-500 dark:text-slate-400">{c.cargo ?? 'Sin cargo'}</p>
+                  <p className={`mt-1 text-[13px] font-medium tabular-nums ${selected ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200'}`}>
+                    {c.telefono ?? 'Sin teléfono'}
+                  </p>
+                </button>
+              </li>
+            )
+          })}
         </ul>
       )}
     </Panel>

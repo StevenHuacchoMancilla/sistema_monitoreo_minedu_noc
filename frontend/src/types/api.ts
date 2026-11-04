@@ -357,7 +357,31 @@ export type IncidentDetail = {
     diagnosis: string | null
     evidence_observations: string | null
     cause: string | null
+    root_cause_group_code?: string | null
+    root_cause_code?: string | null
+    minedu_reason?: 'CAIDA_ENLACE' | 'CAIDA_ENERGIA' | 'REQUERIMIENTO' | null
+    minedu_reason_label?: string | null
     last_contact_at: string | null
+  }
+  sla?: {
+    applies: boolean
+    zone: string
+    zone_label: string
+    monthly_cap_seconds: number
+    used_seconds: number
+    remaining_seconds: number
+    incident_elapsed_seconds: number
+    incident_total_seconds?: number
+    incident_effective_seconds: number
+    incident_pause_seconds: number
+    pause_bank_seconds: number
+    incident_net_seconds: number
+    business_window?: string
+    clock_paused: boolean
+    clock_paused_at: string | null
+    started_at: string | null
+    recovered_at: string | null
+    pauses?: Array<{ started_at: string; ended_at: string | null }>
   }
   managements?: Array<{
     id: number

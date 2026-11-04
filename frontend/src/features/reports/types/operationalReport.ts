@@ -8,6 +8,8 @@ export type ManagementClassification =
 
 export type ManagementScope = 'PEXT' | 'PINT'
 
+export type MineduReason = 'CAIDA_ENLACE' | 'CAIDA_ENERGIA' | 'REQUERIMIENTO'
+
 /** Fila canónica compartida por operativo, preview y XLSX. */
 export type ReportRow = {
   n: number | null
@@ -61,6 +63,10 @@ export type ManagementPayload = {
   observation?: string | null
   contact_id?: number | null
   contact_attempted_at?: string | null
+  root_cause_group_code?: string | null
+  root_cause_code?: string | null
+  cause?: string | null
+  minedu_reason?: MineduReason | '' | null
 }
 
 /** Filas del reporte: contraste alto entre TIPO 1 / 2 / 3. */

@@ -1,13 +1,12 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bell, CheckCircle2, ClipboardList, FileSpreadsheet, Truck } from 'lucide-react'
+import { Bell, CheckCircle2, FileSpreadsheet, Truck } from 'lucide-react'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
-import { SectionCard } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/SoftBadge'
-import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
+import { ErrorState, LoadingState } from '../../../components/ui/States'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/AuthContext'
 import { useOperationalAlerts } from '../hooks/useOperationalAlerts'
@@ -36,8 +35,7 @@ function saveDismissed(ids: Set<string>) {
 }
 
 /**
- * Centro de notificaciones: recuperaciones que requieren decisión del NOC.
- * Incluye “Seguir en reporte” para internet intermitente.
+ * Avisos cuando un colegio que estaba en gestión se recupera y pasa a pendiente de cierre.
  */
 export function NotificationsPage() {
   const navigate = useNavigate()
@@ -98,7 +96,7 @@ export function NotificationsPage() {
     <AppLayout bare>
       <PageHeader
         title="Notificaciones"
-        description="Recuperaciones que requieren decisión del NOC. Usa “Seguir en reporte” si el colegio puede seguir inestable."
+        description="Cuando un colegio en gestión se recupera, queda en pendiente de cierre y aparece aquí."
         icon={<Bell className="h-5 w-5" aria-hidden />}
         actions={
           <Badge tone={rows.length > 0 ? 'warning' : 'neutral'}>
@@ -115,28 +113,28 @@ export function NotificationsPage() {
       ) : null}
 
       {!alerts.isLoading && !alerts.isError && rows.length === 0 ? (
-        <EmptyState
-          title="Sin notificaciones pendientes"
-          description="No hay recuperaciones esperando revisión operativa."
-        />
+        <section className="rounded-2xl border border-dashed border-slate-200 bg-white px-6 py-16 text-center shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <div className="mx-auto mb-4 inline-flex h-14 w-14 items-center justify-center rounded-2xl bg-slate-100 text-slate-500 dark:bg-slate-800">
+            <Bell className="h-6 w-6" aria-hidden />
+          </div>
+          <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Sin notificaciones pendientes</h2>
+          <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
+            No hay colegios que hayan pasado de gestión a pendiente de cierre.
+          </p>
+        </section>
       ) : null}
 
       {rows.length > 0 ? (
-        <SectionCard title="Alertas operativas" accent="prtg">
-          <ul className="divide-y divide-slate-100 dark:divide-slate-800">
-            {rows.map((alert) => (
-              <li key={alert.id} className="flex flex-col gap-3 py-4 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between">
-                <div className="min-w-0 flex-1">
+        <ul className="grid gap-3">
+          {rows.map((alert) => (
+            <li
+              key={alert.id}
+              className="rounded-2xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"
+            >
+              <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
-                    <span
-                      className={`h-2 w-2 shrink-0 rounded-full ${
-                        alert.severity === 'danger' ? 'bg-red-500' : 'bg-amber-400'
-                      }`}
-                    />
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{alert.title}</p>
-                    {alert.management_classification_label ? (
-                      <Badge tone="neutral">{alert.management_classification_label}</Badge>
-                    ) : null}
+                    <Badge tone={alert.severity === 'danger' ? 'danger' : 'warning'}>Pendiente de cierre</Badge>
                     {alert.active_field_dispatch ? (
                       <Badge tone="danger">
                         <span className="inline-flex items-center gap-1">
@@ -146,13 +144,18 @@ export function NotificationsPage() {
                       </Badge>
                     ) : null}
                   </div>
+                  <p className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
+                    {alert.local_educativo ?? alert.title}
+                  </p>
                   <p className="mt-1 text-sm text-slate-600 dark:text-slate-400">{alert.body}</p>
-                  <p className="mt-1 text-xs text-slate-500">
+                  <p className="mt-2 text-xs text-slate-500">
                     {alert.cid ? `CID ${alert.cid}` : 'Sin CID'}
+                    {alert.codigo_local ? ` · ${alert.codigo_local}` : ''}
+                    {alert.provincia ? ` · ${alert.provincia}` : ''}
                     {alert.recovered_at ? ` · Recuperado ${formatDateTime(alert.recovered_at)}` : ''}
                   </p>
                 </div>
-                <div className="flex flex-wrap gap-2 sm:justify-end">
+                <div className="flex flex-wrap gap-2 lg:justify-end">
                   {canManage ? (
                     <Button
                       type="button"
@@ -160,7 +163,6 @@ export function NotificationsPage() {
                       variant="secondary"
                       loading={busyId === `${alert.id}:CONTINUE_MONITORING`}
                       disabled={review.isPending}
-                      title="Mantener TIPO/gestión en reporte. Si cae otra vez, se reabre la misma incidencia hasta cerrar Tracking."
                       onClick={() => runAction(alert, 'CONTINUE_MONITORING')}
                     >
                       <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden />
@@ -176,40 +178,27 @@ export function NotificationsPage() {
                       onClick={() => runAction(alert, 'ACKNOWLEDGE')}
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
-                      Confirmar recuperación
+                      Confirmar cierre
                     </Button>
                   ) : null}
                   <Button type="button" size="sm" variant="secondary" onClick={() => navigate(alert.href)}>
-                    Revisar
+                    Ver caso
                   </Button>
-                  {alert.tracking_id ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      onClick={() => navigate(`/tracking/${alert.tracking_id}`)}
-                    >
-                      <ClipboardList className="h-3.5 w-3.5" aria-hidden />
-                      Tracking
-                    </Button>
-                  ) : null}
                   <Button type="button" size="sm" variant="ghost" onClick={() => dismiss(alert.id)}>
                     Ocultar
                   </Button>
                 </div>
-              </li>
-            ))}
-          </ul>
-          <div className="mt-4 flex flex-wrap gap-3 border-t border-slate-100 pt-3 text-sm dark:border-slate-800">
-            <Link to="/recoveries?review_status=PENDING_REVIEW" className="font-medium text-sky-700 hover:underline dark:text-sky-300">
-              Ver cola de recuperados
-            </Link>
-            <Link to="/tracking" className="font-medium text-slate-600 hover:underline dark:text-slate-300">
-              Tracking general
-            </Link>
-          </div>
-        </SectionCard>
+              </div>
+            </li>
+          ))}
+        </ul>
       ) : null}
+
+      <div className="mt-4">
+        <Link to="/incidents/pendiente-cierre" className="text-sm font-medium text-sky-700 hover:underline dark:text-sky-300">
+          Ir a pendiente de cierre
+        </Link>
+      </div>
     </AppLayout>
   )
 }

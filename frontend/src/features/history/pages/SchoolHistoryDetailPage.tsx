@@ -36,7 +36,6 @@ import { useManualSync } from '../../dashboard/hooks/useDashboard'
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
 import { techBadgeClass } from '../../../lib/uiTokens'
 import { formatRelativeDateTime } from '../../../lib/datetime'
-import { trackingStatusTone } from '../../tracking/lib/trackingStatus'
 import {
   fetchSchoolHistoryIncidents,
   fetchSchoolHistoryOverview,
@@ -305,7 +304,7 @@ export function SchoolHistoryDetailPage() {
 
           <SectionCard title="Incidencias históricas">
             <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              Cada incidencia abre su expediente completo: gestiones, seguimientos de Tracking, motivos,
+              Cada incidencia abre su expediente completo: gestiones, motivos,
               responsables y cierre.
             </p>
             {incidents.isLoading ? <LoadingState /> : null}
@@ -328,7 +327,6 @@ export function SchoolHistoryDetailPage() {
                       <col className="w-[5.5rem]" />
                       <col className="w-[10.5rem]" />
                       <col className="w-[6.5rem]" />
-                      <col className="w-[8.5rem]" />
                       <col style={{ width: '10rem' }} />
                       <col className="w-[8rem]" />
                       <col className="w-[4.5rem]" />
@@ -347,7 +345,6 @@ export function SchoolHistoryDetailPage() {
                         <th className={thClassName}>Duración</th>
                         <th className={thClassName}>Estado actual</th>
                         <th className={thClassName}>Gestión</th>
-                        <th className={thClassName}>Tracking</th>
                         <th className={thClassName}>Último seguimiento</th>
                         <th className={`${thClassName} hidden lg:table-cell`}>Cerrado por</th>
                         <th className={`${thClassName} sticky right-0 z-10 bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}>
@@ -392,20 +389,6 @@ export function SchoolHistoryDetailPage() {
                             {row.management_scope ? (
                               <span className="block text-[11px] text-slate-500">{row.management_scope}</span>
                             ) : null}
-                          </td>
-                          <td className={tdClassName}>
-                            {row.tracking ? (
-                              <span className="flex min-w-0 flex-col items-start gap-0.5">
-                                <Truncate className="font-medium tabular-nums" title={row.tracking.ticket}>
-                                  {row.tracking.ticket ?? 'Sin ticket'}
-                                </Truncate>
-                                <Badge tone={trackingStatusTone(row.tracking.status)}>
-                                  {row.tracking.status_label ?? row.tracking.status}
-                                </Badge>
-                              </span>
-                            ) : (
-                              <span className="text-slate-400">—</span>
-                            )}
                           </td>
                           <td className={tdClassName}>
                             <LastFollowup row={row} />

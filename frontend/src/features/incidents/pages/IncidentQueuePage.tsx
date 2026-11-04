@@ -109,7 +109,6 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                   <th className={thClassName}>Ubicación</th>
                   <th className={thClassName}>Estado</th>
                   <th className={thClassName}>{kind === 'graves' ? 'Marcada' : 'Recuperada'}</th>
-                  <th className={thClassName}>Tracking</th>
                   <th className={thClassName}>Acción</th>
                 </tr>
               </thead>
@@ -132,12 +131,6 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                       <IsoDateTimeCell
                         value={kind === 'graves' ? row.grave_opened_at ?? null : row.recovered_at ?? null}
                       />
-                    </td>
-                    <td className={tdClassName}>
-                      {row.tracking?.ticket ?? '—'}
-                      {row.tracking?.status_label ? (
-                        <span className="block text-[11px] text-slate-500">{row.tracking.status_label}</span>
-                      ) : null}
                     </td>
                     <td className={tdClassName}>
                       <div className="flex flex-wrap gap-1">
@@ -179,7 +172,7 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
       {manageId !== null ? (
         <IncidentManageModal
           incidentId={manageId}
-          initialTab={canManage ? (kind === 'pendiente-cierre' || kind === 'graves' ? 'seguimiento' : 'management') : 'summary'}
+          initialTab={canManage ? 'management' : 'summary'}
           readOnly={!canManage}
           onClose={() => {
             setManageId(null)

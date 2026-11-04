@@ -42,7 +42,6 @@ import { useNow } from '../../../lib/useNow'
 import { useManualSync } from '../../dashboard/hooks/useDashboard'
 import { PrtgLocationFilterFields } from '../../locations/components/PrtgLocationFilterFields'
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
-import { trackingStatusTone } from '../../tracking/lib/trackingStatus'
 import { incidentCaseFilePath } from '../../history/api/historyApi'
 import { fetchRecoveredIncidents, fetchRecoveredSummary } from '../api/recoveriesApi'
 import type { RecoveredRow } from '../types/recoveries'
@@ -387,7 +386,6 @@ export function RecoveriesPage() {
                   <col className="w-[7rem]" />
                   <col className="w-[5.25rem]" />
                   <col className="w-[8rem]" />
-                  <col className="w-[9rem]" />
                   <col className="w-[9.5rem]" />
                   <col className="w-[8rem]" />
                   <col className="w-[7.5rem]" />
@@ -407,7 +405,6 @@ export function RecoveriesPage() {
                     </th>
                     <th className={thClassName}>Duración</th>
                     <th className={thClassName}>Gestión</th>
-                    <th className={thClassName}>Tracking</th>
                     <th className={thClassName}>Estado</th>
                     <th className={`${thClassName} hidden xl:table-cell`}>Alertas</th>
                     <th className={`${thClassName} hidden lg:table-cell`}>Provincia</th>
@@ -521,20 +518,6 @@ function RecoveryRow({
             </Badge>
           ) : null}
         </div>
-      </td>
-      <td className={tdClassName}>
-        {row.tracking ? (
-          <span className="flex min-w-0 flex-col items-start gap-0.5">
-            <Truncate className="font-medium tabular-nums" title={row.tracking.ticket}>
-              {row.tracking.ticket ?? 'Sin ticket'}
-            </Truncate>
-            <Badge tone={trackingStatusTone(row.tracking.status)} className="max-w-full !text-[10px]">
-              {row.tracking.status_label ?? row.tracking.status}
-            </Badge>
-          </span>
-        ) : (
-          <span className="text-slate-400">—</span>
-        )}
       </td>
       <td className={tdClassName}>
         <CaseStatusBadge status={row.case_status} />

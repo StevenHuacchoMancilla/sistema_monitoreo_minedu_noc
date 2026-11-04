@@ -176,7 +176,7 @@ export function NotificationBell() {
                             type="button"
                             className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
                             disabled={keepInReport.isPending}
-                            title="Mantener en reporte/gestión. Si cae otra vez, misma incidencia hasta cerrar Tracking."
+                            title="Mantener la gestión en el reporte aunque PRTG ya haya subido."
                             onClick={() => {
                               setBusyId(alert.id)
                               keepInReport.mutate(alert.incident_id)

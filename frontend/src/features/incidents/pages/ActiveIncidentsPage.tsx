@@ -34,6 +34,7 @@ import { PrtgLocationFilterFields } from '../../locations/components/PrtgLocatio
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
 import { IncidentManageModal } from '../components/IncidentManageModal'
 import { RegisterLinkOutageModal } from '../components/RegisterLinkOutageModal'
+import { ManualTicketModal } from '../components/ManualTicketModal'
 import type { OutageRow } from '../../../types/api'
 
 const outageTd = `${tdClassName} !align-top`
@@ -134,6 +135,7 @@ export function ActiveIncidentsPage({
   const [duration, setDuration] = useState<DurationBucket>('')
   const [manageId, setManageId] = useState<number | null>(null)
   const [linkOutageOpen, setLinkOutageOpen] = useState(false)
+  const [manualOpen, setManualOpen] = useState(false)
   const client = useQueryClient()
   const { user } = useAuth()
   const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
@@ -161,8 +163,8 @@ export function ActiveIncidentsPage({
     setPage(1)
   }, [searchParams])
 
-  const outages = useOutages(useDebouncedValue(search.trim()))
-  const summary = useDashboardSummary()
+  const outages = useOutages(useDebouncedValue(search.trim()), 30_000)
+  const summary = useDashboardSummary(30_000)
   const { prtg } = useManualSync()
   const syncing = prtg.isPending
   const lastPrtgSync = summary.data?.sync?.prtg?.finished_at ?? null
@@ -276,11 +278,16 @@ export function ActiveIncidentsPage({
             >
               Última sync PRTG: {lastPrtgSync ? formatTime(lastPrtgSync) : '—'}
             </span>
-            {canManage && title === 'Caídas activas' ? (
-              <Button size="sm" variant="secondary" onClick={() => setLinkOutageOpen(true)}>
-                <Network className="h-3.5 w-3.5" aria-hidden />
-                Caída de enlace
-              </Button>
+            {canManage && title === 'Caídas totales' ? (
+              <>
+                <Button size="sm" variant="secondary" onClick={() => setManualOpen(true)}>
+                  Registrar ticket
+                </Button>
+                <Button size="sm" variant="secondary" onClick={() => setLinkOutageOpen(true)}>
+                  <Network className="h-3.5 w-3.5" aria-hidden />
+                  Caída de enlace
+                </Button>
+              </>
             ) : null}
             <Button size="sm" onClick={refresh} loading={outages.isFetching} aria-label="Refrescar caídas activas">
               {!outages.isFetching ? <RefreshCw className="h-3.5 w-3.5" aria-hidden /> : null}
@@ -501,6 +508,14 @@ export function ActiveIncidentsPage({
         open={linkOutageOpen}
         onClose={() => setLinkOutageOpen(false)}
         onCreated={({ incidentId }) => {
+          refresh()
+          setManageId(incidentId)
+        }}
+      />
+      <ManualTicketModal
+        open={manualOpen}
+        onClose={() => setManualOpen(false)}
+        onCreated={(incidentId) => {
           refresh()
           setManageId(incidentId)
         }}

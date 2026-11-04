@@ -1,12 +1,16 @@
+import { useState } from 'react'
 import { NavLink } from 'react-router-dom'
 import type { LucideIcon } from 'lucide-react'
 import {
   Activity,
   AlertOctagon,
   Bell,
+  ChevronDown,
   CircleCheck,
+  Clock,
   FileSpreadsheet,
   Files,
+  Gauge,
   GraduationCap,
   History,
   Layers,
@@ -58,6 +62,7 @@ const SECTION_LABEL: Record<NavSection, string> = {
 const NAV: NavItem[] = [
   { section: 'operacion', to: '/dashboard/prtg', label: 'Resumen PRTG', end: true, icon: LayoutDashboard, accent: 'prtg', permission: P.dashboardPrtg },
   { section: 'operacion', to: '/incidents/total', label: 'Caídas totales', badgeKey: 'caidas_totales', tone: 'danger', icon: Layers, permission: P.incidentsView },
+  { section: 'operacion', to: '/incidents/same-hour', label: 'Misma hora', icon: Clock, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/pendiente-gestion', label: 'Pendientes de gestión', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/pendiente-cierre', label: 'Pendiente de cierre', badgeKey: 'pendiente_cierre', tone: 'warn', icon: ShieldAlert, permission: P.incidentsView },
@@ -66,6 +71,8 @@ const NAV: NavItem[] = [
   { section: 'operacion', to: '/mass-outages', label: 'Caídas masivas', badgeKey: 'caidas_masivas', tone: 'danger', icon: Network, permission: P.incidentsView },
   { section: 'operacion', to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map, permission: P.incidentsView },
   { section: 'reportes', to: '/reports/operational', label: 'Vista de reporte', icon: FileSpreadsheet, permission: P.reportsView },
+  { section: 'reportes', to: '/reports/minedu', label: 'Anexo 30 MINEDU', icon: Files, permission: P.reportsView },
+  { section: 'reportes', to: '/reports/usage', label: 'Uso de internet', icon: Gauge, permission: P.reportsView },
   { section: 'reportes', to: '/reports/general', label: 'Reporte general', icon: Files, permission: P.reportsView },
   { section: 'consulta', to: '/history/schools', label: 'Historial por colegio', icon: History, permission: P.historyView },
   { section: 'consulta', to: '/schools', label: 'Locales educativos', icon: GraduationCap, permission: P.schoolsView },
@@ -95,10 +102,27 @@ export function Sidebar({
   const notifCount = alerts.data?.meta.pending_review ?? alerts.data?.data?.length ?? 0
   const { collapsed, toggle } = useSidebar()
   const isCollapsed = forceExpanded ? false : collapsed
+  const [sectionsOpen, setSectionsOpen] = useState<Record<NavSection, boolean>>(() => {
+    try {
+      const raw = localStorage.getItem('noc.nav.sections')
+      const parsed = raw ? (JSON.parse(raw) as Partial<Record<NavSection, boolean>>) : {}
+      return { operacion: true, reportes: true, consulta: true, ...parsed }
+    } catch {
+      return { operacion: true, reportes: true, consulta: true }
+    }
+  })
   const items = NAV.filter((item) => can(item.permission))
   const sections = (['operacion', 'reportes', 'consulta'] as const).filter((section) =>
     items.some((item) => item.section === section),
   )
+
+  const toggleSection = (section: NavSection) => {
+    setSectionsOpen((prev) => {
+      const next = { ...prev, [section]: !prev[section] }
+      localStorage.setItem('noc.nav.sections', JSON.stringify(next))
+      return next
+    })
+  }
 
   return (
     <aside className="flex h-full min-h-screen flex-col border-r border-slate-800 bg-slate-950 text-slate-300">
@@ -118,15 +142,23 @@ export function Sidebar({
         <nav className="space-y-4">
           {sections.map((section) => {
             const sectionItems = items.filter((item) => item.section === section)
+            const open = isCollapsed || sectionsOpen[section]
             return (
               <div key={section}>
                 {!isCollapsed ? (
-                  <p className="mb-2 px-2 text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
+                  <button
+                    type="button"
+                    onClick={() => toggleSection(section)}
+                    className="mb-2 flex w-full items-center justify-between px-2 text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase hover:text-slate-300"
+                    aria-expanded={open}
+                  >
                     {SECTION_LABEL[section]}
-                  </p>
+                    <ChevronDown className={`h-3.5 w-3.5 transition ${open ? '' : '-rotate-90'}`} aria-hidden />
+                  </button>
                 ) : section !== 'operacion' ? (
                   <div className="my-2 border-t border-slate-800" />
                 ) : null}
+                {open ? (
                 <ul className="space-y-1">
                   {sectionItems.map((item) => {
                     const badge =
@@ -172,6 +204,7 @@ export function Sidebar({
                     )
                   })}
                 </ul>
+                ) : null}
               </div>
             )
           })}

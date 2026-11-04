@@ -45,7 +45,7 @@ const ACTIONS: Array<{
   {
     action: 'CONTINUE_MONITORING',
     label: 'Seguir en reporte',
-    hint: 'Internet intermitente: mantiene el TIPO/gestión en reporte. Si cae otra vez, se reabre la misma incidencia hasta cerrar Tracking.',
+    hint: 'Internet intermitente: mantiene la gestión en el reporte aunque PRTG ya haya subido.',
     variant: 'secondary',
     icon: Wrench,
   },

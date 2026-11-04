@@ -109,7 +109,8 @@ PRTG_SYNC_ENABLED=false
 PRTG_SYNC_INTERVAL_SECONDS=30
 ```
 
-`PRTG_SYNC_ENABLED=false` es normal: el sync lo hace el **watch**, no el scheduler del request HTTP.
+`PRTG_SYNC_ENABLED=false` es normal: apaga el scheduler/cron HTTP.  
+El comando `monitoring:watch` **sí sincroniza igual** (es el proceso automático de local).
 
 ---
 

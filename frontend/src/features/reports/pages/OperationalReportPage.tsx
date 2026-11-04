@@ -16,13 +16,11 @@ import { downloadFinalReportPng } from '../lib/downloadFinalReportPng'
 
 function ReportLegend() {
   const items = [
-    { color: 'bg-amber-400', label: 'Amarillo — Nueva caída', soft: 'bg-amber-50 border-amber-200' },
-    { color: 'bg-red-500', label: 'Rojo — Contacto confirmado', soft: 'bg-red-50 border-red-200' },
-    { color: 'bg-orange-500', label: 'Naranja — En espera', soft: 'bg-orange-50 border-orange-200' },
-    { color: 'bg-blue-500', label: 'Azul — Queja / reclamo', soft: 'bg-blue-50 border-blue-200' },
+    { color: 'bg-yellow-400', label: 'Amarillo — caída total activa', soft: 'bg-yellow-50 border-yellow-200' },
+    { color: 'bg-red-500', label: 'Rojo — incidencia', soft: 'bg-red-50 border-red-200' },
   ]
   return (
-    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+    <div className="grid gap-3 sm:grid-cols-2">
       {items.map((item) => (
         <div
           key={item.label}
@@ -64,16 +62,18 @@ function ClosingPreviewPanel() {
     <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
       <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex items-start gap-3">
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-red-50 text-red-600">
+          <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
             <FileCheck2 className="h-5 w-5" aria-hidden />
           </div>
           <div>
             <h2 className="text-lg font-semibold text-slate-900">Informe final</h2>
             <p className="text-sm font-medium text-slate-500">
-              Solo incidencias activas con contacto confirmado.
+              Rojos primero: incidencias graves, aunque PRTG ya haya subido. Amarillos: caídas totales todavía activas.
             </p>
             <div className="mt-2">
-              <Badge tone="danger">{preview.data.total.toLocaleString('es-PE')} registro(s) a exportar</Badge>
+              <Badge tone={preview.data.rows.some((row) => row.color_key === 'red') ? 'danger' : 'warning'}>
+                {preview.data.total.toLocaleString('es-PE')} registro(s) a exportar
+              </Badge>
             </div>
             {pngError ? <p className="mt-2 text-sm text-red-600">{pngError}</p> : null}
           </div>
@@ -105,12 +105,12 @@ function ClosingPreviewPanel() {
           <FileCheck2 className="mx-auto h-10 w-10 text-slate-300" />
           <p className="mt-3 text-base font-semibold text-slate-900">No hay registros listos para exportar.</p>
           <p className="mt-1 text-sm text-slate-500">
-            Las incidencias con contacto confirmado aparecerán aquí.
+            Las incidencias graves y las caídas activas aparecerán aquí.
           </p>
         </div>
       ) : (
         <div className="max-h-[28rem] overflow-y-auto">
-          <ReportDataTable rows={preview.data.rows} rowTone="closing" dense />
+          <ReportDataTable rows={preview.data.rows} dense />
         </div>
       )}
     </section>
@@ -159,7 +159,7 @@ export function OperationalReportPage() {
         <PageHeader
           icon={<FileSpreadsheet className="h-5 w-5" />}
           title="Vista de reporte"
-          description="Vista consolidada de incidencias y gestión de contacto."
+          description="Rojos: incidencias graves (siguen hasta darles solución). Amarillos: caídas totales todavía activas."
           breadcrumb={
             <p className="text-xs font-medium text-slate-500">
               NOC Loreto <span className="text-slate-300">/</span> Vista de reporte

@@ -70,6 +70,25 @@ export const endpoints = {
     apiPut<IncidentDetail>(`/incidents/${id}`, body),
   applyIncidentManagement: (id: number, body: ManagementPayload) =>
     apiPost<IncidentDetail>(`/incidents/${id}/managements`, body),
+  clockStop: (id: number, action: 'start' | 'end') =>
+    apiPost<IncidentDetail>(`/incidents/${id}/clock-stop`, { action }),
+  lookupSchool: (q: string) =>
+    apiGet<{ data: {
+      school_id: number | null
+      assignment_id: number
+      cid: string | null
+      tss: number | null
+      local_educativo: string | null
+      codigo_local: string | null
+      provincia: string | null
+      distrito: string | null
+    } | null }>(`/incidents/lookup?q=${encodeURIComponent(q)}`),
+  createManualTicket: (body: { q: string; detail?: string | null; minedu_reason?: string | null }) =>
+    apiPost<IncidentDetail>('/incidents/manual', body),
+  sameHourGroups: () =>
+    apiGet<{ window_minutes: number; data: Array<Record<string, unknown>> }>('/incidents/same-hour'),
+  applySameHour: (body: { incident_ids: number[]; minedu_reason: string; detail?: string | null }) =>
+    apiPost<{ updated: number }>('/incidents/same-hour', body),
   createManualPartial: (body: {
     school_id?: number
     network_assignment_id?: number
@@ -103,7 +122,20 @@ export const endpoints = {
   generalReport: (params: Record<string, string | undefined | null> = {}) =>
     apiGet<GeneralReportResponse>(`/reports/general${toQuery(params)}`),
   closingPreview: () => apiGet<ClosingPreviewResponse>('/reports/closing-preview'),
+  mineduReport: () =>
+    apiGet<{
+      total: number
+      groups: Array<{ key: string; label: string; total: number }>
+      rows: Array<Record<string, string | number | null>>
+    }>('/reports/minedu'),
+  usageReport: (search = '') =>
+    apiGet<{ total: number; rows: Array<Record<string, string | number | null>> }>(
+      `/reports/usage${search ? `?search=${encodeURIComponent(search)}` : ''}`,
+    ),
   closingXlsxUrl: () => `${API_URL}/reports/closing.xlsx`,
+  mineduXlsxUrl: () => `${API_URL}/reports/minedu.xlsx`,
+  usageXlsxUrl: (search = '') =>
+    `${API_URL}/reports/usage.xlsx${search ? `?search=${encodeURIComponent(search)}` : ''}`,
   generalReportXlsxUrl: (params: Record<string, string | undefined | null> = {}) =>
     `${API_URL}/reports/general.xlsx${toQuery(params)}`,
   ticketera: (fresh = false) => apiGet<TicketeraPayload>(`/ticketera${fresh ? '?fresh=1' : ''}`),
