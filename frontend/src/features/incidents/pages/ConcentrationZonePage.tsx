@@ -26,7 +26,7 @@ const DOWN = new Set(['CAIDO', 'PARCIAL'])
 const ESTADO_LABELS: Record<string, string> = {
   CAIDO: 'Caído',
   OPERATIVO: 'Operativo',
-  PARCIAL: 'Enlace parcial',
+  PARCIAL: 'Parcial caído',
   SIN_MONITOREO: 'Sin monitoreo',
 }
 

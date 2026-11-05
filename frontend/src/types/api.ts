@@ -129,6 +129,8 @@ export type OutageRow = {
   affected_wan_node?: string | null
   affected_wan_node_label?: string | null
   is_link_outage?: boolean
+  /** El Ping de esta caída pasó de advertencia (parcial) a caído. */
+  escalated_from_partial?: boolean
   last_check: string | null
   contacto: string | null
   telefono: string | null

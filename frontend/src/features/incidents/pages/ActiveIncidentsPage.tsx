@@ -24,7 +24,7 @@ import {
   theadClassName,
   trClassName,
 } from '../../../components/ui/DataTableFrame'
-import { ContactOutcomeBadge, FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
+import { FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
 import { FOLLOWUP_LABELS } from '../../../components/ui/Badge'
 import { useDebouncedValue } from '../../../lib/useDebouncedValue'
 import { useNow } from '../../../lib/useNow'
@@ -529,21 +529,18 @@ function OutageTableRow({
   now,
   canManage,
   durationSource,
-  showManagementTag,
   onManage,
 }: {
   row: OutageRow
   now: number
   canManage: boolean
   durationSource: 'incident' | 'current_down'
-  showManagementTag: boolean
+  showManagementTag?: boolean
   onManage: (id: number) => void
 }) {
   const clock = downClock(row, durationSource)
   const seconds = elapsedSeconds(clock, now)
   const bucket = bucketOf(seconds)
-  const reincidencias = row.reincidente_count ?? 1
-  const managing = inManagement(row)
 
   return (
     <tr className={`${trClassName} group`}>
@@ -593,45 +590,17 @@ function OutageTableRow({
       </td>
       <td className={outageTd}>
         <div className="flex min-w-0 flex-col items-start gap-1">
-          <FollowupBadge status={row.followup_status} />
-          <div className="flex flex-wrap items-center gap-1">
-            <ContactOutcomeBadge
-              classification={row.management_classification}
-              label={row.management_classification_label}
-            />
-            {row.has_open_grave_incident ? (
-              <Badge
-                tone="danger"
-                title="Este colegio tiene una incidencia grave abierta"
-                className="!text-[10px] !font-medium"
-              >
-                En incidencia
-              </Badge>
-            ) : null}
-            {bucket === 'new' ? (
-              <Badge tone="info" title={`Esta caída lleva menos de ${NEW_MINUTES} minutos`} className="!text-[10px] !font-medium">
-                {durationSource === 'current_down' ? 'Reciente' : 'Nueva'}
-              </Badge>
-            ) : null}
-            {showManagementTag ? (
-              <Badge
-                tone={managing ? 'warning' : 'neutral'}
-                title={managing ? 'Este colegio ya estaba en gestión' : 'Caída nueva, todavía sin gestión'}
-                className="!text-[10px] !font-medium"
-              >
-                {managing ? 'En gestión' : 'Sin gestión'}
-              </Badge>
-            ) : null}
-            {reincidencias > 1 ? (
-              <Badge
-                tone="warning"
-                title={`${reincidencias} caídas registradas para este CID`}
-                className="!text-[10px] !font-medium"
-              >
-                Reincidencia ×{reincidencias}
-              </Badge>
-            ) : null}
-          </div>
+          {row.has_open_grave_incident ? (
+            <Badge
+              tone="danger"
+              title="Este colegio tiene una incidencia abierta. El ticket sigue hasta el cierre manual; no se abre otra gestión."
+              className="!text-[10px] !font-medium"
+            >
+              En incidencia
+            </Badge>
+          ) : (
+            <FollowupBadge status={row.followup_status} />
+          )}
         </div>
       </td>
       <td className={outageTd}>

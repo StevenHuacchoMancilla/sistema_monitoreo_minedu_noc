@@ -1,7 +1,7 @@
 const variants: Record<string, string> = {
   OPERATIVO: 'bg-green-100 text-green-800',
   CAIDO: 'bg-red-100 text-red-700',
-  PARCIAL: 'bg-orange-100 text-orange-800',
+  PARCIAL: 'bg-amber-100 text-amber-900',
   PAUSADO: 'bg-slate-100 text-slate-600',
   SIN_DATOS: 'bg-slate-100 text-slate-500',
   DESCONOCIDO: 'bg-slate-100 text-slate-500',
@@ -36,12 +36,21 @@ export const FOLLOWUP_LABELS: Record<string, string> = {
   CERRADO: 'Cerrado',
 }
 
+export const PRTG_STATUS_LABELS: Record<string, string> = {
+  OPERATIVO: 'Operativo',
+  CAIDO: 'Caído',
+  PARCIAL: 'Parcial caído',
+  PAUSADO: 'Pausado',
+  SIN_DATOS: 'Sin datos',
+  DESCONOCIDO: 'Desconocido',
+}
+
 export function Badge({ value, label }: { value?: string | null; label?: string }) {
   const key = (value ?? 'UNKNOWN').toUpperCase()
   const cls = variants[key] ?? 'bg-slate-100 text-slate-700'
   return (
     <span className={`inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${cls}`}>
-      {label ?? FOLLOWUP_LABELS[key] ?? value ?? '—'}
+      {label ?? FOLLOWUP_LABELS[key] ?? PRTG_STATUS_LABELS[key] ?? value ?? '—'}
     </span>
   )
 }

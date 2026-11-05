@@ -409,7 +409,7 @@ export function IncidentManageModal({
                       )}
                     </Select>
                   </FormField>
-                  <FormField label="Código">
+                  <FormField label="Código y causa raíz" className="md:col-span-2">
                     <Select
                       value={causeCode}
                       disabled={!causeGroup}
@@ -431,25 +431,30 @@ export function IncidentManageModal({
                         ))}
                     </Select>
                   </FormField>
-                  <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950">
-                    <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">PEXT / PINT</p>
-                    <p className={`mt-1 text-sm font-semibold ${scope ? 'text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
-                      {scope || 'Se registra al elegir el código'}
-                    </p>
-                  </div>
                 </div>
-                <div
-                  className={`mt-3 rounded-xl border px-3 py-2.5 ${
-                    causeText
-                      ? 'border-emerald-500/30 bg-emerald-500/10'
-                      : 'border-dashed border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-950'
-                  }`}
-                >
-                  <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Causa raíz</p>
-                  <p className={`mt-1 text-sm ${causeText ? 'font-medium text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
-                    {causeText || 'Se completa al elegir el grupo y el código'}
-                  </p>
-                </div>
+                {(() => {
+                  const selected = rootCauseLegend.find((row) => row.group_code === causeGroup && row.code === causeCode)
+                  const label = selected ? `${selected.code} · ${selected.cause}` : ''
+                  return (
+                    <div
+                      className={`mt-3 rounded-xl border px-3 py-2.5 ${
+                        label
+                          ? 'border-emerald-500/30 bg-emerald-500/10'
+                          : 'border-dashed border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-950'
+                      }`}
+                    >
+                      <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Código + causa raíz</p>
+                      <p className={`mt-1 text-sm ${label ? 'font-medium text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
+                        {label || 'Se completa al elegir el grupo y el código'}
+                      </p>
+                      {selected?.when ? <p className="mt-1 text-[12px] text-slate-500">{selected.when}</p> : null}
+                      <p className="mt-2 text-[12px] text-slate-600 dark:text-slate-300">
+                        Atención: {selected?.attention || 'se define con el código'}
+                        {selected?.segment ? ` · ${selected.segment}` : ''}
+                      </p>
+                    </div>
+                  )
+                })()}
               </Panel>
 
               <MineduPanel

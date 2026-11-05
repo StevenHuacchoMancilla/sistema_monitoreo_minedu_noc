@@ -152,6 +152,11 @@ export function SchoolHistoryDetailPage() {
                   </span>
                 ) : null}
                 {hasActive ? <Badge tone="danger">Caída activa</Badge> : null}
+                {statistics.total_caidas > 1 ? (
+                  <Badge tone="warning" title={`${statistics.total_caidas} caídas registradas de este colegio`}>
+                    Reincidencia ×{statistics.total_caidas}
+                  </Badge>
+                ) : null}
                 <LocationMismatchBadge
                   compact
                   info={{
