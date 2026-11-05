@@ -246,6 +246,10 @@ class IncidentController extends Controller
                 'cause' => $incident->cause,
                 'root_cause_group_code' => $incident->root_cause_group_code,
                 'root_cause_code' => $incident->root_cause_code,
+                'root_cause_label' => \App\Domain\Incidents\Support\RootCauseLegend::display(
+                    $incident->root_cause_code,
+                    $incident->cause,
+                ),
                 'minedu_reason' => $incident->minedu_reason instanceof \App\Enums\MineduReason
                     ? $incident->minedu_reason->value
                     : $incident->minedu_reason,

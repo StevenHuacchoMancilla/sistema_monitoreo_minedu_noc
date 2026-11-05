@@ -31,6 +31,7 @@ class Incident extends Model
             'management_scope' => ManagementScope::class,
             'recovery_review_status' => RecoveryReviewStatus::class,
             'affected_wan_node' => AffectedWanNode::class,
+            'escalated_from_partial' => 'boolean',
             'recovered_while_managing' => 'boolean',
             'reopened_from_management' => 'boolean',
             'is_grave_incident' => 'boolean',

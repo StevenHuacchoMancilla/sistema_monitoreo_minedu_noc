@@ -3,6 +3,7 @@
 namespace App\Domain\Incidents\Services;
 
 use App\Domain\Incidents\Support\IncidentCaseStatus;
+use App\Domain\Incidents\Support\RootCauseLegend;
 use App\Domain\Incidents\Support\OutageDuration;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Enums\ManagementClassification;
@@ -386,7 +387,7 @@ class IncidentHistoryService
                 'followup_status' => $incident->followup_status?->value,
                 'followup_label' => $incident->followup_status?->label(),
                 'management_scope' => $incident->management_scope?->value,
-                'cause' => $incident->cause,
+                'cause' => RootCauseLegend::display($incident->root_cause_code, $incident->cause),
                 'case_status' => IncidentCaseStatus::resolve($incident, $tracking),
                 'managements_count' => (int) $incident->managements_count,
                 'field_dispatches_count' => (int) $incident->field_dispatches_count,

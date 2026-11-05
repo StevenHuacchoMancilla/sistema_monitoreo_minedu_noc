@@ -146,7 +146,7 @@ class DashboardService
                     OR EXISTS (
                         SELECT 1 FROM prtg_sensors s
                         WHERE s.id = incidents.prtg_sensor_id
-                          AND s.normalized_status = ?
+                          AND s.normalized_status IN (?, ?)
                     )
                   )
                 ORDER BY network_assignment_id, started_at DESC NULLS LAST, id DESC
@@ -155,6 +155,7 @@ class DashboardService
                 FollowupStatus::PendienteContacto->value,
                 Incident::DETECTION_MANUAL_PARTIAL,
                 MonitoringStatus::Caido->value,
+                MonitoringStatus::Parcial->value,
             ]
         );
 
@@ -527,8 +528,10 @@ class DashboardService
         $query = Incident::query()
             ->active()
             ->where(function ($q) {
-                $q->whereHas('sensor', fn ($sensor) => $sensor->where('normalized_status', MonitoringStatus::Caido))
-                    ->orWhere('detection_source', Incident::DETECTION_MANUAL_PARTIAL);
+                $q->whereHas(
+                    'sensor',
+                    fn ($sensor) => $sensor->whereIn('normalized_status', MonitoringStatus::outageValues())
+                )->orWhere('detection_source', Incident::DETECTION_MANUAL_PARTIAL);
             })
             ->with([
                 'school.contacts',
@@ -616,6 +619,9 @@ class DashboardService
                 'affected_wan_node' => $incident->affected_wan_node?->value,
                 'affected_wan_node_label' => $incident->affected_wan_node?->label(),
                 'is_link_outage' => $incident->isManualPartial(),
+                'escalated_from_partial' => (bool) $incident->escalated_from_partial
+                    && ($sensor?->normalized_status === MonitoringStatus::Caido
+                        || (string) $incident->current_status === MonitoringStatus::Caido->value),
                 'duracion' => $downClock?->diffForHumans(now(), true),
                 'duration_seconds' => $durationSeconds,
                 'duration_label' => $durationSeconds !== null ? $this->formatTss($durationSeconds) : null,

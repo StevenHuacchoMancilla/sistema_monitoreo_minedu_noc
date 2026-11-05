@@ -37,13 +37,15 @@ class IncidentService
         ?CarbonInterface $stateSince = null,
         ?Closure $onAnomaly = null,
     ): void {
-        if ($current === MonitoringStatus::Caido) {
+        // CAÍDO (rojo) y PARCIAL/Advertencia (amarillo PRTG) abren o mantienen la caída.
+        if ($current?->isOutage()) {
             $this->ensureOpen($assignment, $sensor, $stateSince, $onAnomaly);
 
             return;
         }
 
-        if ($previous === MonitoringStatus::Caido && $current === MonitoringStatus::Operativo) {
+        // Solo se recupera al volver a OPERATIVO (sale del amarillo o del rojo).
+        if ($previous?->isOutage() && $current === MonitoringStatus::Operativo) {
             $this->recover($assignment, $sensor, $stateSince, $onAnomaly);
         }
     }
@@ -93,8 +95,12 @@ class IncidentService
                 return $fresh;
             }
 
+            $beforeStatus = (string) ($active->current_status instanceof MonitoringStatus
+                ? $active->current_status->value
+                : ($active->current_status ?? ''));
+            $nextStatus = $sensor->normalized_status?->value;
             $payload = [
-                'current_status' => $sensor->normalized_status?->value,
+                'current_status' => $nextStatus,
             ];
             if ($downSince !== null) {
                 $payload['prtg_down_started_at'] = OperationalTime::toStorage($downSince);
@@ -103,6 +109,7 @@ class IncidentService
                 $this->alignOpenStartedAt($active, $downSince, $payload, $onAnomaly);
             }
             $active->update($payload);
+            $this->notePartialToDown($active, $beforeStatus, $nextStatus);
 
             return $active->fresh() ?? $active;
         }
@@ -140,7 +147,10 @@ class IncidentService
             'type' => 'SYSTEM',
             'status_before' => null,
             'status_after' => FollowupStatus::PendienteContacto->value,
-            'observation' => 'Incidencia creada por transición a CAÍDO (Ping). Clasificación: NUEVA CAÍDA. '.$clockNote,
+            'observation' => ($sensor->normalized_status === MonitoringStatus::Parcial
+                ? 'Incidencia creada por Ping en ADVERTENCIA (parcial / intermitente).'
+                : 'Incidencia creada por transición a CAÍDO (Ping).')
+                .' Clasificación: NUEVA CAÍDA. '.$clockNote,
             'created_at' => now(),
         ]);
 
@@ -148,6 +158,27 @@ class IncidentService
         $this->trackingHooks->onIncidentTechnicallyDown($incident);
 
         return $incident;
+    }
+
+    /** Solo parcial → caído. Una recuperación desde amarillo no marca nada. */
+    public function notePartialToDown(Incident $incident, ?string $before, ?string $next): void
+    {
+        if ($before !== MonitoringStatus::Parcial->value || $next !== MonitoringStatus::Caido->value) {
+            return;
+        }
+        if ($incident->escalated_from_partial) {
+            return;
+        }
+
+        $incident->forceFill(['escalated_from_partial' => true])->save();
+        IncidentUpdate::query()->create([
+            'incident_id' => $incident->id,
+            'type' => 'SYSTEM',
+            'status_before' => $incident->followup_status?->value,
+            'status_after' => $incident->followup_status?->value,
+            'observation' => 'Ping pasó de Advertencia (parcial) a Caído en PRTG.',
+            'created_at' => now(),
+        ]);
     }
 
     /**

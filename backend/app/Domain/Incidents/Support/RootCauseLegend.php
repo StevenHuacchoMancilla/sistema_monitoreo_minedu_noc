@@ -10,7 +10,7 @@ use InvalidArgumentException;
 final class RootCauseLegend
 {
     /**
-     * @return list<array{group_code: string, group_name: string, code: string, cause: string, attention: ?string}>
+     * @return list<array{group_code: string, group_name: string, code: string, segment: string, cause: string, when: string, attention: ?string, agent: string}>
      */
     public static function all(): array
     {
@@ -31,13 +31,19 @@ final class RootCauseLegend
             if ($code === '' || $group === '') {
                 continue;
             }
-            $attention = strtoupper(trim((string) ($row['attention'] ?? '')));
+            $attention = trim((string) ($row['attention'] ?? ''));
+            if (in_array(strtoupper($attention), ['PEXT', 'PINT'], true)) {
+                $attention = strtoupper($attention);
+            }
             $out[] = [
                 'group_code' => $group,
                 'group_name' => trim((string) ($row['group_name'] ?? '')),
                 'code' => $code,
+                'segment' => trim((string) ($row['segment'] ?? '')),
                 'cause' => trim((string) ($row['cause'] ?? '')),
-                'attention' => in_array($attention, ['PEXT', 'PINT'], true) ? $attention : null,
+                'when' => trim((string) ($row['when'] ?? '')),
+                'attention' => $attention !== '' ? $attention : null,
+                'agent' => trim((string) ($row['agent'] ?? '')),
             ];
         }
 
@@ -45,7 +51,7 @@ final class RootCauseLegend
     }
 
     /**
-     * @return array{group_code: string, group_name: string, code: string, cause: string, attention: ?string}
+     * @return array{group_code: string, group_name: string, code: string, segment: string, cause: string, when: string, attention: ?string, agent: string}
      */
     public static function requirePair(string $groupCode, string $code): array
     {
@@ -58,5 +64,20 @@ final class RootCauseLegend
         }
 
         throw new InvalidArgumentException('El código de causa raíz no existe en la leyenda para ese grupo.');
+    }
+
+    /** Código y texto juntos, para no dejar el código solo. */
+    public static function display(?string $code, ?string $cause): ?string
+    {
+        $code = trim((string) $code);
+        $cause = trim((string) $cause);
+        if ($code === '' && $cause === '') {
+            return null;
+        }
+        if ($code !== '' && $cause !== '' && ! str_starts_with(mb_strtoupper($cause), mb_strtoupper($code))) {
+            return $code.' · '.$cause;
+        }
+
+        return $cause !== '' ? $cause : $code;
     }
 }

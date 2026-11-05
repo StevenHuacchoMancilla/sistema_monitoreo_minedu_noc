@@ -2,6 +2,7 @@
 
 namespace App\Domain\Reports\Services;
 
+use App\Domain\Incidents\Support\RootCauseLegend;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
@@ -176,8 +177,8 @@ class OperationalReportService
                 : $prefix;
         }
 
-        if (filled($incident->cause)) {
-            $causeLine = trim((string) ($incident->root_cause_code ? $incident->root_cause_code.' · ' : '').$incident->cause);
+        $causeLine = RootCauseLegend::display($incident->root_cause_code, $incident->cause);
+        if ($causeLine) {
             if ($causeLine !== '' && ! str_contains((string) $detail, $causeLine)) {
                 $detail = $detail ? $detail.' · '.$causeLine : $causeLine;
             }

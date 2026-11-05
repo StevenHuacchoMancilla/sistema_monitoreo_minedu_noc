@@ -3,6 +3,7 @@
 namespace App\Domain\Incidents\Services;
 
 use App\Domain\Incidents\Support\IncidentCaseStatus;
+use App\Domain\Incidents\Support\RootCauseLegend;
 use App\Domain\Incidents\Support\IncidentTimelineBuilder;
 use App\Domain\Incidents\Support\OutageDuration;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
@@ -75,7 +76,7 @@ class IncidentCaseFileService
                 'outage_text' => $incident->outage_text,
                 'detail_text' => $incident->detail_text,
                 'diagnosis' => $incident->diagnosis,
-                'cause' => $incident->cause,
+                'cause' => RootCauseLegend::display($incident->root_cause_code, $incident->cause),
                 'responsible_area' => $incident->responsible_area,
                 'glpi_ticket' => $incident->glpi_ticket,
                 'contact_result' => $incident->contact_result,

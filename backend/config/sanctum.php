@@ -27,6 +27,8 @@ return [
         // Acceso LAN (Vite :5173): Sanctum exige el host del Origin, no solo localhost.
         [
             '192.168.10.60:5173',
+            '192.168.10.189:5173',
+            '192.168.10.194:5173',
             '192.168.10.240:5173',
             'localhost:5173',
             '127.0.0.1:5173',

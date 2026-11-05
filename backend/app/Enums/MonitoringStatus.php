@@ -22,4 +22,30 @@ enum MonitoringStatus: string
             default => self::Desconocido,
         };
     }
+
+    /** Caído total o advertencia/intermitente (amarillo PRTG). */
+    public function isOutage(): bool
+    {
+        return $this === self::Caido || $this === self::Parcial;
+    }
+
+    /**
+     * @return list<string>
+     */
+    public static function outageValues(): array
+    {
+        return [self::Caido->value, self::Parcial->value];
+    }
+
+    public function label(): string
+    {
+        return match ($this) {
+            self::Operativo => 'Operativo',
+            self::Caido => 'Caído',
+            self::Parcial => 'Parcial caído',
+            self::Pausado => 'Pausado',
+            self::SinDatos => 'Sin datos',
+            self::Desconocido => 'Desconocido',
+        };
+    }
 }

@@ -595,7 +595,7 @@ class PrtgSyncService
                     if ($sensorModel) {
                         $previous = $previousBySensor[(string) $ping['objid']] ?? null;
                         $this->handleStatusTransition($assignment, $sensorModel, $previous, $ping, $run, $cid);
-                        if ($sensorModel->normalized_status === MonitoringStatus::Caido) {
+                        if ($sensorModel->normalized_status?->isOutage()) {
                             $summary['downs']++;
                         } elseif ($sensorModel->normalized_status === MonitoringStatus::Operativo) {
                             $summary['operativos']++;
@@ -1165,7 +1165,7 @@ class PrtgSyncService
             $this->issue($run, SyncIssueSeverity::Warning, $code, $cid, $codigoLocal, $message, $context);
         };
 
-        $field = $current === MonitoringStatus::Caido ? 'downtimesince' : 'uptimesince';
+        $field = $current?->isOutage() ? 'downtimesince' : 'uptimesince';
         $since = PrtgTimestamps::stateSince($pingRow, $field, now());
         if ($since['future']) {
             $onAnomaly('PRTG_FUTURE_TIMESTAMP', "{$field} PRTG en el futuro; se usa la hora de detección.", [
@@ -1182,10 +1182,20 @@ class PrtgSyncService
         $stateSince = $since['at'];
 
         if ($previous === null || $previous === $current) {
-            if ($current === MonitoringStatus::Caido) {
+            // Caído (rojo) o Advertencia/parcial (amarillo): mantener ticket abierto.
+            if ($current?->isOutage()) {
                 $key = $assignment->id.'|'.$sensor->id;
                 $open = $this->openIncidents?->get($key);
                 if ($open instanceof Incident && $this->downStartUnchanged($open, $stateSince)) {
+                    // Aun sin cambio de hora, reflejar si pasó de parcial ↔ caído.
+                    if ($open->current_status !== $current->value) {
+                        $before = $open->current_status instanceof MonitoringStatus
+                            ? $open->current_status->value
+                            : (string) $open->current_status;
+                        $open->update(['current_status' => $current->value]);
+                        $this->incidentService->notePartialToDown($open, $before, $current->value);
+                    }
+
                     return;
                 }
                 $incident = $this->incidentService->ensureOpen($assignment, $sensor, $stateSince, $onAnomaly);
