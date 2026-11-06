@@ -147,6 +147,7 @@ class MineduAttendanceReportService
                 'networkAssignment',
                 'managements' => fn ($q) => $q->orderBy('id'),
             ])
+            ->falls()
             ->whereNotNull('minedu_reason')
             ->where('started_at', '<=', $end)
             ->where(function ($q) use ($start) {

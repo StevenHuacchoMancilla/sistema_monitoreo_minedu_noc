@@ -13,6 +13,10 @@ return new class extends Migration
             $table->boolean('escalated_from_partial')->default(false)->after('current_status');
         });
 
+        if (Schema::getConnection()->getDriverName() !== 'pgsql') {
+            return;
+        }
+
         DB::statement("
             UPDATE incidents i
             SET escalated_from_partial = true

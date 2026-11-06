@@ -66,6 +66,24 @@ final class RootCauseLegend
         throw new InvalidArgumentException('El código de causa raíz no existe en la leyenda para ese grupo.');
     }
 
+    /**
+     * @return array{group_code: string, group_name: string, code: string, segment: string, cause: string, when: string, attention: ?string, agent: string}|null
+     */
+    public static function findByCode(string $code): ?array
+    {
+        $code = strtoupper(trim($code));
+        if ($code === '') {
+            return null;
+        }
+        foreach (self::all() as $row) {
+            if (strtoupper($row['code']) === $code) {
+                return $row;
+            }
+        }
+
+        return null;
+    }
+
     /** Código y texto juntos, para no dejar el código solo. */
     public static function display(?string $code, ?string $cause): ?string
     {

@@ -3,6 +3,7 @@
 namespace App\Domain\Incidents\Services;
 
 use App\Domain\Incidents\Support\RootCauseLegend;
+use App\Domain\Ticketera\Services\ServiceTicketService;
 use App\Domain\Tracking\Services\TrackingFromManagementService;
 use App\Enums\AuditModule;
 use App\Enums\AuditSource;
@@ -14,6 +15,7 @@ use App\Models\Incident;
 use App\Models\IncidentManagement;
 use App\Models\IncidentUpdate;
 use App\Models\SchoolContact;
+use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Support\Facades\DB;
 use InvalidArgumentException;
@@ -23,6 +25,7 @@ class IncidentManagementService
     public function __construct(
         private readonly AuditLogger $audit,
         private readonly TrackingFromManagementService $trackingFromManagement,
+        private readonly ServiceTicketService $serviceTickets,
     ) {}
 
     /**
@@ -184,6 +187,9 @@ class IncidentManagementService
                     'observation' => $payload['observation'] ?? null,
                 ]);
             }
+
+            $actorName = $userId > 0 ? User::query()->find($userId)?->name : null;
+            $this->serviceTickets->syncFromIncident($incident->fresh() ?? $incident, is_string($actorName) ? $actorName : null);
 
             $this->audit->record(
                 $incident,

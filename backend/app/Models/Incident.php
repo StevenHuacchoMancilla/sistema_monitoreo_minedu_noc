@@ -11,10 +11,15 @@ use App\Enums\RecoveryReviewStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 
 class Incident extends Model
 {
     public const DETECTION_MANUAL_PARTIAL = 'MANUAL_PARTIAL';
+
+    public const DETECTION_PREVENTIVE = 'PREVENTIVE';
+
+    public const DETECTION_HISTORICAL = 'HISTORICAL';
 
     protected $guarded = [];
 
@@ -55,6 +60,25 @@ class Incident extends Model
     public function isManualPartial(): bool
     {
         return $this->detection_source === self::DETECTION_MANUAL_PARTIAL;
+    }
+
+    public function isPreventive(): bool
+    {
+        return $this->detection_source === self::DETECTION_PREVENTIVE;
+    }
+
+    public function serviceTicket(): HasOne
+    {
+        return $this->hasOne(ServiceTicket::class);
+    }
+
+    /** Caídas reales. El preventivo y el histórico cargado no entran en las colas de caída. */
+    public function scopeFalls($query)
+    {
+        return $query->where(function ($q) {
+            $q->whereNull('detection_source')
+                ->orWhereNotIn('detection_source', [self::DETECTION_PREVENTIVE, self::DETECTION_HISTORICAL]);
+        });
     }
 
     public function school(): BelongsTo

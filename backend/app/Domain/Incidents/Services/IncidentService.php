@@ -2,6 +2,7 @@
 
 namespace App\Domain\Incidents\Services;
 
+use App\Domain\Ticketera\Services\ServiceTicketService;
 use App\Domain\Tracking\Services\TrackingPrtgHookService;
 use App\Enums\AffectedWanNode;
 use App\Enums\FollowupStatus;
@@ -24,6 +25,7 @@ class IncidentService
 {
     public function __construct(
         private readonly TrackingPrtgHookService $trackingHooks,
+        private readonly ServiceTicketService $serviceTickets,
     ) {}
     /**
      * @param  ?CarbonInterface  $stateSince  Inicio del estado actual según PRTG (caída o recuperación).
@@ -154,6 +156,7 @@ class IncidentService
             'created_at' => now(),
         ]);
 
+        $this->serviceTickets->ensureForIncident($incident);
         // Re-caída / nueva caída con Tracking abierto: avisar y vincular, sin cerrar Tracking.
         $this->trackingHooks->onIncidentTechnicallyDown($incident);
 
@@ -274,6 +277,8 @@ class IncidentService
             $payload['prtg_up_at'] = OperationalTime::toStorage($prtgEvidence);
         }
         $incident->update($payload);
+        $freshForTicket = $incident->fresh() ?? $incident;
+        $this->serviceTickets->markRestored($freshForTicket, $recoveredAt);
 
         $clockNote = (bool) config('incidents.use_system_clock', false)
             ? ' Hora de cierre = reloj del sistema al detectar OPERATIVO.'
@@ -494,6 +499,7 @@ class IncidentService
         }
 
         $existing = Incident::query()
+            ->falls()
             ->where('network_assignment_id', $assignment->id)
             ->whereNull('recovered_at')
             ->first();
@@ -554,6 +560,8 @@ class IncidentService
             'created_at' => now(),
         ]);
 
+        $this->serviceTickets->ensureForIncident($incident);
+
         return $incident->fresh() ?? $incident;
     }
 
@@ -573,12 +581,15 @@ class IncidentService
 
         $assignment->loadMissing(['school', 'sensors']);
         $existing = Incident::query()
+            ->falls()
             ->where('network_assignment_id', $assignment->id)
             ->whereNull('recovered_at')
             ->orderByDesc('id')
             ->first();
         if ($existing) {
-            return $existing;
+            $this->serviceTickets->ensureForIncident($existing);
+
+            return $existing->fresh() ?? $existing;
         }
 
         $sensor = $assignment->sensors
@@ -618,6 +629,8 @@ class IncidentService
             'user_id' => $userId,
             'created_at' => now(),
         ]);
+
+        $this->serviceTickets->ensureForIncident($incident);
 
         return $incident->fresh() ?? $incident;
     }

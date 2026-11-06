@@ -141,6 +141,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::middleware('permission:'.PermissionCatalog::INCIDENTS_MANAGE)->group(function () {
             Route::post('/incidents/manual-partial', [IncidentController::class, 'storeManualPartial']);
             Route::post('/incidents/manual', [IncidentController::class, 'storeManual']);
+            Route::post('/incidents/preventive', [IncidentController::class, 'storePreventive']);
             Route::post('/incidents/same-hour', [IncidentController::class, 'applySameHour']);
             Route::put('/incidents/{incident}', [IncidentController::class, 'update']);
             Route::post('/incidents/{incident}/managements', [IncidentController::class, 'storeManagement']);
@@ -150,6 +151,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('/incidents/{incident}/close-grave', [IncidentController::class, 'closeGrave']);
             Route::post('/incidents/{incident}/close-ticket', [IncidentController::class, 'closeTicket']);
             Route::post('/incidents/{incident}/clock-stop', [IncidentController::class, 'clockStop']);
+            Route::put('/incidents/{incident}/visit', [IncidentController::class, 'recordVisit']);
         });
 
     Route::middleware('permission:'.PermissionCatalog::RECOVERIES_MANAGE)->group(function () {

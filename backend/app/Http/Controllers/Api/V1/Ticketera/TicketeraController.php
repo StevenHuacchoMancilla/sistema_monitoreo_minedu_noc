@@ -2,18 +2,24 @@
 
 namespace App\Http\Controllers\Api\V1\Ticketera;
 
+use App\Domain\Ticketera\Services\LocalTicketeraService;
 use App\Domain\Ticketera\Services\TicketeraPrtgTimelineService;
 use App\Domain\Ticketera\Services\TicketeraReadService;
 use App\Http\Controllers\Controller;
+use App\Models\ServiceTicket;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
 
 class TicketeraController extends Controller
 {
-    public function __invoke(Request $request, TicketeraReadService $ticketera): JsonResponse
+    public function __invoke(Request $request, TicketeraReadService $ticketera, LocalTicketeraService $local): JsonResponse
     {
         try {
+            if (ServiceTicket::query()->exists()) {
+                return response()->json($local->dashboard());
+            }
+
             if ($request->boolean('fresh')) {
                 $ticketera->forget();
             }

@@ -21,6 +21,7 @@ class SameHourOutageService
     {
         $windowMinutes = max(5, min($windowMinutes, 60));
         $open = Incident::query()
+            ->falls()
             ->with(['school:id,local_educativo,codigo_local,current_sequence,provincia,distrito', 'networkAssignment:id,cid'])
             ->whereNull('recovered_at')
             ->orderBy('started_at')

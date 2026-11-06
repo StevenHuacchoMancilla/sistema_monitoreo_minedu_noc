@@ -16,14 +16,17 @@ use App\Domain\Incidents\Services\IncidentService;
 use App\Domain\Incidents\Services\RecoveryReviewService;
 use App\Domain\Incidents\Services\SameHourOutageService;
 use App\Domain\Incidents\Services\SlaClockService;
+use App\Domain\Ticketera\Services\ServiceTicketService;
 use App\Models\School;
 use App\Domain\Incidents\Support\IncidentTimelineBuilder;
+use App\Domain\Incidents\Support\RootCauseLegend;
 use App\Domain\Incidents\Support\OutageDuration;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Enums\FieldDispatchStatus;
 use App\Http\Controllers\Controller;
 use App\Models\FieldDispatch;
 use App\Models\Incident;
+use App\Models\IncidentManagement;
 use App\Models\IncidentUpdate;
 use App\Models\NetworkAssignment;
 use Illuminate\Http\JsonResponse;
@@ -41,6 +44,7 @@ class IncidentController extends Controller
         private readonly IncidentOperativeCloseService $operativeClose,
         private readonly SlaClockService $slaClock,
         private readonly SameHourOutageService $sameHour,
+        private readonly ServiceTicketService $serviceTickets,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -48,7 +52,7 @@ class IncidentController extends Controller
         $query = Incident::query()->with(['school', 'networkAssignment', 'sensor'])->orderByDesc('started_at');
 
         if ($request->boolean('active_only', true)) {
-            $query->active();
+            $query->active()->falls();
         }
 
         if ($request->filled('followup_status')) {
@@ -77,6 +81,7 @@ class IncidentController extends Controller
             'managements.author',
             'fieldDispatches',
             'activeTracking.openedBy:id,name',
+            'serviceTicket',
         ]);
 
         $historyQuery = Incident::query()
@@ -86,7 +91,7 @@ class IncidentController extends Controller
         $history = (clone $historyQuery)->limit(50)->get();
         $totalForCid = (clone $historyQuery)->count();
         $recoveredForCid = (clone $historyQuery)->whereNotNull('recovered_at')->count();
-        $activeForCid = (clone $historyQuery)->whereNull('recovered_at')->count();
+        $activeForCid = (clone $historyQuery)->falls()->whereNull('recovered_at')->count();
         $reincidente = $totalForCid > 1;
 
         $school = $incident->school;
@@ -258,6 +263,9 @@ class IncidentController extends Controller
                     : null,
                 'last_contact_at' => $incident->last_contact_at?->toIso8601String(),
             ],
+            'ticket' => $incident->serviceTicket
+                ? $this->serviceTickets->toApi($incident->serviceTicket)
+                : null,
             'sla' => $this->slaClock->snapshot($incident),
             'managements' => $incident->managements->map(fn ($m) => [
                 'id' => $m->id,
@@ -522,10 +530,18 @@ class IncidentController extends Controller
             'q' => ['required', 'string', 'max:40'],
             'detail' => ['nullable', 'string', 'max:5000'],
             'minedu_reason' => ['nullable', Rule::in(MineduReason::values())],
+            'root_cause_group_code' => ['required', 'string', 'max:8'],
+            'root_cause_code' => ['required', 'string', 'max:16'],
         ]);
         $userId = (int) ($request->user()?->id ?? 0);
         if ($userId < 1) {
             return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        try {
+            RootCauseLegend::requirePair((string) $data['root_cause_group_code'], (string) $data['root_cause_code']);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
 
         $lookup = $this->lookupSchool($request->duplicate(['q' => $data['q']]))->getData(true);
@@ -545,9 +561,82 @@ class IncidentController extends Controller
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        if (! empty($data['minedu_reason'])) {
-            $incident->minedu_reason = MineduReason::from((string) $data['minedu_reason']);
-            $incident->save();
+        $this->applyOpeningGestion($incident, $data, $request->user()?->name);
+
+        return $this->show($incident->fresh() ?? $incident);
+    }
+
+    public function storePreventive(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'q' => ['required', 'string', 'max:40'],
+            'detail' => ['nullable', 'string', 'max:5000'],
+            'opened_at' => ['nullable', 'date'],
+            'minedu_reason' => ['nullable', Rule::in(MineduReason::values())],
+            'root_cause_group_code' => ['required', 'string', 'max:8'],
+            'root_cause_code' => ['required', 'string', 'max:16'],
+        ]);
+        $userId = (int) ($request->user()?->id ?? 0);
+        if ($userId < 1) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        try {
+            RootCauseLegend::requirePair((string) $data['root_cause_group_code'], (string) $data['root_cause_code']);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $lookup = $this->lookupSchool($request->duplicate(['q' => $data['q']]))->getData(true);
+        $found = is_array($lookup) ? ($lookup['data'] ?? null) : null;
+        if (! is_array($found) || empty($found['assignment_id'])) {
+            return response()->json(['message' => 'No hay un colegio activo con ese CID o TSS.'], 422);
+        }
+
+        $assignment = NetworkAssignment::query()->find((int) $found['assignment_id']);
+        if ($assignment === null) {
+            return response()->json(['message' => 'No hay un colegio activo con ese CID o TSS.'], 422);
+        }
+
+        try {
+            $opened = ! empty($data['opened_at'])
+                ? \Illuminate\Support\Carbon::parse((string) $data['opened_at'], \App\Support\OperationalTime::tz())
+                : \App\Support\OperationalTime::now();
+            $incident = $this->serviceTickets->openPreventive($assignment, $userId, $opened, $data['detail'] ?? null);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        $this->applyOpeningGestion($incident, $data, $request->user()?->name);
+
+        return $this->show($incident->fresh() ?? $incident);
+    }
+
+    public function recordVisit(Request $request, Incident $incident): JsonResponse
+    {
+        foreach (['opened_at', 'restored_at', 'closed_at', 'arrived_at', 'departed_at'] as $field) {
+            if ($request->input($field) === '') {
+                $request->merge([$field => null]);
+            }
+        }
+
+        $data = $request->validate([
+            'opened_at' => ['nullable', 'date'],
+            'restored_at' => ['nullable', 'date'],
+            'closed_at' => ['nullable', 'date'],
+            'arrived_at' => ['nullable', 'date'],
+            'departed_at' => ['nullable', 'date'],
+            'technician_name' => ['nullable', 'string', 'max:160'],
+            'polygon' => ['nullable', 'string', 'max:160'],
+            'visit_reason' => ['nullable', 'string', 'max:500'],
+            'activities' => ['nullable', 'string', 'max:5000'],
+            'materials' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        try {
+            $this->serviceTickets->recordVisit($incident, $data, $request->user()?->name);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
         }
 
         return $this->show($incident->fresh() ?? $incident);
@@ -923,8 +1012,9 @@ class IncidentController extends Controller
             $data['observation'] ?? null,
             $userId,
         );
+        $this->serviceTickets->close($result['incident'], $request->user()?->name);
 
-        return response()->json($this->show($result['incident'])->getData(true));
+        return response()->json($this->show($result['incident']->fresh() ?? $result['incident'])->getData(true));
     }
 
     /**
@@ -964,6 +1054,50 @@ class IncidentController extends Controller
                 'ticket' => $tracking->report_ticket ?? $tracking->ticket,
             ] : null,
         ];
+    }
+
+    /**
+     * @param  array<string, mixed>  $data
+     */
+    private function applyOpeningGestion(Incident $incident, array $data, ?string $actor): void
+    {
+        if (filled($incident->root_cause_code)) {
+            $this->serviceTickets->syncFromIncident($incident, $actor);
+
+            return;
+        }
+
+        $row = RootCauseLegend::requirePair(
+            (string) $data['root_cause_group_code'],
+            (string) $data['root_cause_code'],
+        );
+        $scope = in_array($row['attention'], ['PEXT', 'PINT'], true)
+            ? ManagementScope::from((string) $row['attention'])
+            : $incident->management_scope;
+
+        $incident->fill([
+            'root_cause_group_code' => $row['group_code'],
+            'root_cause_code' => $row['code'],
+            'cause' => $row['cause'],
+            'detail_text' => $data['detail'] ?? $incident->detail_text,
+            'minedu_reason' => ! empty($data['minedu_reason'])
+                ? MineduReason::from((string) $data['minedu_reason'])
+                : $incident->minedu_reason,
+            'management_scope' => $scope,
+        ])->save();
+
+        IncidentManagement::query()->create([
+            'incident_id' => $incident->id,
+            'classification' => $incident->management_classification instanceof ManagementClassification
+                ? $incident->management_classification->value
+                : (string) ($incident->management_classification ?: ManagementClassification::Unclassified->value),
+            'scope' => $scope instanceof ManagementScope ? $scope->value : $scope,
+            'detail' => $incident->detail_text,
+            'observation' => 'Causa raíz marcada al abrir el ticket. '.$row['code'].' · '.$row['cause'],
+            'created_by' => request()->user()?->id,
+        ]);
+
+        $this->serviceTickets->syncFromIncident($incident->fresh() ?? $incident, $actor);
     }
 
     private static function loopbackFromRow(int $excelRow): ?string
