@@ -83,8 +83,33 @@ export const endpoints = {
       provincia: string | null
       distrito: string | null
     } | null }>(`/incidents/lookup?q=${encodeURIComponent(q)}`),
-  createManualTicket: (body: { q: string; detail?: string | null; minedu_reason?: string | null }) =>
-    apiPost<IncidentDetail>('/incidents/manual', body),
+  createManualTicket: (body: {
+    q: string
+    detail?: string | null
+    minedu_reason?: string | null
+    root_cause_group_code: string
+    root_cause_code: string
+  }) => apiPost<IncidentDetail>('/incidents/manual', body),
+  createPreventiveTicket: (body: {
+    q: string
+    detail?: string | null
+    opened_at?: string | null
+    minedu_reason?: string | null
+    root_cause_group_code: string
+    root_cause_code: string
+  }) => apiPost<IncidentDetail>('/incidents/preventive', body),
+  saveVisit: (id: number, body: {
+    opened_at?: string | null
+    restored_at?: string | null
+    closed_at?: string | null
+    arrived_at?: string | null
+    departed_at?: string | null
+    technician_name?: string | null
+    polygon?: string | null
+    visit_reason?: string | null
+    activities?: string | null
+    materials?: string | null
+  }) => apiPut<IncidentDetail>(`/incidents/${id}/visit`, body),
   sameHourGroups: () =>
     apiGet<{ window_minutes: number; data: Array<Record<string, unknown>> }>('/incidents/same-hour'),
   applySameHour: (body: { incident_ids: number[]; minedu_reason: string; detail?: string | null }) =>

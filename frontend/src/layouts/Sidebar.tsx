@@ -22,6 +22,7 @@ import {
   Phone,
   Settings,
   ShieldAlert,
+  Ticket,
 } from 'lucide-react'
 import { useDashboardSummary } from '../features/dashboard/hooks/useDashboard'
 import { useOperationalAlerts } from '../features/notifications/hooks/useOperationalAlerts'
@@ -70,6 +71,7 @@ const NAV: NavItem[] = [
   { section: 'operacion', to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck, permission: P.recoveriesView },
   { section: 'operacion', to: '/mass-outages', label: 'Caídas masivas', badgeKey: 'caidas_masivas', tone: 'danger', icon: Network, permission: P.incidentsView },
   { section: 'operacion', to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map, permission: P.incidentsView },
+  { section: 'reportes', to: '/reports/ticketera', label: 'Histórico de tickets', icon: Ticket, permission: P.reportsView },
   { section: 'reportes', to: '/reports/operational', label: 'Vista de reporte', icon: FileSpreadsheet, permission: P.reportsView },
   { section: 'reportes', to: '/reports/minedu', label: 'Anexo 30 MINEDU', icon: Files, permission: P.reportsView },
   { section: 'reportes', to: '/reports/usage', label: 'Uso de internet', icon: Gauge, permission: P.reportsView },

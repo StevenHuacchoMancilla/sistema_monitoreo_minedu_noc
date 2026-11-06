@@ -344,6 +344,27 @@ export type IncidentDetail = {
     status: string
     es_actual: boolean
   }>
+  ticket?: {
+    id: number
+    incident_id: number | null
+    ticket_code: string
+    kind: 'CORRECTIVO' | 'PREVENTIVO'
+    kind_label: string
+    status: 'ABIERTO' | 'CERRADO'
+    opened_at: string | null
+    restored_at: string | null
+    closed_at: string | null
+    opened_by_name: string | null
+    closed_by_name: string | null
+    technician_name: string | null
+    polygon: string | null
+    visit_reason: string | null
+    arrived_at: string | null
+    departed_at: string | null
+    activities: string | null
+    materials: string | null
+    event_detail: string
+  } | null
   gestion: {
     followup_status: string | null
     management_classification?: string | null

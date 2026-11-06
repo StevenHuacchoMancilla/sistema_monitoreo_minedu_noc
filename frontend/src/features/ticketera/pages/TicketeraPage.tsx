@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Download, RefreshCw, Ticket } from 'lucide-react'
 import { endpoints } from '../../../api/endpoints'
+import { useAuth } from '../../auth/context/AuthContext'
+import { IncidentManageModal } from '../../incidents/components/IncidentManageModal'
 import { ApiError } from '../../../api/client'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
@@ -12,7 +14,7 @@ import { MetricCard } from '../../../components/ui/MetricCard'
 import { SectionCard } from '../../../components/ui/Card'
 import { DataTableContainer, tableClassName, thClassName, theadClassName, trClassName } from '../../../components/ui/DataTableFrame'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
-import { formatDateTime24, formatDuration } from '../../../lib/datetime'
+import { formatDateTime24 } from '../../../lib/datetime'
 import { TicketeraCharts } from '../components/TicketeraCharts'
 import { SchoolTimelines } from '../components/SchoolTimelines'
 import {
@@ -47,11 +49,12 @@ function StatusPill({ status }: { status: TicketeraStatus }) {
 }
 
 function downloadCsv(rows: PreparedRow[], from: string, to: string) {
-  const header = ['Fila', 'Ticket', 'CID', 'TSS', 'Local', 'Provincia', 'Distrito', 'Código', 'Grupo', 'MINEDU', 'Apertura', 'Cierre', 'Situación', 'Causa', 'Detalle']
+  const header = ['Fila', 'Ticket', 'Tipo', 'CID', 'TSS', 'Local', 'Provincia', 'Distrito', 'Código', 'Grupo', 'MINEDU', 'Apertura', 'Restablecimiento', 'Cierre', 'Situación', 'Causa', 'Detalle', 'Detalle de evento']
   const lines = rows.map((row) =>
     [
       row.row,
       row.ticket,
+      row.kind_label || row.kind || '',
       row.cid,
       row.tss,
       row.nombre,
@@ -61,10 +64,12 @@ function downloadCsv(rows: PreparedRow[], from: string, to: string) {
       row.grupo,
       row.minedu,
       row.open_text,
+      row.restored_text || '',
       row.close_text,
       row.status,
       row.causa,
       row.detalle,
+      row.event_detail || '',
     ]
       .map((value) => `"${String(value ?? '').replace(/"/g, '""')}"`)
       .join(';'),
@@ -80,6 +85,9 @@ function downloadCsv(rows: PreparedRow[], from: string, to: string) {
 
 export function TicketeraPage() {
   const queryClient = useQueryClient()
+  const { user } = useAuth()
+  const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
+  const [manageId, setManageId] = useState<number | null>(null)
   const query = useQuery({
     queryKey: ['ticketera'],
     queryFn: () => endpoints.ticketera(),
@@ -99,7 +107,14 @@ export function TicketeraPage() {
 
   useEffect(() => {
     if (!query.data || filters) return
-    setFilters(defaultFilters(latestDay(query.data.rows, query.data.today)))
+    const day = latestDay(query.data.rows, query.data.today)
+    const next = defaultFilters(day)
+    if (query.data.source.mode === 'sistema') {
+      const range = historyRange(query.data.rows, day)
+      next.from = range.from
+      next.to = range.to
+    }
+    setFilters(next)
   }, [query.data, filters])
 
   const prepared = useMemo(() => {
@@ -171,8 +186,12 @@ export function TicketeraPage() {
     <AppLayout>
       <PageHeader
         icon={<Ticket className="h-5 w-5" />}
-        title="Ticketera"
-        description="Incidencias de la hoja TICKETERA. Las gráficas se actualizan solas cada 30 segundos."
+        title="Histórico de tickets"
+        description={
+          query.data?.source.mode === 'sistema'
+            ? 'Consulta del histórico. La gestión de cada ticket se hace en la incidencia; aquí se ve el mismo formato de la hoja.'
+            : 'Consulta del histórico de tickets. Las gráficas se actualizan solas cada 30 segundos.'
+        }
         badges={
           query.data ? (
             <span className="text-xs font-medium text-slate-500">
@@ -452,7 +471,7 @@ export function TicketeraPage() {
                 <table className={tableClassName}>
                   <thead className={theadClassName}>
                     <tr>
-                      {['Fila', 'Ticket', 'TSS / ubicación', 'Código', 'MINEDU', 'Apertura', 'Situación', 'En el periodo'].map((label) => (
+                      {['Fila', 'Ticket', 'Tipo', 'TSS / ubicación', 'Código', 'Apertura', 'Restablecimiento', 'Cierre', 'Situación', 'Detalle de evento'].map((label) => (
                         <th key={label} className={thClassName}>{label}</th>
                       ))}
                     </tr>
@@ -462,9 +481,16 @@ export function TicketeraPage() {
                       <tr key={`${row.row}-${row.ticket}`} className={trClassName}>
                         <td className={cell}>{row.row}</td>
                         <td className={`${cell} max-w-none`}>
-                          <span className="font-semibold">{row.ticket || 'Sin ticket'}</span>
+                          {row.incident_id ? (
+                            <button type="button" className="font-semibold text-blue-700 hover:underline dark:text-blue-300" onClick={() => setManageId(row.incident_id ?? null)}>
+                              {row.ticket || 'Sin ticket'}
+                            </button>
+                          ) : (
+                            <span className="font-semibold">{row.ticket || 'Sin ticket'}</span>
+                          )}
                           <span className="block text-[11px] text-slate-500">CID {row.cid || '—'}</span>
                         </td>
+                        <td className={cell}>{row.kind_label || 'Correctivo'}</td>
                         <td className={`${cell} max-w-none`}>
                           TSS {row.tss || '—'}
                           <span className="block truncate text-[11px] text-slate-500">{row.nombre || row.provincia || '—'}</span>
@@ -473,13 +499,14 @@ export function TicketeraPage() {
                           {row.codigo || '—'}
                           <span className="block truncate text-[11px] text-slate-500">{row.grupo || 'Sin grupo'}</span>
                         </td>
-                        <td className={`${cell} max-w-[16rem]`}>{row.minedu || 'Sin clasificación'}</td>
                         <td className={`${cell} whitespace-nowrap`}>{row.open_text || '—'}</td>
+                        <td className={`${cell} whitespace-nowrap`}>{row.restored_text || '—'}</td>
+                        <td className={`${cell} whitespace-nowrap`}>{row.close_text || '—'}</td>
                         <td className={cell}><StatusPill status={row.status} /></td>
-                        <td className={cell}>{formatDuration(row.periodSeconds)}</td>
+                        <td className={`${cell} max-w-[18rem] whitespace-pre-line`}>{row.event_detail || '—'}</td>
                       </tr>
                     )) : (
-                      <tr><td className={cell} colSpan={8}>Sin tickets para estos filtros.</td></tr>
+                      <tr><td className={cell} colSpan={10}>Sin tickets para estos filtros.</td></tr>
                     )}
                   </tbody>
                 </table>
@@ -533,6 +560,17 @@ export function TicketeraPage() {
             </div>
           ) : null}
         </div>
+      ) : null}
+      {manageId !== null ? (
+        <IncidentManageModal
+          incidentId={manageId}
+          initialTab={canManage ? 'management' : 'summary'}
+          readOnly={!canManage}
+          onClose={() => {
+            setManageId(null)
+            void queryClient.invalidateQueries({ queryKey: ['ticketera'] })
+          }}
+        />
       ) : null}
     </AppLayout>
   )

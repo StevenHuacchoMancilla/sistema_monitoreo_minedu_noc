@@ -16,6 +16,12 @@ export type TicketeraRow = {
   minedu: string
   causa: string
   detalle: string
+  event_detail?: string
+  kind?: string
+  kind_label?: string
+  incident_id?: number | null
+  restored?: string | null
+  restored_text?: string
   open: string | null
   close: string | null
   open_text: string
@@ -33,6 +39,7 @@ export type TicketeraPayload = {
   source: {
     spreadsheet_id: string
     sheet: string
+    mode?: 'sistema' | 'hoja'
     row_count: number
     fetched_at: string
   }

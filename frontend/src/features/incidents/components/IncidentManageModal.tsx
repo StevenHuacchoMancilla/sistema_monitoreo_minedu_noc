@@ -18,6 +18,7 @@ import type { ManagementPayload, MineduReason } from '../../reports/types/operat
 import { incidentCaseFilePath } from '../../history/api/historyApi'
 import { VoiceDictationButton } from '../../voice/components/VoiceDictationButton'
 import { FieldDispatchPanel } from './FieldDispatchPanel'
+import { VisitReportPanel } from './VisitReportPanel'
 import type { IncidentDetail } from '../../../types/api'
 import rootCauseLegend from '../data/rootCauseLegend.json' with { type: 'json' }
 
@@ -272,9 +273,20 @@ export function IncidentManageModal({
               {data ? (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   <PrtgStatusBadge status={data.estado.estado_prtg} />
-                  <Badge tone={recovered ? 'success' : 'danger'} title={recovered ? 'Duración total de la caída' : 'Tiempo caído hasta ahora'}>
-                    {recovered ? 'Duró' : 'Caído'} {formatDuration(seconds)}
-                  </Badge>
+                  {data.ticket?.kind === 'PREVENTIVO' ? (
+                    <Badge tone={data.ticket.status === 'CERRADO' ? 'success' : 'warning'}>
+                      Preventivo {data.ticket.status === 'CERRADO' ? 'cerrado' : 'abierto'}
+                    </Badge>
+                  ) : (
+                    <Badge tone={recovered ? 'success' : 'danger'} title={recovered ? 'Duración total de la caída' : 'Tiempo caído hasta ahora'}>
+                      {recovered ? 'Duró' : 'Caído'} {formatDuration(seconds)}
+                    </Badge>
+                  )}
+                  {data.ticket?.ticket_code ? (
+                    <Badge tone="neutral" title="Código de ticketera">
+                      {data.ticket.ticket_code}
+                    </Badge>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -338,6 +350,14 @@ export function IncidentManageModal({
                 contacts={data.contactos}
                 selectedId={contactId}
                 onSelect={(id) => setContactId(id)}
+              />
+              <VisitReportPanel
+                incidentId={incidentId}
+                ticket={data.ticket}
+                schoolName={data.colegio.local_educativo}
+                tss={data.colegio.current_sequence}
+                readOnly={readOnly}
+                onSaved={() => setSavedMsg('Visita técnica guardada')}
               />
               {readOnly ? (
                 <Panel title="Gestión">

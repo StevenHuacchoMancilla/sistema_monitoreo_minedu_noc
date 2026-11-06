@@ -20,6 +20,7 @@ import { OperationalReportPage } from '../features/reports/pages/OperationalRepo
 import { GeneralReportPage } from '../features/reports/pages/GeneralReportPage'
 import { MineduReportPage } from '../features/reports/pages/MineduReportPage'
 import { InternetUsageReportPage } from '../features/reports/pages/InternetUsageReportPage'
+import { TicketeraPage } from '../features/ticketera/pages/TicketeraPage'
 import { LoginPage } from '../features/auth/pages/LoginPage'
 import { ProfilePage } from '../features/auth/pages/ProfilePage'
 import { RequireAuth } from '../features/auth/components/RequireAuth'
@@ -144,7 +145,7 @@ export function AppRouter() {
             <Route path="/reports/minedu" element={<MineduReportPage />} />
             <Route path="/reports/usage" element={<InternetUsageReportPage />} />
             <Route path="/reports/general" element={<GeneralReportPage />} />
-            <Route path="/reports/ticketera" element={<Navigate to="/reports/operational" replace />} />
+            <Route path="/reports/ticketera" element={<TicketeraPage />} />
           </Route>
 
           <Route element={<RequirePermission permission={P.adminView} />}>
