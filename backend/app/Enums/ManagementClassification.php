@@ -22,7 +22,7 @@ enum ManagementClassification: string
     }
 
     /**
-     * Opciones seleccionables al registrar gestión (TIPO 1 / 2 / 3).
+     * Clasificaciones que aún pueden llegar desde gestión (derivadas de razón MINEDU).
      *
      * @return list<string>
      */
@@ -32,6 +32,7 @@ enum ManagementClassification: string
             self::ContactConfirmed->value,
             self::LinkOutage->value,
             self::NoResponse->value,
+            self::Complaint->value,
         ];
     }
 
@@ -39,10 +40,10 @@ enum ManagementClassification: string
     {
         return match ($this) {
             self::NewOutage => 'Nueva caída',
-            self::ContactConfirmed => 'TIPO 1',
-            self::LinkOutage => 'TIPO 2',
-            self::NoResponse => 'TIPO 3',
-            self::Complaint => 'Queja / reclamo',
+            self::ContactConfirmed => 'Caída de enlace',
+            self::LinkOutage => 'Requerimiento',
+            self::NoResponse => 'Sin respuesta',
+            self::Complaint => 'Queja',
             self::Unclassified => 'Sin clasificar',
         };
     }
@@ -50,11 +51,11 @@ enum ManagementClassification: string
     public function hint(): string
     {
         return match ($this) {
-            self::ContactConfirmed => 'Para reporte',
-            self::LinkOutage => 'Caída solo de un enlace en P2P',
-            self::NoResponse => 'Equipos apagados, corte de energía, sin respuesta, etc.',
+            self::ContactConfirmed => 'Incidencia / para reporte (rojo)',
+            self::LinkOutage => 'Requerimiento MINEDU',
+            self::NoResponse => 'Corte de energía u origen similar',
             self::NewOutage => 'Detectada automáticamente por PRTG',
-            self::Complaint => 'Histórico (ya no se usa)',
+            self::Complaint => 'Queja o reclamo',
             self::Unclassified => 'Sin clasificar',
         };
     }
