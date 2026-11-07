@@ -8,9 +8,10 @@ import { DataTableContainer } from '../../../components/ui/DataTableFrame'
 import { endpoints } from '../../../api/endpoints'
 
 const TONE: Record<string, string> = {
-  CAIDA_ENLACE: 'bg-sky-50',
+  CAIDA_ENLACE: 'bg-red-50',
   CAIDA_ENERGIA: 'bg-amber-50',
-  REQUERIMIENTO: 'bg-slate-50',
+  REQUERIMIENTO: 'bg-violet-50',
+  QUEJA: 'bg-orange-50',
 }
 
 const COLUMNS: Array<{ key: string; label: string }> = [
@@ -85,7 +86,7 @@ export function MineduReportPage() {
                 {report.data.rows.length === 0 ? (
                   <tr>
                     <td className="px-3 py-8 text-center text-slate-500" colSpan={COLUMNS.length + 1}>
-                      Sin registros. Asigna Caída de enlace, Caída de energía o Requerimiento en la gestión.
+                      Sin registros. Asigna Caída de enlace, Requerimiento o Queja en la gestión.
                     </td>
                   </tr>
                 ) : report.data.rows.map((row, index) => (

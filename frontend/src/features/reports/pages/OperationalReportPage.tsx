@@ -12,19 +12,24 @@ import { endpoints } from '../../../api/endpoints'
 import { IncidentManageModal } from '../../incidents/components/IncidentManageModal'
 import { PrtgLocationFilterFields } from '../../locations/components/PrtgLocationFilterFields'
 import { ReportDataTable } from '../components/ReportDataTable'
+import { ResumenPrtgBoard } from '../components/ResumenPrtgBoard'
 import { downloadFinalReportPng } from '../lib/downloadFinalReportPng'
+
+type ViewTab = 'lista' | 'resumen'
 
 function ReportLegend() {
   const items = [
-    { color: 'bg-yellow-400', label: 'Amarillo — caída total activa', soft: 'bg-yellow-50 border-yellow-200' },
-    { color: 'bg-red-500', label: 'Rojo — incidencia', soft: 'bg-red-50 border-red-200' },
+    { color: 'bg-red-500', label: '✖ PRTG caído / parcial', soft: 'bg-red-50 border-red-200 dark:bg-red-950/30 dark:border-red-800' },
+    { color: 'bg-emerald-500', label: '✔ PRTG operativo', soft: 'bg-emerald-50 border-emerald-200 dark:bg-emerald-950/30 dark:border-emerald-800' },
+    { color: 'bg-amber-400', label: 'Energia (auto LE05/LE06…)', soft: 'bg-amber-50 border-amber-200 dark:bg-amber-950/30 dark:border-amber-800' },
+    { color: 'bg-violet-500', label: 'Requerimiento (RM / razón MINEDU)', soft: 'bg-violet-50 border-violet-200 dark:bg-violet-950/30 dark:border-violet-800' },
   ]
   return (
-    <div className="grid gap-3 sm:grid-cols-2">
+    <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
       {items.map((item) => (
         <div
           key={item.label}
-          className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium text-slate-700 ${item.soft}`}
+          className={`flex items-center gap-2 rounded-xl border px-4 py-3 text-sm font-medium text-slate-700 dark:text-slate-200 ${item.soft}`}
         >
           <span className={`h-2.5 w-2.5 shrink-0 rounded-full ${item.color}`} />
           {item.label}
@@ -59,16 +64,16 @@ function ClosingPreviewPanel() {
   }
 
   return (
-    <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-      <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between">
+    <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <div className="flex flex-col gap-3 border-b border-slate-100 px-5 py-4 sm:flex-row sm:items-start sm:justify-between dark:border-slate-800">
         <div className="flex items-start gap-3">
-          <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600">
+          <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-amber-50 text-amber-600 dark:bg-amber-950/40">
             <FileCheck2 className="h-5 w-5" aria-hidden />
           </div>
           <div>
-            <h2 className="text-lg font-semibold text-slate-900">Informe final</h2>
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Informe final</h2>
             <p className="text-sm font-medium text-slate-500">
-              Rojos primero: incidencias graves, aunque PRTG ya haya subido. Amarillos: caídas totales todavía activas.
+              Exportación del día · mismos datos automáticos de la lista.
             </p>
             <div className="mt-2">
               <Badge tone={preview.data.rows.some((row) => row.color_key === 'red') ? 'danger' : 'warning'}>
@@ -103,10 +108,7 @@ function ClosingPreviewPanel() {
       {preview.data.total === 0 ? (
         <div className="px-6 py-12 text-center">
           <FileCheck2 className="mx-auto h-10 w-10 text-slate-300" />
-          <p className="mt-3 text-base font-semibold text-slate-900">No hay registros listos para exportar.</p>
-          <p className="mt-1 text-sm text-slate-500">
-            Las incidencias graves y las caídas activas aparecerán aquí.
-          </p>
+          <p className="mt-3 text-base font-semibold text-slate-900 dark:text-slate-100">No hay registros listos para exportar.</p>
         </div>
       ) : (
         <div className="max-h-[28rem] overflow-y-auto">
@@ -119,11 +121,11 @@ function ClosingPreviewPanel() {
 
 export function OperationalReportPage() {
   const client = useQueryClient()
-  const [classification, setClassification] = useState('')
+  const [tab, setTab] = useState<ViewTab>('lista')
+  const [listaEstado, setListaEstado] = useState('')
   const [province, setProvince] = useState('')
   const [district, setDistrict] = useState('')
-  const [scope, setScope] = useState('')
-  const [technology, setTechnology] = useState('')
+  const [zona, setZona] = useState('')
   const [search, setSearch] = useState('')
   const [manageId, setManageId] = useState<number | null>(null)
   const [showClosing, setShowClosing] = useState(false)
@@ -131,14 +133,13 @@ export function OperationalReportPage() {
   const [perPage, setPerPage] = useState(25)
 
   const report = useQuery({
-    queryKey: ['reports', 'operational', classification, province, district, scope, technology, search],
+    queryKey: ['reports', 'operational', listaEstado, province, district, zona, search],
     queryFn: () =>
       endpoints.operationalReport({
-        classification: classification || undefined,
+        lista_estado: listaEstado || undefined,
         province: province || undefined,
         district: district || undefined,
-        scope: scope || undefined,
-        technology: technology || undefined,
+        zona: zona || undefined,
         search: search || undefined,
         active_only: '1',
       }),
@@ -152,6 +153,8 @@ export function OperationalReportPage() {
   }, [report.data, page, perPage])
 
   const lastPage = Math.max(1, Math.ceil((report.data?.total ?? 0) / perPage))
+  const estados = report.data?.lista_estados ?? []
+  const zonas = report.data?.zonas ?? []
 
   return (
     <AppLayout bare>
@@ -159,7 +162,7 @@ export function OperationalReportPage() {
         <PageHeader
           icon={<FileSpreadsheet className="h-5 w-5" />}
           title="Vista de reporte"
-          description="Rojos: incidencias graves (siguen hasta darles solución). Amarillos: caídas totales todavía activas."
+          description="Lista de LLEE automática hasta ZONA. El ESTADO sale de la causa raíz, la razón MINEDU y el PRTG (ej. LE05 → Energia)."
           breadcrumb={
             <p className="text-xs font-medium text-slate-500">
               NOC Loreto <span className="text-slate-300">/</span> Vista de reporte
@@ -178,22 +181,57 @@ export function OperationalReportPage() {
           }
         />
 
+        <div className="inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-950">
+          {(
+            [
+              { key: 'lista' as const, label: 'Lista de LLEE' },
+              { key: 'resumen' as const, label: 'Resumen PRTG' },
+            ] as const
+          ).map((item) => (
+            <button
+              key={item.key}
+              type="button"
+              onClick={() => setTab(item.key)}
+              className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+                tab === item.key
+                  ? 'bg-white text-slate-900 shadow-sm dark:bg-slate-800 dark:text-white'
+                  : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200'
+              }`}
+            >
+              {item.label}
+            </button>
+          ))}
+        </div>
+
         <ReportLegend />
 
         <FilterCard>
-          <FormField label="Clasificación">
+          <FormField label="Estado (lista)">
             <Select
-              value={classification}
+              value={listaEstado}
               onChange={(e) => {
-                setClassification(e.target.value)
+                setListaEstado(e.target.value)
                 setPage(1)
               }}
             >
               <option value="">Todos</option>
-              <option value="NEW_OUTAGE">Nuevas</option>
-              <option value="CONTACT_CONFIRMED">TIPO 1 · Para reporte</option>
-              <option value="LINK_OUTAGE">TIPO 2 · Enlace P2P</option>
-              <option value="NO_RESPONSE">TIPO 3 · En espera / energía</option>
+              {estados.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+              {estados.length === 0 ? (
+                <>
+                  <option value="Averias">Averias</option>
+                  <option value="Descartes en curso">Descartes en curso</option>
+                  <option value="Sin respuesta">Sin respuesta</option>
+                  <option value="Equipos apagados">Equipos apagados</option>
+                  <option value="Energia">Energia</option>
+                  <option value="Restablecido">Restablecido</option>
+                  <option value="Requerimiento">Requerimiento</option>
+                  <option value="Enlace parcial">Enlace parcial</option>
+                </>
+              ) : null}
             </Select>
           </FormField>
           <PrtgLocationFilterFields
@@ -208,30 +246,27 @@ export function OperationalReportPage() {
               setPage(1)
             }}
           />
-          <FormField label="PEXT/PINT">
+          <FormField label="Zona">
             <Select
-              value={scope}
+              value={zona}
               onChange={(e) => {
-                setScope(e.target.value)
+                setZona(e.target.value)
                 setPage(1)
               }}
             >
-              <option value="">Todos</option>
-              <option value="PEXT">PEXT</option>
-              <option value="PINT">PINT</option>
-            </Select>
-          </FormField>
-          <FormField label="Tipo">
-            <Select
-              value={technology}
-              onChange={(e) => {
-                setTechnology(e.target.value)
-                setPage(1)
-              }}
-            >
-              <option value="">Todos</option>
-              <option value="P2P">P2P</option>
-              <option value="GPON">GPON</option>
+              <option value="">TODAS</option>
+              {zonas.map((z) => (
+                <option key={z} value={z}>
+                  {z}
+                </option>
+              ))}
+              {zonas.length === 0 ? (
+                <>
+                  <option value="IQUITOS">IQUITOS</option>
+                  <option value="YURIMAGUAS">YURIMAGUAS</option>
+                  <option value="PUCALLPA">PUCALLPA</option>
+                </>
+              ) : null}
             </Select>
           </FormField>
           <SearchField
@@ -249,69 +284,85 @@ export function OperationalReportPage() {
 
         {report.isLoading ? <LoadingState /> : null}
         {report.isError ? <ErrorState message="Error cargando vista de reporte" /> : null}
-        {report.data && report.data.rows.length === 0 ? (
-          <EmptyState title="Sin filas" description="No hay incidencias activas con los filtros actuales." />
+
+        {tab === 'resumen' && report.data?.resumen_prtg ? (
+          <ResumenPrtgBoard
+            data={report.data.resumen_prtg}
+            zonas={zonas}
+            selectedZona={zona}
+            onZonaChange={(value) => {
+              setZona(value)
+              setPage(1)
+            }}
+            onSelectEstado={(estado) => {
+              setListaEstado(estado)
+              setTab('lista')
+              setPage(1)
+            }}
+          />
         ) : null}
 
-        {report.data && report.data.rows.length > 0 ? (
-          <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4">
-              <div className="flex items-start gap-3">
-                <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                  <FileSpreadsheet className="h-5 w-5" aria-hidden />
-                </div>
-                <div>
-                  <h2 className="text-lg font-semibold text-slate-900">Reporte operativo</h2>
-                  <p className="text-sm font-medium text-slate-500">
-                    {report.data.total.toLocaleString('es-PE')} registros activos
-                  </p>
-                  <p className="text-xs text-slate-400">
-                    Vista consolidada · CAÍDA desde PRTG · TIPO desde asignación de red
-                  </p>
-                </div>
-              </div>
-              <div className="flex items-center gap-2">
-                <Select
-                  className="h-9 w-[5.5rem]"
-                  value={String(perPage)}
-                  onChange={(e) => {
-                    setPerPage(Number(e.target.value))
-                    setPage(1)
-                  }}
-                >
-                  <option value="25">25</option>
-                  <option value="50">50</option>
-                  <option value="100">100</option>
-                </Select>
-                <Button type="button" size="sm" onClick={() => void report.refetch()}>
-                  <RefreshCw className="h-3.5 w-3.5" />
-                  Refrescar
-                </Button>
-              </div>
-            </div>
+        {tab === 'lista' ? (
+          <>
+            {report.data && report.data.rows.length === 0 ? (
+              <EmptyState
+                title="Sin filas en la lista"
+                description="Gestioná una caída (razón MINEDU + causa raíz) y aparecerá aquí con ESTADO automático."
+              />
+            ) : null}
 
-            <ReportDataTable
-              rows={pageRows}
-              showClassification
-              showAction
-              onManage={setManageId}
-              rowTone="classification"
-            />
+            {report.data && report.data.rows.length > 0 ? (
+              <section className="min-w-0 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+                  <div className="flex items-start gap-3">
+                    <div className="inline-flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600 dark:bg-blue-950/40">
+                      <FileSpreadsheet className="h-5 w-5" aria-hidden />
+                    </div>
+                    <div>
+                      <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Lista de LLEE</h2>
+                      <p className="text-sm font-medium text-slate-500">
+                        {report.data.total.toLocaleString('es-PE')} registros · datos desde gestión de cada caída
+                      </p>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Select
+                      className="h-9 w-[5.5rem]"
+                      value={String(perPage)}
+                      onChange={(e) => {
+                        setPerPage(Number(e.target.value))
+                        setPage(1)
+                      }}
+                    >
+                      <option value="25">25</option>
+                      <option value="50">50</option>
+                      <option value="100">100</option>
+                    </Select>
+                    <Button type="button" size="sm" onClick={() => void report.refetch()}>
+                      <RefreshCw className="h-3.5 w-3.5" />
+                      Refrescar
+                    </Button>
+                  </div>
+                </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3">
-              <p className="text-sm text-slate-500">
-                Página {page} / {lastPage}
-              </p>
-              <div className="flex gap-2">
-                <Button type="button" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
-                  Anterior
-                </Button>
-                <Button type="button" size="sm" disabled={page >= lastPage} onClick={() => setPage((p) => p + 1)}>
-                  Siguiente
-                </Button>
-              </div>
-            </div>
-          </section>
+                <ReportDataTable rows={pageRows} showAction onManage={setManageId} rowTone="lista" />
+
+                <div className="flex flex-wrap items-center justify-between gap-2 border-t border-slate-100 px-4 py-3 dark:border-slate-800">
+                  <p className="text-sm text-slate-500">
+                    Página {page} / {lastPage}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button type="button" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>
+                      Anterior
+                    </Button>
+                    <Button type="button" size="sm" disabled={page >= lastPage} onClick={() => setPage((p) => p + 1)}>
+                      Siguiente
+                    </Button>
+                  </div>
+                </div>
+              </section>
+            ) : null}
+          </>
         ) : null}
 
         {manageId != null ? (

@@ -3,34 +3,38 @@ import type { CSSProperties, ReactNode } from 'react'
 import { formatDateTime24, formatDate } from '../../../lib/datetime'
 import { formatOutageDisplay, type ReportRow } from '../types/operationalReport'
 
-/** Mismo orden que ClosingReportService / officialColumns(). */
+/** Mismo orden que ClosingReportService / officialColumns() (hasta ZONA). */
 export const FINAL_REPORT_IMAGE_COLUMNS = [
   'TSS',
   'CID',
   'LOCAL EDUCATIVO',
   'PRESENTACION NOMBRE PRTG',
+  'ESTADO PRTG',
+  'ESTADO',
+  'CODIGO',
+  'CAUSA RAIZ',
   'CAÍDA',
-  'TIPO',
   'DETALLE',
-  'PEXT/PINT',
   'PROVINCIA',
   'DISTRITO',
-  'CODIGO DE LOCAL',
+  'ZONA',
 ] as const
 
 /** Anchos fijos (suma ≈ 2360 dentro del marco). */
 const COL_WIDTHS = [
-  '48px',
-  '84px',
-  '210px',
-  '320px',
-  '108px',
-  '62px',
-  '280px',
-  '72px',
-  '130px',
-  '120px',
+  '44px',
+  '78px',
+  '180px',
+  '260px',
+  '70px',
+  '110px',
+  '70px',
+  '150px',
   '100px',
+  '240px',
+  '110px',
+  '110px',
+  '90px',
 ] as const
 
 type Props = {
@@ -269,30 +273,35 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
                         </span>
                       </span>
                     </Td>
-                    <Td bg={zebra}>{caidaText}</Td>
                     <Td bg={zebra} center>
-                      {row.tipo ? (
-                        <span
-                          style={{
-                            display: 'inline-flex',
-                            padding: '2px 8px',
-                            borderRadius: 999,
-                            fontSize: 10,
-                            fontWeight: 700,
-                            background:
-                              row.tipo.toUpperCase() === 'GPON'
-                                ? 'rgba(6, 182, 212, 0.2)'
-                                : 'rgba(99, 102, 241, 0.22)',
-                            color: row.tipo.toUpperCase() === 'GPON' ? '#67E8F9' : '#A5B4FC',
-                            border: '1px solid rgba(148, 163, 184, 0.25)',
-                          }}
-                        >
-                          {row.tipo}
-                        </span>
-                      ) : (
-                        '—'
-                      )}
+                      <span
+                        style={{
+                          display: 'inline-flex',
+                          width: 28,
+                          height: 28,
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          borderRadius: 999,
+                          fontSize: 14,
+                          fontWeight: 800,
+                          background:
+                            row.estado_prtg === '✔'
+                              ? 'rgba(16, 185, 129, 0.22)'
+                              : 'rgba(239, 68, 68, 0.22)',
+                          color: row.estado_prtg === '✔' ? '#6EE7B7' : '#FCA5A5',
+                        }}
+                      >
+                        {cell(row.estado_prtg)}
+                      </span>
                     </Td>
+                    <Td bg={zebra} strong>
+                      {cell(row.lista_estado)}
+                    </Td>
+                    <Td bg={zebra} mono>
+                      {cell(row.root_cause_code)}
+                    </Td>
+                    <Td bg={zebra}>{cell(row.root_cause)}</Td>
+                    <Td bg={zebra}>{caidaText}</Td>
                     <Td bg={zebra}>
                       <span
                         title={detalle === '—' ? undefined : detalle}
@@ -307,13 +316,10 @@ export function FinalReportImageTemplate({ rows, generatedAt = new Date() }: Pro
                         {detalle}
                       </span>
                     </Td>
-                    <Td bg={zebra} strong center>
-                      {cell(row.pext_pint)}
-                    </Td>
                     <Td bg={zebra}>{cell(row.provincia)}</Td>
                     <Td bg={zebra}>{cell(row.distrito)}</Td>
-                    <Td bg={zebra} mono>
-                      {cell(row.codigo_local)}
+                    <Td bg={zebra} strong>
+                      {cell(row.zona)}
                     </Td>
                   </tr>
                 )
