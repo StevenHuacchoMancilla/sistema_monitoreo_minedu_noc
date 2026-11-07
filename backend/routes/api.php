@@ -41,6 +41,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
 
     Route::middleware('permission:'.PermissionCatalog::INCIDENTS_VIEW)->group(function () {
         Route::get('/dashboard/outages', [DashboardController::class, 'outages']);
+        Route::get('/dashboard/managing', [DashboardController::class, 'managing']);
         Route::get('/dashboard/concentrations', [DashboardController::class, 'concentrations']);
         Route::get('/dashboard/concentrations/zone', [DashboardController::class, 'concentrationZone']);
         Route::get('/dashboard/mass-outages', [DashboardController::class, 'massOutages']);
@@ -76,6 +77,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/incidents/lookup', [IncidentController::class, 'lookupSchool']);
         Route::get('/incidents/same-hour', [IncidentController::class, 'sameHour']);
         Route::get('/notifications/operational', [OperationalNotificationController::class, 'index']);
+        Route::get('/notifications/restorations', [OperationalNotificationController::class, 'restorations']);
+        Route::get('/notifications/live', [OperationalNotificationController::class, 'live']);
         Route::get('/incidents/{incident}', [IncidentController::class, 'show']);
         Route::get('/assignments/{assignment}/prtg-sensors', [PrtgSensorController::class, 'byAssignment']);
     });
@@ -146,7 +149,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::put('/incidents/{incident}', [IncidentController::class, 'update']);
             Route::post('/incidents/{incident}/managements', [IncidentController::class, 'storeManagement']);
             Route::post('/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);
-            Route::post('/incidents/{incident}/field-dispatches', [IncidentController::class, 'fieldDispatch']);
             Route::post('/incidents/{incident}/mark-grave', [IncidentController::class, 'markGrave']);
             Route::post('/incidents/{incident}/close-grave', [IncidentController::class, 'closeGrave']);
             Route::post('/incidents/{incident}/close-ticket', [IncidentController::class, 'closeTicket']);

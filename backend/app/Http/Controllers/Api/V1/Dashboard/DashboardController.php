@@ -27,6 +27,18 @@ class DashboardController extends Controller
         ]);
     }
 
+    public function managing(Request $request): JsonResponse
+    {
+        return response()->json([
+            'data' => $this->dashboard->activeOutages(
+                $request->string('q')->toString() ?: null,
+                $request->string('sort')->toString() ?: null,
+                $request->string('direction')->toString() ?: null,
+                true,
+            ),
+        ]);
+    }
+
     public function concentrations(): JsonResponse
     {
         return response()->json([

@@ -50,7 +50,18 @@ class DashboardService
                 (SELECT COUNT(*)::int FROM network_assignments WHERE is_active = true AND cid_status = ?) AS valid_cid,
                 (SELECT COUNT(*)::int FROM network_assignments WHERE is_active = true AND cid_status IN (?, ?, ?)) AS without_cid,
                 (SELECT COUNT(*)::int FROM network_assignments WHERE is_active = true AND monitoring_eligible = true) AS eligible,
-                (SELECT COUNT(*)::int FROM incidents WHERE recovered_at IS NULL AND followup_status IN (?, ?, ?, ?, ?)) AS en_gestion,
+                (SELECT COUNT(*)::int FROM incidents
+                    WHERE recovered_at IS NULL
+                      AND followup_status IN (?, ?, ?, ?, ?)
+                      AND (
+                        detection_source = ?
+                        OR EXISTS (
+                          SELECT 1 FROM prtg_sensors s
+                          WHERE s.id = incidents.prtg_sensor_id
+                            AND s.normalized_status IN (?, ?)
+                        )
+                      )
+                ) AS en_gestion,
                 (SELECT COUNT(*)::int FROM incidents WHERE recovered_at IS NOT NULL AND recovered_at BETWEEN ? AND ?) AS recovered_today,
                 (SELECT COUNT(*)::int FROM incidents WHERE recovered_at IS NOT NULL AND (recovery_review_status = ? OR (recovered_while_managing = true AND recovery_review_status IS NULL))) AS pending_reviews,
                 (SELECT COUNT(*)::int FROM incidents WHERE recovered_at IS NOT NULL) AS recovered_total,
@@ -60,6 +71,9 @@ class DashboardService
                 CidStatus::Valid->value,
                 ...$cidMissing,
                 ...$managing,
+                Incident::DETECTION_MANUAL_PARTIAL,
+                MonitoringStatus::Caido->value,
+                MonitoringStatus::Parcial->value,
                 $dayStart,
                 $dayEnd,
                 RecoveryReviewStatus::PendingReview->value,
@@ -520,23 +534,31 @@ class DashboardService
     /**
      * @return Collection<int, array<string, mixed>>
      */
-    public function activeOutages(?string $search = null, ?string $sort = null, ?string $direction = null): Collection
+    public function activeOutages(?string $search = null, ?string $sort = null, ?string $direction = null, bool $openManagement = false): Collection
     {
         $sort = in_array($sort, ['started_at', 'id'], true) ? $sort : 'started_at';
         $direction = strtolower((string) $direction) === 'asc' ? 'asc' : 'desc';
 
-        $query = Incident::query()
-            ->active()
-            ->where(function ($q) {
+        $query = Incident::query()->active();
+
+        if ($openManagement) {
+            // Tickets abiertos en gestión, aunque PRTG ya los vea operativos.
+            $query->whereIn('followup_status', FollowupStatus::managingValues());
+        } else {
+            $query->where(function ($q) {
                 $q->whereHas(
                     'sensor',
                     fn ($sensor) => $sensor->whereIn('normalized_status', MonitoringStatus::outageValues())
                 )->orWhere('detection_source', Incident::DETECTION_MANUAL_PARTIAL);
-            })
+            });
+        }
+
+        $query
             ->with([
                 'school.contacts',
                 'networkAssignment',
                 'sensor',
+                'serviceTicket:id,incident_id,ticket_code,status,kind',
                 'trackingRecords' => fn ($q) => $q
                     ->select(['id', 'incident_id', 'status', 'report_ticket', 'ticket'])
                     ->orderByDesc('id'),
@@ -556,14 +578,17 @@ class DashboardService
                     $na->whereRaw('LOWER(cid) like ?', [$term])
                         ->orWhereRaw('LOWER(COALESCE(prtg_province, \'\')) like ?', [$term])
                         ->orWhereRaw('LOWER(COALESCE(prtg_district, \'\')) like ?', [$term]);
+                })->orWhereHas('serviceTicket', function ($ticket) use ($term) {
+                    $ticket->whereRaw('LOWER(ticket_code) like ?', [$term]);
                 });
             });
         }
 
-        $incidents = $query->get()
+        $incidents = $query->get();
+        if (! $openManagement) {
             // Una caída visible por asignación (evita dobles por sensores de ramas antiguas).
-            ->unique('network_assignment_id')
-            ->values();
+            $incidents = $incidents->unique('network_assignment_id')->values();
+        }
 
         $assignmentIds = $incidents->pluck('network_assignment_id')->filter()->unique()->values();
         $schoolIds = $incidents->pluck('school_id')->filter()->unique()->values();
@@ -582,7 +607,16 @@ class DashboardService
             ->unique()
             ->flip();
 
-        return $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds) {
+        // Hora real en que el Ping pasó de parcial a caído (para etiqueta Reciente).
+        $escalatedAtByIncident = \App\Models\IncidentUpdate::query()
+            ->whereIn('incident_id', $incidents->pluck('id'))
+            ->where('observation', 'like', 'Ping pasó de Advertencia (parcial) a Caído%')
+            ->orderByDesc('created_at')
+            ->get(['incident_id', 'created_at'])
+            ->unique('incident_id')
+            ->keyBy('incident_id');
+
+        return $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds, $escalatedAtByIncident) {
             $school = $incident->school;
             $assignment = $incident->networkAssignment;
             $sensor = $incident->sensor;
@@ -622,6 +656,7 @@ class DashboardService
                 'escalated_from_partial' => (bool) $incident->escalated_from_partial
                     && ($sensor?->normalized_status === MonitoringStatus::Caido
                         || (string) $incident->current_status === MonitoringStatus::Caido->value),
+                'escalated_at' => ($escalatedAtByIncident->get($incident->id)?->created_at)?->toIso8601String(),
                 'duracion' => $downClock?->diffForHumans(now(), true),
                 'duration_seconds' => $durationSeconds,
                 'duration_label' => $durationSeconds !== null ? $this->formatTss($durationSeconds) : null,
@@ -653,6 +688,7 @@ class DashboardService
                 'telefono_masked' => $contact?->phone,
                 'reincidente_count' => $reincidenteCount,
                 'reincidente' => $reincidenteCount > 1,
+                'ticket_code' => $incident->serviceTicket?->ticket_code,
                 'glpi_ticket' => $incident->glpi_ticket,
                 'responsible_area' => $incident->responsible_area,
                 'reopened_from_management' => (bool) $incident->reopened_from_management,
