@@ -158,11 +158,11 @@ class TicketeraGestionWriter
         if (str_contains($text, 'ENLACE')) {
             return MineduReason::CaidaEnlace;
         }
-        if (str_contains($text, 'ENERG')) {
-            return MineduReason::CaidaEnergia;
-        }
         if (str_contains($text, 'REQUER')) {
             return MineduReason::Requerimiento;
+        }
+        if (str_contains($text, 'QUEJA')) {
+            return MineduReason::Queja;
         }
 
         return null;

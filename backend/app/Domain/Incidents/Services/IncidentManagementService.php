@@ -38,6 +38,7 @@ class IncidentManagementService
      *   detail?: ?string,
      *   observation?: ?string,
      *   contact_id?: ?int,
+     *   contact_via_descartes?: bool,
      *   contact_attempted_at?: ?string,
      *   created_by?: ?int,
      *   root_cause_group_code?: ?string,
@@ -72,8 +73,9 @@ class IncidentManagementService
             $scope = ManagementScope::from((string) $payload['scope']);
         }
 
+        $viaDescartes = (bool) ($payload['contact_via_descartes'] ?? false);
         $contact = null;
-        if (! empty($payload['contact_id'])) {
+        if (! $viaDescartes && ! empty($payload['contact_id'])) {
             $contact = SchoolContact::query()
                 ->where('school_id', $incident->school_id)
                 ->whereKey((int) $payload['contact_id'])
@@ -100,7 +102,7 @@ class IncidentManagementService
             : null;
         $mineduProvided = array_key_exists('minedu_reason', $payload);
 
-        return DB::transaction(function () use ($incident, $payload, $classification, $scope, $contact, $userId, $rootCause, $minedu, $mineduProvided) {
+        return DB::transaction(function () use ($incident, $payload, $classification, $scope, $contact, $viaDescartes, $userId, $rootCause, $minedu, $mineduProvided) {
             $before = [
                 'management_classification' => $incident->management_classification?->value,
                 'management_scope' => $incident->management_scope?->value,
@@ -117,9 +119,11 @@ class IncidentManagementService
                 'detail' => $payload['detail'] ?? null,
                 'observation' => $payload['observation'] ?? null,
                 'contact_id' => $contact?->id,
-                'contact_name_snapshot' => $contact?->name,
-                'contact_phone_snapshot' => $contact?->phone,
-                'contact_role_snapshot' => $contact?->role,
+                'contact_name_snapshot' => $viaDescartes
+                    ? 'Según descartes realizados'
+                    : $contact?->name,
+                'contact_phone_snapshot' => $viaDescartes ? null : $contact?->phone,
+                'contact_role_snapshot' => $viaDescartes ? 'DESCARTES' : $contact?->role,
                 'contact_attempted_at' => $payload['contact_attempted_at'] ?? now(),
                 'created_by' => $userId,
             ]);

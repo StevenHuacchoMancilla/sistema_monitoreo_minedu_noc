@@ -9,7 +9,6 @@ use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\MonitoringStatus;
 use App\Enums\RecoveryReviewStatus;
-use App\Models\FieldDispatch;
 use App\Models\Incident;
 use App\Models\IncidentUpdate;
 use App\Models\NetworkAssignment;
@@ -237,19 +236,12 @@ class IncidentService
 
         $before = $incident->followup_status?->value;
         $wasManaging = $before !== null && in_array($before, FollowupStatus::managingValues(), true);
-        $hasActiveDispatch = FieldDispatch::query()
-            ->where('incident_id', $incident->id)
-            ->active()
-            ->exists();
-        $hadFieldTech = $before === FollowupStatus::TecnicoEnCampo->value || $hasActiveDispatch;
+        $hadFieldTech = $before === FollowupStatus::TecnicoEnCampo->value;
         $needsReview = $wasManaging || $hadFieldTech;
 
-        $observationSuffix = '';
-        if ($hasActiveDispatch) {
-            $observationSuffix = ' Alerta: hay personal movilizado (desplazamiento activo). No se cancela automáticamente.';
-        } elseif ($wasManaging) {
-            $observationSuffix = ' Requiere revisión operativa (estaba en gestión).';
-        }
+        $observationSuffix = $wasManaging
+            ? ' Requiere cierre operativo (estaba en gestión).'
+            : '';
 
         // Incidencias graves abiertas: PRTG UP no cierra ni quita el flag; solo marca recuperación técnica.
         $isOpenGrave = (bool) $incident->is_grave_incident && $incident->grave_closed_at === null;

@@ -9,7 +9,6 @@ use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Enums\MineduReason;
-use App\Domain\Incidents\Services\FieldDispatchService;
 use App\Domain\Incidents\Services\IncidentManagementService;
 use App\Domain\Incidents\Services\IncidentOperativeCloseService;
 use App\Domain\Incidents\Services\IncidentService;
@@ -40,7 +39,6 @@ class IncidentController extends Controller
         private readonly IncidentManagementService $managements,
         private readonly IncidentService $incidents,
         private readonly RecoveryReviewService $recoveryReviews,
-        private readonly FieldDispatchService $fieldDispatches,
         private readonly IncidentOperativeCloseService $operativeClose,
         private readonly SlaClockService $slaClock,
         private readonly SameHourOutageService $sameHour,
@@ -336,22 +334,6 @@ class IncidentController extends Controller
                     'value' => $s->value,
                     'label' => $s->label(),
                 ])->values()->all(),
-                'field_dispatch_actions' => collect(FieldDispatchService::actions())->map(fn (string $a) => [
-                    'value' => $a,
-                    'label' => match ($a) {
-                        FieldDispatchService::ACTION_PLAN => 'Planificar desplazamiento',
-                        FieldDispatchService::ACTION_DISPATCH => 'Despachar',
-                        FieldDispatchService::ACTION_ARRIVE => 'Reportar en sitio',
-                        FieldDispatchService::ACTION_CANCEL => 'Cancelar desplazamiento',
-                        FieldDispatchService::ACTION_COMPLETE => 'Completar',
-                        default => $a,
-                    },
-                ])->values()->all(),
-                'field_dispatch_statuses' => collect(FieldDispatchStatus::cases())->map(fn (FieldDispatchStatus $s) => [
-                    'value' => $s->value,
-                    'label' => $s->label(),
-                    'active' => $s->isActive(),
-                ])->values()->all(),
             ],
         ]);
     }
@@ -430,29 +412,30 @@ class IncidentController extends Controller
     public function storeManagement(Request $request, Incident $incident): JsonResponse
     {
         $data = $request->validate([
-            'classification' => ['required', Rule::in([
-                ManagementClassification::ContactConfirmed->value,
-                ManagementClassification::LinkOutage->value,
-                ManagementClassification::NoResponse->value,
-            ])],
+            'classification' => ['nullable', Rule::in(ManagementClassification::operableValues())],
             'scope' => ['nullable', Rule::in(array_merge([''], ManagementScope::values()))],
             'outage_text' => ['nullable', 'string', 'max:2000'],
             'detail' => ['nullable', 'string', 'max:5000'],
             'observation' => ['nullable', 'string', 'max:5000'],
             'contact_id' => ['nullable', 'integer'],
+            'contact_via_descartes' => ['sometimes', 'boolean'],
             'contact_attempted_at' => ['nullable', 'date'],
             'root_cause_group_code' => ['nullable', 'string', 'max:8'],
             'root_cause_code' => ['nullable', 'string', 'max:16'],
             'cause' => ['nullable', 'string', 'max:500'],
-            'minedu_reason' => ['nullable', Rule::in(array_merge([''], MineduReason::values()))],
+            'minedu_reason' => ['required', Rule::in(MineduReason::operableValues())],
         ]);
 
         if (($data['scope'] ?? null) === '') {
             $data['scope'] = null;
         }
-        if (($data['minedu_reason'] ?? null) === '') {
-            $data['minedu_reason'] = null;
+        if (! empty($data['contact_via_descartes'])) {
+            $data['contact_id'] = null;
         }
+        // La razón MINEDU define el resultado; la clasificación interna sigue el mapeo del reporte.
+        $data['classification'] = MineduReason::from((string) $data['minedu_reason'])
+            ->toManagementClassification()
+            ->value;
 
         $userId = $request->user()?->id;
         if (! $userId) {
@@ -529,7 +512,7 @@ class IncidentController extends Controller
         $data = $request->validate([
             'q' => ['required', 'string', 'max:40'],
             'detail' => ['nullable', 'string', 'max:5000'],
-            'minedu_reason' => ['nullable', Rule::in(MineduReason::values())],
+            'minedu_reason' => ['nullable', Rule::in(MineduReason::operableValues())],
             'root_cause_group_code' => ['required', 'string', 'max:8'],
             'root_cause_code' => ['required', 'string', 'max:16'],
         ]);
@@ -572,7 +555,7 @@ class IncidentController extends Controller
             'q' => ['required', 'string', 'max:40'],
             'detail' => ['nullable', 'string', 'max:5000'],
             'opened_at' => ['nullable', 'date'],
-            'minedu_reason' => ['nullable', Rule::in(MineduReason::values())],
+            'minedu_reason' => ['nullable', Rule::in(MineduReason::operableValues())],
             'root_cause_group_code' => ['required', 'string', 'max:8'],
             'root_cause_code' => ['required', 'string', 'max:16'],
         ]);
@@ -657,7 +640,7 @@ class IncidentController extends Controller
         $data = $request->validate([
             'incident_ids' => ['required', 'array', 'min:2'],
             'incident_ids.*' => ['integer'],
-            'minedu_reason' => ['required', Rule::in(MineduReason::values())],
+            'minedu_reason' => ['required', Rule::in(MineduReason::operableValues())],
             'detail' => ['nullable', 'string', 'max:5000'],
         ]);
 
@@ -774,15 +757,6 @@ class IncidentController extends Controller
             $incident->save();
         }
 
-        if (($data['followup_status'] ?? null) === FollowupStatus::TecnicoEnCampo->value
-            && $before !== FollowupStatus::TecnicoEnCampo->value) {
-            $this->fieldDispatches->ensurePlanned(
-                $incident->fresh() ?? $incident,
-                $request->user()?->id,
-                'Desplazamiento planificado al marcar Técnico en campo.',
-            );
-        }
-
         $observationParts = array_filter([
             $data['diagnosis'] ?? null,
             $data['evidence_observations'] ?? null,
@@ -833,28 +807,6 @@ class IncidentController extends Controller
         );
     }
 
-    public function fieldDispatch(Request $request, Incident $incident): JsonResponse
-    {
-        $data = $request->validate([
-            'action' => ['required', 'string', Rule::in(FieldDispatchService::actions())],
-            'technician_name' => ['nullable', 'string', 'max:255'],
-            'observation' => ['nullable', 'string', 'max:5000'],
-        ]);
-
-        try {
-            $this->fieldDispatches->apply($incident, [
-                ...$data,
-                'created_by' => $request->user()?->id,
-            ]);
-        } catch (InvalidArgumentException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        return response()->json(
-            $this->show($incident->fresh())->getData(true)
-        );
-    }
-
     public function recoveryReview(Request $request, Incident $incident): JsonResponse
     {
         $data = $request->validate([
@@ -890,13 +842,6 @@ class IncidentController extends Controller
                 'last_contact_at' => now(),
             ]);
 
-            if ($data['followup_status'] === FollowupStatus::TecnicoEnCampo->value) {
-                $this->fieldDispatches->ensurePlanned(
-                    $incident->fresh() ?? $incident,
-                    $request->user()?->id,
-                    $data['observation'],
-                );
-            }
         }
 
         $update = IncidentUpdate::query()->create([

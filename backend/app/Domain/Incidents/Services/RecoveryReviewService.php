@@ -17,10 +17,6 @@ class RecoveryReviewService
 
     public const ACTION_CONTINUE_MONITORING = 'CONTINUE_MONITORING';
 
-    public const ACTION_CONTINUE_ONSITE = 'CONTINUE_ONSITE';
-
-    public const ACTION_CANCEL_DISPATCH = 'CANCEL_DISPATCH';
-
     public const ACTION_ADD_NOTE = 'ADD_NOTE';
 
     /**
@@ -31,15 +27,12 @@ class RecoveryReviewService
         return [
             self::ACTION_ACKNOWLEDGE,
             self::ACTION_CONTINUE_MONITORING,
-            self::ACTION_CONTINUE_ONSITE,
-            self::ACTION_CANCEL_DISPATCH,
             self::ACTION_ADD_NOTE,
         ];
     }
 
     public function __construct(
         private readonly AuditLogger $audit,
-        private readonly FieldDispatchService $dispatches,
     ) {}
 
     /**
@@ -60,9 +53,6 @@ class RecoveryReviewService
         if ($action === self::ACTION_ADD_NOTE && $observation === '') {
             throw new InvalidArgumentException('La observación es obligatoria.');
         }
-        if ($action === self::ACTION_CANCEL_DISPATCH && $observation === '') {
-            throw new InvalidArgumentException('Indica el motivo de cancelación del desplazamiento.');
-        }
 
         return DB::transaction(function () use ($incident, $action, $observation, $payload) {
             $beforeStatus = $incident->recovery_review_status instanceof RecoveryReviewStatus
@@ -71,31 +61,13 @@ class RecoveryReviewService
             $before = [
                 'recovery_review_status' => $beforeStatus,
                 'recovered_while_managing' => (bool) $incident->recovered_while_managing,
-                'had_active_dispatch' => $this->dispatches->hasActive($incident),
             ];
 
             $userId = $payload['created_by'] ?? null;
 
-            if ($action === self::ACTION_CANCEL_DISPATCH) {
-                $cancelled = $this->dispatches->cancelActive($incident, $observation, $userId);
-                if ($cancelled === null) {
-                    throw new InvalidArgumentException('No hay desplazamiento activo para cancelar.');
-                }
-            }
-
-            if ($action === self::ACTION_CONTINUE_ONSITE) {
-                $this->dispatches->ensureOnSite(
-                    $incident,
-                    $userId,
-                    $observation !== '' ? $observation : 'Continuar atención en sitio.',
-                );
-            }
-
             $title = match ($action) {
                 self::ACTION_ACKNOWLEDGE => 'Operador confirmó la recuperación técnica.',
-                self::ACTION_CONTINUE_MONITORING => 'Seguir en reporte: internet puede ser intermitente; se mantiene la gestión/TIPO y el historial hasta cerrar Tracking.',
-                self::ACTION_CONTINUE_ONSITE => 'Operador decide continuar atención en sitio.',
-                self::ACTION_CANCEL_DISPATCH => 'Operador canceló el desplazamiento a campo.',
+                self::ACTION_CONTINUE_MONITORING => 'Seguir en reporte: internet puede ser intermitente; se mantiene la gestión y el historial hasta cerrar Tracking.',
                 self::ACTION_ADD_NOTE => 'Observación de revisión de recuperación.',
                 default => 'Revisión de recuperación.',
             };
@@ -134,7 +106,6 @@ class RecoveryReviewService
             $fresh = $incident->fresh([
                 'updates',
                 'managements',
-                'fieldDispatches',
                 'school',
                 'networkAssignment',
                 'sensor',
@@ -148,7 +119,6 @@ class RecoveryReviewService
                     'recovery_review_status' => $fresh->recovery_review_status,
                     'action' => $action,
                     'observation' => $observation !== '' ? $observation : null,
-                    'had_active_dispatch' => $this->dispatches->hasActive($fresh),
                 ],
                 AuditModule::Incidents,
                 AuditSource::Api

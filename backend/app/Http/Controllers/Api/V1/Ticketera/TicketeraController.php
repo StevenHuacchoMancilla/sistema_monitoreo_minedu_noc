@@ -4,32 +4,22 @@ namespace App\Http\Controllers\Api\V1\Ticketera;
 
 use App\Domain\Ticketera\Services\LocalTicketeraService;
 use App\Domain\Ticketera\Services\TicketeraPrtgTimelineService;
-use App\Domain\Ticketera\Services\TicketeraReadService;
 use App\Http\Controllers\Controller;
-use App\Models\ServiceTicket;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Throwable;
 
 class TicketeraController extends Controller
 {
-    public function __invoke(Request $request, TicketeraReadService $ticketera, LocalTicketeraService $local): JsonResponse
+    public function __invoke(Request $request, LocalTicketeraService $local): JsonResponse
     {
         try {
-            if (ServiceTicket::query()->exists()) {
-                return response()->json($local->dashboard());
-            }
-
-            if ($request->boolean('fresh')) {
-                $ticketera->forget();
-            }
-
-            return response()->json($ticketera->dashboard());
+            return response()->json($local->dashboard());
         } catch (Throwable $exception) {
             return response()->json([
                 'message' => $exception->getMessage() !== ''
                     ? $exception->getMessage()
-                    : 'No se pudo leer la hoja de Ticketera.',
+                    : 'No se pudo leer el histórico de tickets.',
             ], 502);
         }
     }
