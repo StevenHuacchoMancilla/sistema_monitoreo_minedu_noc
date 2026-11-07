@@ -7,6 +7,7 @@ use App\Domain\Reports\Services\GeneralReportService;
 use App\Domain\Reports\Services\InternetUsageReportService;
 use App\Domain\Reports\Services\MineduAttendanceReportService;
 use App\Domain\Reports\Services\OperationalReportService;
+use App\Enums\ListaLleeEstado;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Http\Controllers\Controller;
@@ -35,6 +36,8 @@ class ReportController extends Controller
             'technology' => ['nullable', 'string', 'max:32'],
             'search' => ['nullable', 'string', 'max:120'],
             'active_only' => ['nullable', 'boolean'],
+            'lista_estado' => ['nullable', Rule::in(ListaLleeEstado::values())],
+            'zona' => ['nullable', 'string', 'max:40'],
         ]);
 
         return response()->json($this->operational->list($data));

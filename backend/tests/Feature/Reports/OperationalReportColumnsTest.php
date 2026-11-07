@@ -65,6 +65,9 @@ class OperationalReportColumnsTest extends TestCase
             'current_status' => MonitoringStatus::Caido->value,
             'followup_status' => FollowupStatus::EnGestion,
             'management_classification' => $classification ?? ManagementClassification::NewOutage,
+            'root_cause_code' => 'LE05',
+            'cause' => 'Corte de energía en el local educativo',
+            'minedu_reason' => 'CAIDA_ENLACE',
             'outage_text' => 'caído 15/09 GPON',
             'detail_text' => 'REINICIO DEL UPS',
             'management_scope' => 'PINT',
@@ -85,14 +88,23 @@ class OperationalReportColumnsTest extends TestCase
         $this->assertSame('GPON', $row['technology_type']);
         $this->assertSame('21/09/2026 12:12', $row['caida']);
         $this->assertSame('started_at', $row['caida_source']);
-        $this->assertSame('REINICIO DEL UPS', $row['detalle']);
+        $this->assertStringContainsString('REINICIO DEL UPS', (string) $row['detalle']);
         $this->assertSame('MARISCAL RAMON CASTILLA', $row['provincia']);
         $this->assertSame('SAN PABLO', $row['distrito']);
         $this->assertSame('387025', $row['codigo_local']);
         $this->assertStringContainsString('CID258632', (string) $row['presentacion_nombre_prtg']);
+        $this->assertSame('✖', $row['estado_prtg']);
+        $this->assertSame('Energia', $row['lista_estado']);
+        $this->assertSame('LE05', $row['root_cause_code']);
+        $this->assertSame('IQUITOS', $row['zona']);
+        $this->assertContains('ZONA', $response->json('columns'));
+        $this->assertNotContains('PEXT/PINT', $response->json('columns'));
+        $this->assertArrayHasKey('resumen_prtg', $response->json());
+        $this->assertArrayHasKey('by_zona', $response->json('resumen_prtg'));
+        $this->assertContains('IQUITOS', $response->json('zonas'));
     }
 
-    public function test_closing_preview_has_same_official_columns_including_tipo(): void
+    public function test_closing_preview_has_official_columns_through_zona(): void
     {
         $incident = $this->seedActive('P2P', ManagementClassification::ContactConfirmed);
 
@@ -102,14 +114,21 @@ class OperationalReportColumnsTest extends TestCase
         $row = $preview->json('rows.0');
 
         $this->assertSame($incident->id, $row['incident_id']);
-        $this->assertSame('P2P', $row['tipo']);
         $this->assertArrayHasKey('presentacion_nombre_prtg', $row);
+        $this->assertArrayHasKey('estado_prtg', $row);
+        $this->assertArrayHasKey('lista_estado', $row);
+        $this->assertArrayHasKey('root_cause_code', $row);
         $this->assertArrayHasKey('detalle', $row);
         $this->assertArrayHasKey('provincia', $row);
         $this->assertArrayHasKey('distrito', $row);
-        $this->assertArrayHasKey('codigo_local', $row);
+        $this->assertArrayHasKey('zona', $row);
         $this->assertSame('21/09/2026 12:12', $row['caida']);
-        $this->assertContains('TIPO', $preview->json('columns'));
+        $this->assertSame(
+            ['TSS', 'CID', 'LOCAL EDUCATIVO', 'PRESENTACION NOMBRE PRTG', 'ESTADO PRTG', 'ESTADO', 'CODIGO', 'CAUSA RAIZ', 'CAÍDA', 'DETALLE', 'PROVINCIA', 'DISTRITO', 'ZONA'],
+            $preview->json('columns')
+        );
+        $this->assertNotContains('PEXT/PINT', $preview->json('columns'));
+        $this->assertNotContains('TIPO', $preview->json('columns'));
     }
 
     public function test_technology_filter_is_server_side(): void

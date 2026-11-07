@@ -4,6 +4,8 @@ namespace App\Domain\Reports\Services;
 
 use App\Domain\Incidents\Support\RootCauseLegend;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
+use App\Domain\Reports\Support\ListaLleeEstadoResolver;
+use App\Enums\ListaLleeEstado;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Enums\RecoveryReviewStatus;
@@ -22,9 +24,10 @@ class OperationalReportService
      *   scope?: ?string,
      *   technology?: ?string,
      *   search?: ?string,
-     *   active_only?: bool
+     *   active_only?: bool,
+     *   lista_estado?: ?string
      * }  $filters
-     * @return array{rows: list<array<string, mixed>>, total: int, legend: list<array<string, string>>}
+     * @return array{rows: list<array<string, mixed>>, total: int, legend: list<array<string, string>>, resumen_prtg: array<string, mixed>}
      */
     public function list(array $filters = []): array
     {
@@ -33,21 +36,60 @@ class OperationalReportService
 
         $rows = $incidents->values()->map(fn (Incident $incident, int $index) => $this->mapRow($incident, $index + 1))->all();
 
+        // Resumen usa todas las filas (salvo filtro de zona); la lista puede acotar por ESTADO.
+        $resumenRows = $rows;
+        if (! empty($filters['zona'])) {
+            $zona = mb_strtoupper(trim((string) $filters['zona']));
+            $resumenRows = array_values(array_filter(
+                $resumenRows,
+                fn (array $row) => mb_strtoupper((string) ($row['zona'] ?? '')) === $zona
+            ));
+        }
+
+        $listRows = $resumenRows;
+        if (! empty($filters['lista_estado'])) {
+            $wanted = (string) $filters['lista_estado'];
+            $listRows = array_values(array_filter(
+                $listRows,
+                fn (array $row) => ($row['lista_estado'] ?? null) === $wanted
+            ));
+        }
+
+        $zonas = collect($rows)
+            ->pluck('zona')
+            ->filter(fn ($z) => is_string($z) && trim($z) !== '')
+            ->unique()
+            ->sort()
+            ->values()
+            ->all();
+
         return [
-            'rows' => $rows,
-            'total' => count($rows),
+            'rows' => $listRows,
+            'total' => count($listRows),
             'legend' => [
-                ['key' => ManagementClassification::ContactConfirmed->value, 'color' => 'red', 'label' => 'TIPO 1 · Para reporte'],
-                ['key' => ManagementClassification::LinkOutage->value, 'color' => 'orange', 'label' => 'TIPO 2 · Enlace P2P'],
-                ['key' => ManagementClassification::NoResponse->value, 'color' => 'yellow', 'label' => 'TIPO 3 · En espera / energía'],
-                ['key' => ManagementClassification::NewOutage->value, 'color' => 'yellow', 'label' => 'Amarillo · Caída activa'],
+                ['key' => '✖', 'color' => 'red', 'label' => '✖ PRTG caído / sin servicio'],
+                ['key' => '✔', 'color' => 'green', 'label' => '✔ PRTG operativo'],
+                ['key' => ListaLleeEstado::Energia->value, 'color' => 'amber', 'label' => 'Energia (ej. LE05)'],
+                ['key' => ListaLleeEstado::Averias->value, 'color' => 'red', 'label' => 'Averias'],
+                ['key' => ListaLleeEstado::DescartesEnCurso->value, 'color' => 'orange', 'label' => 'Descartes en curso'],
+                ['key' => ListaLleeEstado::Requerimiento->value, 'color' => 'violet', 'label' => 'Requerimiento'],
             ],
             'filters_applied' => $filters,
             'columns' => self::officialColumns(),
+            'lista_estados' => collect(ListaLleeEstado::cases())->map(fn (ListaLleeEstado $e) => [
+                'value' => $e->value,
+                'label' => $e->value,
+                'group' => $e->group(),
+                'tone' => $e->tone(),
+            ])->values()->all(),
+            'zonas' => $zonas,
+            'resumen_prtg' => $this->buildResumenPrtg($resumenRows),
         ];
     }
 
     /**
+     * Columnas del reporte LISTA DE LLEE: desde TSS hasta ZONA (sin PEXT/PINT).
+     *
      * @return list<string>
      */
     public static function officialColumns(): array
@@ -57,13 +99,15 @@ class OperationalReportService
             'CID',
             'LOCAL EDUCATIVO',
             'PRESENTACION NOMBRE PRTG',
+            'ESTADO PRTG',
+            'ESTADO',
+            'CODIGO',
+            'CAUSA RAIZ',
             'CAÍDA',
-            'TIPO',
             'DETALLE',
-            'PEXT/PINT',
             'PROVINCIA',
             'DISTRITO',
-            'CODIGO DE LOCAL',
+            'ZONA',
         ];
     }
 
@@ -75,7 +119,12 @@ class OperationalReportService
         $activeOnly = array_key_exists('active_only', $filters) ? (bool) $filters['active_only'] : true;
 
         $query = Incident::query()
-            ->with(['school', 'networkAssignment', 'sensor'])
+            ->with([
+                'school',
+                'networkAssignment',
+                'sensor',
+                'managements' => fn ($q) => $q->orderByDesc('id'),
+            ])
             ->when($activeOnly, function (Builder $q) {
                 $q->where(function (Builder $inner) {
                     // Amarillo: caída todavía activa. Rojo: incidencia grave abierta aunque PRTG ya subió.
@@ -200,6 +249,13 @@ class OperationalReportService
             }
         }
 
+        $listaEstado = ListaLleeEstadoResolver::resolve($incident);
+        $provincia = $apiLocation['provincia'] ?? $snapshotProvince;
+        $distrito = $apiLocation['distrito'] ?? $snapshotDistrict;
+        $rootCode = $incident->root_cause_code ? strtoupper(trim((string) $incident->root_cause_code)) : null;
+        $legendCause = $rootCode ? (RootCauseLegend::findByCode($rootCode)['cause'] ?? null) : null;
+        $rootCause = trim((string) ($incident->cause ?: $legendCause)) ?: null;
+
         return [
             'n' => $school?->current_sequence,
             'ordinal' => $ordinal,
@@ -207,6 +263,12 @@ class OperationalReportService
             'cid' => $assignment?->cid ?? ($snapshotNet['cid'] ?? null),
             'local_educativo' => $school?->local_educativo ?? ($snapshotSchool['local_educativo'] ?? null),
             'presentacion_nombre_prtg' => $nombrePrtg !== '' ? $nombrePrtg : null,
+            'estado_prtg' => ListaLleeEstadoResolver::prtgMark($incident),
+            'lista_estado' => $listaEstado->value,
+            'lista_estado_tone' => $listaEstado->tone(),
+            'lista_estado_group' => $listaEstado->group(),
+            'root_cause_code' => $rootCode,
+            'root_cause' => $rootCause,
             'outage_at' => $outageAt?->toIso8601String(),
             'caida' => $caida,
             'caida_source' => $outageAt ? 'started_at' : (filled($incident->outage_text) ? 'outage_text_legacy' : null),
@@ -217,8 +279,12 @@ class OperationalReportService
             'affected_wan_node' => $incident->affected_wan_node?->value,
             'is_link_outage' => $incident->isManualPartial(),
             'pext_pint' => $incident->management_scope?->value,
-            'provincia' => $apiLocation['provincia'] ?? $snapshotProvince,
-            'distrito' => $apiLocation['distrito'] ?? $snapshotDistrict,
+            'provincia' => $provincia,
+            'distrito' => $distrito,
+            'zona' => ListaLleeEstadoResolver::zona(
+                is_string($provincia) ? $provincia : null,
+                is_string($distrito) ? $distrito : null,
+            ),
             'prtg_province' => $apiLocation['prtg_province'],
             'prtg_district' => $apiLocation['prtg_district'],
             'admin_provincia' => $apiLocation['admin_provincia'] ?? $snapshotProvince,
@@ -226,8 +292,13 @@ class OperationalReportService
             'location_source' => $apiLocation['location_source'],
             'location_mismatch' => $apiLocation['location_mismatch'],
             'codigo_local' => $school?->codigo_local ?? ($snapshotSchool['codigo_local'] ?? null),
+            'clasificacion' => $school?->clasificacion,
+            'capacidad' => $assignment?->capacidad_mbps,
             'management_classification' => $classification?->value,
             'management_classification_label' => $classification?->label(),
+            'minedu_reason' => $incident->minedu_reason instanceof \App\Enums\MineduReason
+                ? $incident->minedu_reason->value
+                : $incident->minedu_reason,
             'color_key' => $incident->isOpenGrave()
                 ? 'red'
                 : ($incident->recovered_at === null ? 'yellow' : ($classification?->colorKey() ?? 'yellow')),
@@ -235,6 +306,166 @@ class OperationalReportService
             'started_at' => $incident->started_at?->toIso8601String(),
             'recovered_at' => $incident->recovered_at?->toIso8601String(),
             'activa' => $incident->recovered_at === null,
+        ];
+    }
+
+    /**
+     * Tablero RESUMEN PRTG (hoja del Excel LISTA DE LLEE).
+     *
+     * @param  list<array<string, mixed>>  $rows
+     * @return array{
+     *   date: string,
+     *   groups: list<array<string, mixed>>,
+     *   by_root_cause: list<array<string, mixed>>,
+     *   totals: array{up: int, down: int, all: int}
+     * }
+     */
+    public function buildResumenPrtg(array $rows): array
+    {
+        $byEstado = [];
+        foreach (ListaLleeEstado::resumenOrder() as $estado) {
+            $byEstado[$estado->value] = [
+                'estado' => $estado->value,
+                'group' => $estado->group(),
+                'tone' => $estado->tone(),
+                'up' => 0,
+                'down' => 0,
+                'total' => 0,
+                'cids_up' => [],
+                'cids_down' => [],
+            ];
+        }
+
+        $byCode = [];
+        foreach ($rows as $row) {
+            $estado = (string) ($row['lista_estado'] ?? '');
+            if ($estado === '' || $estado === ListaLleeEstado::Activo->value) {
+                continue;
+            }
+            if (! isset($byEstado[$estado])) {
+                $byEstado[$estado] = [
+                    'estado' => $estado,
+                    'group' => '',
+                    'tone' => 'slate',
+                    'up' => 0,
+                    'down' => 0,
+                    'total' => 0,
+                    'cids_up' => [],
+                    'cids_down' => [],
+                ];
+            }
+            $up = ($row['estado_prtg'] ?? '') === '✔';
+            $cid = (string) ($row['cid'] ?? $row['incident_id'] ?? '');
+            if ($up) {
+                $byEstado[$estado]['up']++;
+                if ($cid !== '') {
+                    $byEstado[$estado]['cids_up'][] = $cid;
+                }
+            } else {
+                $byEstado[$estado]['down']++;
+                if ($cid !== '') {
+                    $byEstado[$estado]['cids_down'][] = $cid;
+                }
+            }
+            $byEstado[$estado]['total']++;
+
+            $code = (string) ($row['root_cause_code'] ?? '');
+            if ($code === '') {
+                continue;
+            }
+            $codeKey = $estado.'|'.$code;
+            if (! isset($byCode[$codeKey])) {
+                $byCode[$codeKey] = [
+                    'code' => $code,
+                    'cause' => (string) ($row['root_cause'] ?? $code),
+                    'estado' => $estado,
+                    'up' => 0,
+                    'down' => 0,
+                    'total' => 0,
+                    'cids_up' => [],
+                    'cids_down' => [],
+                ];
+            }
+            if ($up) {
+                $byCode[$codeKey]['up']++;
+                if ($cid !== '') {
+                    $byCode[$codeKey]['cids_up'][] = $cid;
+                }
+            } else {
+                $byCode[$codeKey]['down']++;
+                if ($cid !== '') {
+                    $byCode[$codeKey]['cids_down'][] = $cid;
+                }
+            }
+            $byCode[$codeKey]['total']++;
+        }
+
+        $groups = [];
+        $subtotalUp = 0;
+        $subtotalDown = 0;
+        foreach (ListaLleeEstado::resumenOrder() as $estado) {
+            $row = $byEstado[$estado->value];
+            $row['cids_up'] = array_values(array_unique($row['cids_up']));
+            $row['cids_down'] = array_values(array_unique($row['cids_down']));
+            $groups[] = $row;
+            if ($estado->group() === 'Caídos') {
+                $subtotalUp += $row['up'];
+                $subtotalDown += $row['down'];
+            }
+        }
+
+        usort($byCode, fn ($a, $b) => $b['total'] <=> $a['total']);
+        $byRoot = array_map(function (array $row) {
+            $row['cids_up'] = array_values(array_unique($row['cids_up']));
+            $row['cids_down'] = array_values(array_unique($row['cids_down']));
+
+            return $row;
+        }, array_values($byCode));
+
+        $byZona = [];
+        foreach ($rows as $row) {
+            $estado = (string) ($row['lista_estado'] ?? '');
+            if ($estado === '' || $estado === ListaLleeEstado::Activo->value) {
+                continue;
+            }
+            $zona = trim((string) ($row['zona'] ?? 'Sin zona')) ?: 'Sin zona';
+            if (! isset($byZona[$zona])) {
+                $byZona[$zona] = ['zona' => $zona, 'up' => 0, 'down' => 0, 'total' => 0];
+            }
+            $up = ($row['estado_prtg'] ?? '') === '✔';
+            if ($up) {
+                $byZona[$zona]['up']++;
+            } else {
+                $byZona[$zona]['down']++;
+            }
+            $byZona[$zona]['total']++;
+        }
+        usort($byZona, fn ($a, $b) => $b['total'] <=> $a['total']);
+
+        $totalUp = array_sum(array_column($groups, 'up'));
+        $totalDown = array_sum(array_column($groups, 'down'));
+
+        return [
+            'date' => now('America/Lima')->format('d/m/Y'),
+            'title' => 'TABLERO EJECUTIVO · CONECTIVIDAD DE LLEE',
+            'groups' => $groups,
+            'caidos_subtotal' => [
+                'up' => $subtotalUp,
+                'down' => $subtotalDown,
+                'total' => $subtotalUp + $subtotalDown,
+            ],
+            'by_root_cause' => $byRoot,
+            'by_zona' => array_values($byZona),
+            'totals' => [
+                'up' => $totalUp,
+                'down' => $totalDown,
+                'all' => $totalUp + $totalDown,
+            ],
+            'legend' => [
+                'up' => '✔ EN VERDE: CONEXIÓN PRTG ACTIVA',
+                'down' => '✖ EN ROJO: CAÍDO EN PRTG',
+                'total' => 'TOTAL: ACTIVOS + CAÍDOS',
+            ],
         ];
     }
 
