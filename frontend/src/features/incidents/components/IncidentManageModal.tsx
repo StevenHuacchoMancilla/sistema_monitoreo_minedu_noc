@@ -2,7 +2,7 @@ import { useEffect, useId, useMemo, useRef, useState, type ReactNode } from 'rea
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, ExternalLink, MapPin, Phone, Radio, Timer, X } from 'lucide-react'
+import { Check, ChevronRight, Clock3, ExternalLink, History, MapPin, Phone, Radio, Timer, X } from 'lucide-react'
 import { endpoints } from '../../../api/endpoints'
 import { ClassificationBadge, FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
 import { Badge } from '../../../components/ui/SoftBadge'
@@ -14,27 +14,25 @@ import { inputClassName } from '../../../lib/uiTokens'
 import { formatDateTime, formatDuration } from '../../../lib/datetime'
 import { useBodyScrollLock } from '../../../lib/useBodyScrollLock'
 import { useNow } from '../../../lib/useNow'
-import type { ManagementPayload, MineduReason } from '../../reports/types/operationalReport'
+import type { MineduReason } from '../../reports/types/operationalReport'
 import { incidentCaseFilePath } from '../../history/api/historyApi'
 import { VoiceDictationButton } from '../../voice/components/VoiceDictationButton'
-import { FieldDispatchPanel } from './FieldDispatchPanel'
 import { VisitReportPanel } from './VisitReportPanel'
 import type { IncidentDetail } from '../../../types/api'
 import rootCauseLegend from '../data/rootCauseLegend.json' with { type: 'json' }
 
-type TabKey = 'summary' | 'management' | 'dispatch' | 'history'
+type TabKey = 'summary' | 'management' | 'history'
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'summary', label: 'Resumen' },
   { key: 'management', label: 'Contacto y gestión' },
-  { key: 'dispatch', label: 'Desplazamiento' },
   { key: 'history', label: 'Historial' },
 ]
 
 const TIMELINE_PAGE = 15
 
-const RESULT_OPTIONS: Array<{
-  value: ManagementPayload['classification']
+const MINEDU_RESULT_OPTIONS: Array<{
+  value: MineduReason
   label: string
   hint: string
   selected: string
@@ -42,30 +40,36 @@ const RESULT_OPTIONS: Array<{
   dot: string
 }> = [
   {
-    value: 'CONTACT_CONFIRMED',
-    label: 'TIPO 1',
-    hint: 'Para reporte',
+    value: 'CAIDA_ENLACE',
+    label: 'Caída de enlace',
+    hint: 'Incidencia / para reporte (rojo)',
     selected: 'border-red-500 bg-red-50 shadow-sm dark:border-red-500 dark:bg-red-950/40',
     radio: 'text-red-600',
     dot: 'bg-red-500',
   },
   {
-    value: 'LINK_OUTAGE',
-    label: 'TIPO 2',
-    hint: 'Caída solo de un enlace en P2P',
+    value: 'REQUERIMIENTO',
+    label: 'Requerimiento',
+    hint: 'Pedido o atención solicitada',
+    selected: 'border-violet-400 bg-violet-50 shadow-sm dark:border-violet-400 dark:bg-violet-950/35',
+    radio: 'text-violet-500',
+    dot: 'bg-violet-500',
+  },
+  {
+    value: 'QUEJA',
+    label: 'Queja',
+    hint: 'Queja o reclamo del colegio',
     selected: 'border-orange-400 bg-orange-50 shadow-sm dark:border-orange-400 dark:bg-orange-950/35',
     radio: 'text-orange-500',
     dot: 'bg-orange-500',
   },
-  {
-    value: 'NO_RESPONSE',
-    label: 'TIPO 3',
-    hint: 'Equipos apagados, corte de energía, sin respuesta',
-    selected: 'border-yellow-400 bg-yellow-50 shadow-sm dark:border-yellow-400 dark:bg-yellow-950/30',
-    radio: 'text-yellow-500',
-    dot: 'bg-yellow-400',
-  },
 ]
+
+/** Opción de contacto cuando no se habló con nadie del colegio. */
+const CONTACT_VIA_DESCARTES = 'DESCARTES' as const
+const CONTACT_DESCARTES_LABEL = 'Según descartes realizados'
+
+type ContactSelection = number | '' | typeof CONTACT_VIA_DESCARTES
 
 const panelClass =
   'rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900'
@@ -127,9 +131,8 @@ export function IncidentManageModal({
     queryFn: () => endpoints.incidentDetail(incidentId),
   })
 
-  const [classification, setClassification] = useState<ManagementPayload['classification'] | ''>('')
   const [scope, setScope] = useState<'' | 'PEXT' | 'PINT'>('')
-  const [contactId, setContactId] = useState<number | ''>('')
+  const [contactId, setContactId] = useState<ContactSelection>('')
   const [detailText, setDetailText] = useState('')
   const [observation, setObservation] = useState('')
   const [causeGroup, setCauseGroup] = useState('')
@@ -144,19 +147,27 @@ export function IncidentManageModal({
     if (!detail.data || hydrated.current) return
     hydrated.current = true
     const g = detail.data.gestion
-    const current = g.management_classification
-    setClassification(
-      current === 'CONTACT_CONFIRMED' || current === 'LINK_OUTAGE' || current === 'NO_RESPONSE' ? current : '',
-    )
+    const lastMgmt = detail.data.managements?.[0]
     setScope((g.management_scope as '' | 'PEXT' | 'PINT') || '')
-    setContactId(g.last_managed_contact_id ?? '')
+    if (
+      lastMgmt &&
+      !lastMgmt.contact_id &&
+      (lastMgmt.contact_role_snapshot === 'DESCARTES' ||
+        lastMgmt.contact_name_snapshot === CONTACT_DESCARTES_LABEL)
+    ) {
+      setContactId(CONTACT_VIA_DESCARTES)
+    } else {
+      setContactId(g.last_managed_contact_id ?? '')
+    }
     setDetailText(g.detail_text ?? '')
     setObservation('')
     setCauseGroup(g.root_cause_group_code ?? '')
     setCauseCode(g.root_cause_code ?? '')
     setCauseText(g.cause ?? '')
     setMineduReason(
-      g.minedu_reason === 'CAIDA_ENLACE' || g.minedu_reason === 'CAIDA_ENERGIA' || g.minedu_reason === 'REQUERIMIENTO'
+      g.minedu_reason === 'CAIDA_ENLACE' ||
+        g.minedu_reason === 'REQUERIMIENTO' ||
+        g.minedu_reason === 'QUEJA'
         ? g.minedu_reason
         : '',
     )
@@ -198,18 +209,20 @@ export function IncidentManageModal({
 
   const save = useMutation({
     mutationFn: () => {
-      if (!classification) throw new Error('Selecciona un resultado de gestión')
+      if (!mineduReason) throw new Error('Selecciona la razón MINEDU')
+      const viaDescartes = contactId === CONTACT_VIA_DESCARTES
       return endpoints.applyIncidentManagement(incidentId, {
-        classification,
+        classification: null,
         scope: scope || null,
         outage_text: null,
         detail: detailText || null,
         observation: observation || null,
-        contact_id: contactId === '' ? null : Number(contactId),
+        contact_id: viaDescartes || contactId === '' ? null : Number(contactId),
+        contact_via_descartes: viaDescartes,
         root_cause_group_code: causeGroup || null,
         root_cause_code: causeCode || null,
         cause: causeText || null,
-        minedu_reason: mineduReason || null,
+        minedu_reason: mineduReason,
       })
     },
     onSuccess: async (data) => {
@@ -351,14 +364,16 @@ export function IncidentManageModal({
                 selectedId={contactId}
                 onSelect={(id) => setContactId(id)}
               />
-              <VisitReportPanel
-                incidentId={incidentId}
-                ticket={data.ticket}
-                schoolName={data.colegio.local_educativo}
-                tss={data.colegio.current_sequence}
-                readOnly={readOnly}
-                onSaved={() => setSavedMsg('Visita técnica guardada')}
-              />
+              {data.incident.detection_source === 'PREVENTIVE' || data.incident.detection_source === 'MANUAL' ? (
+                <VisitReportPanel
+                  incidentId={incidentId}
+                  ticket={data.ticket}
+                  schoolName={data.colegio.local_educativo}
+                  tss={data.colegio.current_sequence}
+                  readOnly={readOnly}
+                  onSaved={() => setSavedMsg('Visita técnica guardada')}
+                />
+              ) : null}
               {readOnly ? (
                 <Panel title="Gestión">
                   <p className="text-[13px] text-slate-600 dark:text-slate-300">
@@ -371,9 +386,13 @@ export function IncidentManageModal({
               ) : (
                 <>
               <Panel title="Resultado de gestión">
-                <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Resultado de gestión">
-                  {RESULT_OPTIONS.map((opt) => {
-                    const on = classification === opt.value
+                <p className="mb-3 text-[12px] text-slate-500">
+                  Razón MINEDU del Anexo 30. La causa raíz define el diagnóstico técnico.
+                  Caída de enlace = incidencia para reporte (rojo).
+                </p>
+                <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Razón MINEDU">
+                  {MINEDU_RESULT_OPTIONS.map((opt) => {
+                    const on = mineduReason === opt.value
                     return (
                       <label
                         key={opt.value}
@@ -386,9 +405,9 @@ export function IncidentManageModal({
                         <input
                           type="radio"
                           className={`mt-1 ${opt.radio}`}
-                          name={`${titleId}-result`}
+                          name={`${titleId}-minedu`}
                           checked={on}
-                          onChange={() => setClassification(opt.value)}
+                          onChange={() => setMineduReason(opt.value)}
                         />
                         <span className="min-w-0">
                           <span className="flex items-center gap-2 text-[13px] font-bold tracking-wide text-slate-900 dark:text-slate-100">
@@ -477,18 +496,20 @@ export function IncidentManageModal({
                 })()}
               </Panel>
 
-              <MineduPanel
-                reason={mineduReason}
-                onChange={setMineduReason}
-                sla={detail.data?.sla}
-                disabled={readOnly}
-              />
-
               <Panel title="Detalle de la atención">
                 <div className="grid gap-3">
                   <FormField label="Contacto utilizado">
-                    <Select value={contactId} onChange={(e) => setContactId(e.target.value ? Number(e.target.value) : '')}>
+                    <Select
+                      value={contactId === '' ? '' : String(contactId)}
+                      onChange={(e) => {
+                        const v = e.target.value
+                        if (v === '') setContactId('')
+                        else if (v === CONTACT_VIA_DESCARTES) setContactId(CONTACT_VIA_DESCARTES)
+                        else setContactId(Number(v))
+                      }}
+                    >
                       <option value="">— Sin seleccionar —</option>
+                      <option value={CONTACT_VIA_DESCARTES}>{CONTACT_DESCARTES_LABEL}</option>
                       {data.contactos.map((c, idx) => (
                         <option key={c.id} value={c.id}>
                           {idx + 1}. {c.nombre ?? 'Sin nombre'} · {c.telefono ?? 's/n'}
@@ -540,15 +561,6 @@ export function IncidentManageModal({
             </div>
           ) : null}
 
-          {data && tab === 'dispatch' ? (
-            <FieldDispatchPanel
-              incidentId={incidentId}
-              active={recovered}
-              dispatch={data.field_dispatch}
-              history={data.field_dispatches ?? []}
-            />
-          ) : null}
-
           {data && tab === 'history' ? <HistoryTab data={data} incidentId={incidentId} onNavigate={onClose} /> : null}
         </div>
 
@@ -560,9 +572,9 @@ export function IncidentManageModal({
                 {save.error instanceof Error ? save.error.message : 'Error al guardar'}
               </span>
             ) : null}
-            {!savedMsg && !save.isError && !classification ? (
+            {!savedMsg && !save.isError && !mineduReason ? (
               <span className="text-slate-500 dark:text-slate-400">
-                Elige un resultado en <strong>Contacto y gestión</strong> para guardar.
+                Elige la <strong>razón MINEDU</strong> en Contacto y gestión para guardar.
               </span>
             ) : null}
           </div>
@@ -590,7 +602,7 @@ export function IncidentManageModal({
               >
                 Cerrar ticket
               </Button>
-              <Button variant="primary" disabled={!data || !classification} loading={save.isPending} onClick={() => save.mutate()}>
+              <Button variant="primary" disabled={!data || !mineduReason} loading={save.isPending} onClick={() => save.mutate()}>
                 Guardar gestión
               </Button>
             </>
@@ -665,6 +677,17 @@ function liveClock(sla: NonNullable<IncidentDetail['sla']>, now: number) {
   }
 }
 
+function ClockMetric({ label, value, accent }: { label: string; value: string; accent?: string }) {
+  return (
+    <div className="min-w-0 rounded-lg bg-slate-50 px-3 py-2 dark:bg-slate-950/80">
+      <p className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</p>
+      <p className={`mt-0.5 truncate text-[13px] font-semibold tabular-nums ${accent ?? 'text-slate-900 dark:text-slate-100'}`}>
+        {value}
+      </p>
+    </div>
+  )
+}
+
 function ClockStopBar({
   sla,
   disabled,
@@ -678,43 +701,77 @@ function ClockStopBar({
 }) {
   const now = useNow(1000)
   const live = liveClock(sla, now)
+  const paused = Boolean(sla.clock_paused)
+
   return (
-    <section className="mt-3 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-900">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div>
-          <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Parada de reloj</p>
-          <p className="mt-1 text-sm text-slate-700 dark:text-slate-200">
-            Total 24 h {formatClock(live.total)} · Efectiva 8:00–16:00 {formatClock(live.effective)} · Parada {formatClock(live.pause)}
-          </p>
-          {sla.applies ? (
-            <p className={`mt-0.5 text-sm font-semibold ${live.remaining < 0 ? 'text-red-600' : 'text-slate-900 dark:text-slate-100'}`}>
-              SLA del mes {formatClock(live.remaining)} · {sla.zone_label}
+    <section
+      className={`mt-3 overflow-hidden rounded-xl border ${
+        paused
+          ? 'border-amber-300/80 bg-amber-50/70 dark:border-amber-500/40 dark:bg-amber-950/25'
+          : 'border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900'
+      }`}
+    >
+      <div className="flex flex-col gap-3 p-3 sm:flex-row sm:items-stretch sm:justify-between">
+        <div className="min-w-0 flex-1">
+          <div className="mb-2 flex flex-wrap items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-600 uppercase dark:text-slate-300">
+              <Timer className="h-3.5 w-3.5" aria-hidden />
+              Parada de reloj
+            </span>
+            {paused ? (
+              <span className="rounded-full bg-amber-200/90 px-2 py-0.5 text-[10px] font-bold text-amber-950 dark:bg-amber-500/25 dark:text-amber-200">
+                En pausa
+              </span>
+            ) : (
+              <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[10px] font-bold text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300">
+                Corriendo
+              </span>
+            )}
+            {sla.applies ? (
+              <span
+                className={`ml-auto text-[12px] font-semibold tabular-nums ${
+                  live.remaining < 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-700 dark:text-slate-200'
+                }`}
+              >
+                SLA mes {formatClock(live.remaining)}
+                {sla.zone_label ? ` · ${sla.zone_label}` : ''}
+              </span>
+            ) : null}
+          </div>
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+            <ClockMetric label="Total 24 h" value={formatClock(live.total)} />
+            <ClockMetric label="Efectiva 8:00–16:00" value={formatClock(live.effective)} />
+            <ClockMetric
+              label="Tiempo en parada"
+              value={formatClock(live.pause)}
+              accent={paused || live.pause > 0 ? 'text-amber-800 dark:text-amber-300' : undefined}
+            />
+          </div>
+          {!sla.applies ? (
+            <p className="mt-2 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+              El SLA del mes se descuenta cuando la caída tiene razón MINEDU.
             </p>
-          ) : (
-            <p className="mt-0.5 text-[12px] text-slate-500">El SLA del mes se descuenta cuando la caída tiene razón MINEDU.</p>
-          )}
+          ) : null}
         </div>
         {!disabled ? (
-          <Button
-            type="button"
-            variant={sla.clock_paused ? 'secondary' : 'primary'}
-            loading={pending}
-            onClick={() => onClock(sla.clock_paused ? 'end' : 'start')}
-          >
-            <Timer className="h-4 w-4" aria-hidden />
-            {sla.clock_paused ? 'Reanudar reloj' : 'Iniciar parada de reloj'}
-          </Button>
+          <div className="flex shrink-0 items-center sm:pl-2">
+            <Button
+              type="button"
+              size="sm"
+              variant={paused ? 'secondary' : 'primary'}
+              loading={pending}
+              className="w-full sm:w-auto"
+              onClick={() => onClock(paused ? 'end' : 'start')}
+            >
+              <Timer className="h-4 w-4" aria-hidden />
+              {paused ? 'Reanudar reloj' : 'Iniciar parada'}
+            </Button>
+          </div>
         ) : null}
       </div>
     </section>
   )
 }
-
-const MINEDU_OPTIONS: Array<{ value: MineduReason; label: string; className: string }> = [
-  { value: 'CAIDA_ENLACE', label: 'Caída de enlace', className: 'border-sky-300 bg-sky-50 text-sky-900' },
-  { value: 'CAIDA_ENERGIA', label: 'Caída de energía', className: 'border-amber-300 bg-amber-50 text-amber-900' },
-  { value: 'REQUERIMIENTO', label: 'Requerimiento', className: 'border-slate-300 bg-slate-100 text-slate-900' },
-]
 
 function formatClock(seconds: number): string {
   const sign = seconds < 0 ? '−' : ''
@@ -723,53 +780,6 @@ function formatClock(seconds: number): string {
   const minutes = Math.floor((total % 3600) / 60)
   const secs = total % 60
   return `${sign}${hours} h ${String(minutes).padStart(2, '0')} min ${String(secs).padStart(2, '0')} s`
-}
-
-function MineduPanel({
-  reason,
-  onChange,
-  sla,
-  disabled,
-}: {
-  reason: '' | MineduReason
-  onChange: (value: '' | MineduReason) => void
-  sla: IncidentDetail['sla']
-  disabled: boolean
-}) {
-  const now = useNow(1000)
-  const live = useMemo(() => (sla ? liveClock(sla, now) : null), [now, sla])
-
-  return (
-    <Panel title="Reporte MINEDU" icon={<Timer className="h-4 w-4" aria-hidden />}>
-      <p className="mb-3 text-[12px] text-slate-500">
-        Elige una sola razón para el Anexo 30. El SLA del mes usa el tiempo efectivo, de 8:00 a 16:00.
-      </p>
-      <div className="grid gap-2 sm:grid-cols-3">
-        {MINEDU_OPTIONS.map((opt) => {
-          const selected = reason === opt.value
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              disabled={disabled}
-              onClick={() => onChange(selected ? '' : opt.value)}
-              className={`rounded-xl border px-3 py-3 text-left text-sm font-semibold transition ${
-                selected ? opt.className : 'border-slate-200 bg-white text-slate-600 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300'
-              }`}
-            >
-              {opt.label}
-            </button>
-          )
-        })}
-      </div>
-      {reason && sla && live ? (
-        <p className="mt-3 text-sm text-slate-600 dark:text-slate-300">
-          Total 24 h {formatClock(live.total)}. Efectiva {formatClock(live.effective)}. Quedan {formatClock(live.remaining)} del mes.
-          La parada de reloj está arriba del ticket, junto al resumen.
-        </p>
-      ) : null}
-    </Panel>
-  )
 }
 
 function SummaryBand({ data }: { data: IncidentDetail }) {
@@ -883,7 +893,7 @@ function ContactsPanel({
   onSelect,
 }: {
   contacts: IncidentDetail['contactos']
-  selectedId?: number | ''
+  selectedId?: ContactSelection
   onSelect?: (id: number) => void
 }) {
   return (
@@ -939,6 +949,9 @@ function RecentManagements({ managements }: { managements: NonNullable<IncidentD
               {m.scope ? <span className="font-semibold text-slate-600 dark:text-slate-300">{m.scope}</span> : null}
               {m.created_by_name ? <span className="text-slate-500">· {m.created_by_name}</span> : null}
             </div>
+            {m.contact_name_snapshot ? (
+              <p className="mt-1 text-slate-600 dark:text-slate-300">Contacto: {m.contact_name_snapshot}</p>
+            ) : null}
             {m.detail ? <p className="mt-1 text-slate-700 dark:text-slate-300">{m.detail}</p> : null}
             {m.observation ? <p className="text-slate-500 dark:text-slate-400">{m.observation}</p> : null}
           </li>
@@ -962,12 +975,14 @@ function HistoryTab({
 }) {
   const [visible, setVisible] = useState(TIMELINE_PAGE)
   const events = useMemo(() => data.timeline ?? [], [data.timeline])
-  const previous = data.historial.filter((h) => !h.es_actual).slice(0, 5)
+  const previous = data.historial.filter((h) => !h.es_actual).slice(0, 12)
+  const totalPrev = Math.max(0, data.antecedentes.incidencias_registradas - 1)
 
   return (
     <div className="space-y-4">
       <Panel
         title="Línea de tiempo"
+        icon={<History className="h-4 w-4 text-slate-500" aria-hidden />}
         action={
           <Link
             to={incidentCaseFilePath(incidentId)}
@@ -979,18 +994,34 @@ function HistoryTab({
         }
       >
         {events.length === 0 ? (
-          <p className="text-[13px] text-slate-500 dark:text-slate-400">Sin eventos registrados.</p>
+          <div className="flex flex-col items-center justify-center rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-8 text-center dark:border-slate-700 dark:bg-slate-950/60">
+            <Clock3 className="mb-2 h-8 w-8 text-slate-400 dark:text-slate-500" aria-hidden />
+            <p className="text-[13px] font-semibold text-slate-700 dark:text-slate-200">Sin eventos aún</p>
+            <p className="mt-1 max-w-sm text-[12px] text-slate-500 dark:text-slate-400">
+              Aquí aparecerán gestiones, cambios de estado y notas cuando se registren en esta caída.
+            </p>
+          </div>
         ) : (
-          <ol className="relative space-y-3 border-l border-slate-200 pl-4 dark:border-slate-700">
-            {events.slice(0, visible).map((e) => (
-              <li key={e.id} className="relative">
-                <span className="absolute top-1.5 -left-[21px] h-2 w-2 rounded-full bg-slate-400 ring-4 ring-white dark:bg-slate-500 dark:ring-slate-900" />
-                <div className="flex flex-wrap items-baseline gap-x-2 text-[12px]">
-                  <time className="font-semibold text-slate-500 tabular-nums">{formatDateTime(e.at)}</time>
-                  <span className="font-semibold text-slate-900 dark:text-slate-100">{e.title}</span>
-                  {e.actor ? <span className="text-slate-500">· {e.actor}</span> : null}
-                </div>
-                {e.detail ? <p className="mt-0.5 text-[12px] text-slate-600 dark:text-slate-300">{e.detail}</p> : null}
+          <ol className="relative space-y-0 border-l-2 border-slate-200 pl-5 dark:border-slate-700">
+            {events.slice(0, visible).map((e, idx) => (
+              <li key={e.id} className={`relative ${idx === 0 ? 'pt-0' : 'pt-3'}`}>
+                <span
+                  className={`absolute top-1.5 -left-[27px] h-3 w-3 rounded-full ring-4 ring-white dark:ring-slate-900 ${
+                    idx === 0 ? 'bg-blue-500' : 'bg-slate-400 dark:bg-slate-500'
+                  }`}
+                />
+                <article className="rounded-xl border border-slate-200 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950/50">
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-[12px]">
+                    <time className="font-semibold text-slate-500 tabular-nums dark:text-slate-400">
+                      {formatDateTime(e.at)}
+                    </time>
+                    <span className="font-semibold text-slate-900 dark:text-slate-100">{e.title}</span>
+                    {e.actor ? <span className="text-slate-500 dark:text-slate-400">· {e.actor}</span> : null}
+                  </div>
+                  {e.detail ? (
+                    <p className="mt-1 text-[12px] leading-snug text-slate-600 dark:text-slate-300">{e.detail}</p>
+                  ) : null}
+                </article>
               </li>
             ))}
           </ol>
@@ -1002,34 +1033,80 @@ function HistoryTab({
         ) : null}
       </Panel>
 
-      <Panel title={`Caídas anteriores (${data.antecedentes.incidencias_registradas})`}>
+      <Panel
+        title={`Caídas anteriores (${totalPrev})`}
+        icon={<Radio className="h-4 w-4 text-slate-500" aria-hidden />}
+        action={
+          data.colegio.school_id ? (
+            <Link
+              to={`/history/schools/${data.colegio.school_id}`}
+              onClick={onNavigate}
+              className="text-[12px] font-semibold text-blue-700 hover:underline dark:text-blue-300"
+            >
+              Ver todas
+            </Link>
+          ) : null
+        }
+      >
         {previous.length === 0 ? (
-          <p className="text-[13px] text-slate-500 dark:text-slate-400">No hay caídas anteriores para este CID.</p>
+          <div className="rounded-xl border border-dashed border-slate-200 bg-slate-50 px-4 py-6 text-center dark:border-slate-700 dark:bg-slate-950/60">
+            <p className="text-[13px] text-slate-500 dark:text-slate-400">No hay caídas anteriores para este CID.</p>
+          </div>
         ) : (
-          <ul className="divide-y divide-slate-100 text-[12px] dark:divide-slate-800">
-            {previous.map((h) => (
-              <li key={h.id} className="flex items-center justify-between gap-3 py-1.5">
-                <span className="tabular-nums text-slate-700 dark:text-slate-300">{formatDateTime(h.started_at)}</span>
-                <span className="text-slate-500">{h.duracion ?? '—'}</span>
-                <Link
-                  to={incidentCaseFilePath(h.id)}
-                  onClick={onNavigate}
-                  className="font-semibold text-blue-700 hover:underline dark:text-blue-300"
-                >
-                  Ver
-                </Link>
-              </li>
-            ))}
+          <ul className="space-y-2">
+            {previous.map((h) => {
+              const active = h.status === 'ACTIVA'
+              return (
+                <li key={h.id}>
+                  <Link
+                    to={incidentCaseFilePath(h.id)}
+                    onClick={onNavigate}
+                    className="group flex items-center gap-3 rounded-xl border border-slate-200 bg-white px-3 py-2.5 transition hover:border-blue-300 hover:bg-blue-50/50 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:border-slate-700 dark:bg-slate-950 dark:hover:border-blue-500/50 dark:hover:bg-blue-950/20"
+                  >
+                    <span
+                      className={`mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full ${
+                        active ? 'bg-red-500' : 'bg-emerald-500'
+                      }`}
+                      aria-hidden
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex flex-wrap items-center gap-2">
+                        <span className="text-[13px] font-semibold text-slate-900 tabular-nums dark:text-slate-100">
+                          {formatDateTime(h.started_at)}
+                        </span>
+                        <span
+                          className={`rounded-full px-2 py-0.5 text-[10px] font-bold ${
+                            active
+                              ? 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300'
+                              : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300'
+                          }`}
+                        >
+                          {active ? 'Activa' : 'Recuperada'}
+                        </span>
+                      </span>
+                      <span className="mt-0.5 flex flex-wrap gap-x-3 text-[12px] text-slate-500 dark:text-slate-400">
+                        <span className="inline-flex items-center gap-1">
+                          <Clock3 className="h-3 w-3" aria-hidden />
+                          {h.duracion ?? 'Sin duración'}
+                        </span>
+                        {h.recovered_at ? <span>Hasta {formatDateTime(h.recovered_at)}</span> : null}
+                        {h.followup_status ? <FollowupBadge status={h.followup_status} /> : null}
+                      </span>
+                    </span>
+                    <ChevronRight
+                      className="h-4 w-4 shrink-0 text-slate-400 transition group-hover:text-blue-600 dark:group-hover:text-blue-300"
+                      aria-hidden
+                    />
+                  </Link>
+                </li>
+              )
+            })}
           </ul>
         )}
-        {data.colegio.school_id ? (
-          <Link
-            to={`/history/schools/${data.colegio.school_id}`}
-            onClick={onNavigate}
-            className="mt-2 inline-block text-[12px] font-semibold text-blue-700 hover:underline dark:text-blue-300"
-          >
-            Historial completo del colegio
-          </Link>
+        {previous.length > 0 && totalPrev > previous.length ? (
+          <p className="mt-2 text-[11px] text-slate-500 dark:text-slate-400">
+            Mostrando {previous.length} de {totalPrev}. Usa “Ver todas” para el historial del colegio.
+          </p>
         ) : null}
       </Panel>
     </div>

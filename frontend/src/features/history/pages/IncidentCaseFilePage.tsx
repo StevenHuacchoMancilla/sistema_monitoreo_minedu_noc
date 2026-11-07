@@ -17,7 +17,6 @@ import {
   School,
   Ticket,
   TriangleAlert,
-  Truck,
   UserRound,
   Users,
   Wrench,
@@ -36,14 +35,12 @@ import {
 import { formatDate, formatDateTime, formatTime } from '../../../lib/datetime'
 import type { StatusTone } from '../../../lib/uiTokens'
 import { RecoveryReviewPanel } from '../../recoveries/components/RecoveryReviewPanel'
-import { FieldDispatchPanel } from '../../incidents/components/FieldDispatchPanel'
 import { fetchIncidentCaseFile } from '../api/historyApi'
 import type { CaseTimelineEvent, CaseTimelineGroup, IncidentCaseFile } from '../types/history'
 
 const GROUPS: Array<{ value: CaseTimelineGroup | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'Todo' },
   { value: 'GESTION', label: 'Gestión' },
-  { value: 'CAMPO', label: 'Campo' },
   { value: 'REVISION', label: 'Revisión' },
   { value: 'SISTEMA', label: 'Sistema' },
 ]
@@ -75,7 +72,7 @@ const ICONS: Record<string, LucideIcon> = {
   check: CircleCheck,
   activity: Activity,
   alert: TriangleAlert,
-  truck: Truck,
+  truck: Wrench,
   ticket: Ticket,
   lock: Lock,
 }
@@ -258,17 +255,8 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
               reviewStatus={recovery.review_status}
               reviewLabel={recovery.review_label}
               reviewedAt={recovery.reviewed_at}
-              hadFieldTech={recovery.had_field_tech || recovery.has_active_dispatch}
-              hasActiveDispatch={recovery.has_active_dispatch}
             />
           ) : null}
-
-          <FieldDispatchPanel
-            incidentId={incident.id}
-            active={Boolean(incident.recovered_at)}
-            dispatch={data.field_dispatch}
-            history={data.field_dispatches}
-          />
         </aside>
       </div>
     </>
@@ -302,7 +290,6 @@ function CaseSummary({ data }: { data: IncidentCaseFile }) {
           value={recovery.review_label ?? (recovery.requires_review ? 'Pendiente' : null)}
         />
         <Field label="Recuperó en gestión" value={recovery.recovered_while_managing ? 'Sí' : 'No'} />
-        <Field label="Técnico en campo" value={recovery.had_field_tech ? 'Sí' : 'No'} />
       </dl>
       {filled.length === 0 ? (
         <p className="text-[13px] text-slate-500">Aún no se registraron motivos ni notas para esta incidencia.</p>

@@ -177,7 +177,7 @@ export function TicketeraPage() {
     }
   }
 
-  const errorMessage = query.error instanceof ApiError ? query.error.message : query.error ? 'No se pudo leer Ticketera.' : null
+  const errorMessage = query.error instanceof ApiError ? query.error.message : query.error ? 'No se pudo leer el histórico.' : null
   const pages = Math.max(1, Math.ceil(tickets.length / PAGE))
   const page = Math.min(ticketPage, pages)
   const visibleTickets = tickets.slice((page - 1) * PAGE, page * PAGE)
@@ -219,7 +219,7 @@ export function TicketeraPage() {
         }
       />
 
-      {query.isLoading ? <LoadingState label="Leyendo TICKETERA…" /> : null}
+      {query.isLoading ? <LoadingState label="Cargando histórico…" /> : null}
       {errorMessage ? <ErrorState message={errorMessage} /> : null}
 
       {query.data && filters && prepared && stats ? (

@@ -73,7 +73,7 @@ export function VisitReportPanel({
   const save = useMutation({
     mutationFn: () =>
       endpoints.saveVisit(incidentId, {
-        opened_at: preventive ? openedAt || null : undefined,
+        opened_at: undefined,
         restored_at: preventive ? undefined : restoredAt || null,
         closed_at: closedAt || null,
         arrived_at: arrivedAt || null,
@@ -107,11 +107,11 @@ export function VisitReportPanel({
             {ticket.kind_label}
             {' · '}
             {ticket.status === 'CERRADO' ? 'Cerrado' : 'Abierto'}
+            {ticket.opened_at ? ' · la hora de generación ya quedó registrada' : ''}
           </>
         ) : (
-          'Al guardar se genera el código TGS del ticket.'
+          'La hora de generación queda registrada al crear el ticket.'
         )}
-        {' '}Este detalle es la columna Detalle de Evento de la ticketera.
       </p>
       <div className="grid gap-3 md:grid-cols-2">
         <FormField label="Institución educativa">
@@ -129,11 +129,10 @@ export function VisitReportPanel({
         <FormField label="Motivo de la visita" className="md:col-span-2">
           <Input value={reason} disabled={readOnly} onChange={(event) => setReason(event.target.value)} />
         </FormField>
-        {preventive ? (
-          <FormField label="Hora de inicio">
-            <Input type="datetime-local" value={openedAt} disabled={readOnly} onChange={(event) => setOpenedAt(event.target.value)} />
-          </FormField>
-        ) : (
+        <FormField label="Hora de generación">
+          <Input type="datetime-local" value={openedAt} readOnly />
+        </FormField>
+        {preventive ? null : (
           <FormField label="Hora de restablecimiento">
             <Input type="datetime-local" value={restoredAt} disabled={readOnly} onChange={(event) => setRestoredAt(event.target.value)} />
           </FormField>

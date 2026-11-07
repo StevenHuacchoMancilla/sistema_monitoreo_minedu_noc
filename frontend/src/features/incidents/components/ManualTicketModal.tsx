@@ -28,7 +28,6 @@ export function ManualTicketModal({
 }) {
   const [q, setQ] = useState('')
   const [kind, setKind] = useState<TicketKind>('CORRECTIVO')
-  const [openedAt, setOpenedAt] = useState('')
   const [detail, setDetail] = useState('')
   const [reason, setReason] = useState<'' | MineduReason>('')
   const [causeGroup, setCauseGroup] = useState('')
@@ -51,7 +50,6 @@ export function ManualTicketModal({
         ? endpoints.createPreventiveTicket({
             q: q.trim(),
             detail: detail || null,
-            opened_at: openedAt || null,
             minedu_reason: reason || null,
             root_cause_group_code: causeGroup,
             root_cause_code: causeCode,
@@ -92,8 +90,8 @@ export function ManualTicketModal({
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Registrar ticket</h2>
         <p className="mt-1 text-sm text-slate-500">
           {kind === 'PREVENTIVO'
-            ? 'Mantenimiento preventivo con el colegio operativo. Se genera un código TGS y pasa a gestión, sin aparecer en caídas.'
-            : 'Correctivo: caída que no llegó por PRTG. Si el colegio ya está caído, se continúa ese ticket.'}
+            ? 'Mantenimiento preventivo con el colegio operativo. Al generar, la hora del ticket es este momento y se crea el código TGS.'
+            : 'Mantenimiento correctivo cargado a mano. Al generar, la hora del ticket es este momento. Si el colegio ya está caído en PRTG, se continúa ese ticket.'}
         </p>
         <div className="mt-4 grid gap-3">
           <FormField label="Tipo de ticket">
@@ -139,15 +137,10 @@ export function ManualTicketModal({
             <Select value={reason} onChange={(event) => setReason(event.target.value as '' | MineduReason)}>
               <option value="">— No aplica / sin razón —</option>
               <option value="CAIDA_ENLACE">Caída de enlace</option>
-              <option value="CAIDA_ENERGIA">Caída de energía</option>
               <option value="REQUERIMIENTO">Requerimiento</option>
+              <option value="QUEJA">Queja</option>
             </Select>
           </FormField>
-          {kind === 'PREVENTIVO' ? (
-            <FormField label="Hora de inicio">
-              <Input type="datetime-local" value={openedAt} onChange={(event) => setOpenedAt(event.target.value)} />
-            </FormField>
-          ) : null}
           <FormField label="Detalle">
             <Input value={detail} onChange={(event) => setDetail(event.target.value)} placeholder={kind === 'PREVENTIVO' ? 'Motivo del mantenimiento' : 'Cómo se enteraron de la caída'} />
           </FormField>
@@ -164,9 +157,7 @@ export function ManualTicketModal({
           {!found ? (
             <Button type="submit" loading={lookup.isPending}>Buscar colegio</Button>
           ) : (
-            <Button type="submit" loading={create.isPending}>
-              {kind === 'PREVENTIVO' ? 'Generar ticket preventivo' : 'Crear ticket'}
-            </Button>
+            <Button type="submit" loading={create.isPending}>Generar ticket</Button>
           )}
         </div>
       </form>

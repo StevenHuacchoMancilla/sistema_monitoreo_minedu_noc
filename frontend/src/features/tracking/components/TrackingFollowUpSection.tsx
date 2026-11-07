@@ -107,7 +107,7 @@ export function TrackingFollowUpSection({
     )
   }
   if (!data) {
-    return <EmptyState title="Sin Tracking" description="Guarda una gestión TIPO 1/2/3 para abrir el seguimiento." />
+    return <EmptyState title="Sin Tracking" description="Guarda una gestión con razón MINEDU para abrir el seguimiento." />
   }
 
   return (

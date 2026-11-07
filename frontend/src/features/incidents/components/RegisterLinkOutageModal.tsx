@@ -85,7 +85,9 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
     mutationFn: () => {
       if (!selectedSchoolId) throw new Error('Selecciona un colegio')
       if (!node) throw new Error('Selecciona el nodo afectado')
-      if (!classification) throw new Error('Selecciona TIPO 1, 2 o 3')
+      if (!classification || classification === 'COMPLAINT') {
+        throw new Error('Selecciona TIPO 1, 2 o 3')
+      }
       return endpoints.createManualPartial({
         school_id: selectedSchoolId,
         affected_wan_node: node,

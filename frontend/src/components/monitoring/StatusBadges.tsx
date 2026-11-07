@@ -13,10 +13,10 @@ export function FollowupBadge({ status }: { status?: string | null }) {
 
 const CLASSIFICATION_LABELS: Record<string, string> = {
   NEW_OUTAGE: 'Nueva caída',
-  CONTACT_CONFIRMED: 'TIPO 1',
-  LINK_OUTAGE: 'TIPO 2',
-  NO_RESPONSE: 'TIPO 3',
-  COMPLAINT: 'Queja / reclamo',
+  CONTACT_CONFIRMED: 'Caída de enlace',
+  LINK_OUTAGE: 'Requerimiento',
+  NO_RESPONSE: 'Sin respuesta',
+  COMPLAINT: 'Queja',
   UNCLASSIFIED: 'Sin clasificar',
 }
 

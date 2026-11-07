@@ -131,6 +131,8 @@ export type OutageRow = {
   is_link_outage?: boolean
   /** El Ping de esta caída pasó de advertencia (parcial) a caído. */
   escalated_from_partial?: boolean
+  /** Momento en que pasó de parcial a caído (para etiqueta Reciente). */
+  escalated_at?: string | null
   last_check: string | null
   contacto: string | null
   telefono: string | null
@@ -138,6 +140,7 @@ export type OutageRow = {
   telefono_masked?: string | null
   reincidente_count?: number
   reincidente?: boolean
+  ticket_code?: string | null
   glpi_ticket?: string | null
   responsible_area?: string | null
   reopened_from_management?: boolean
@@ -244,6 +247,7 @@ export type IncidentDetail = {
     started_at?: string | null
     recovered_at?: string | null
     followup_status?: string | null
+    detection_source?: string | null
   }
   estado: {
     estado_prtg: string | null
@@ -382,7 +386,7 @@ export type IncidentDetail = {
     cause: string | null
     root_cause_group_code?: string | null
     root_cause_code?: string | null
-    minedu_reason?: 'CAIDA_ENLACE' | 'CAIDA_ENERGIA' | 'REQUERIMIENTO' | null
+    minedu_reason?: 'CAIDA_ENLACE' | 'CAIDA_ENERGIA' | 'REQUERIMIENTO' | 'QUEJA' | null
     minedu_reason_label?: string | null
     last_contact_at: string | null
   }
