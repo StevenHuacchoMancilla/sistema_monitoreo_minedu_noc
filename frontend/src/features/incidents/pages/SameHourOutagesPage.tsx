@@ -101,19 +101,19 @@ export function SameHourOutagesPage() {
                   event.preventDefault()
                   apply.mutate({
                     incident_ids: ids,
-                    minedu_reason: reason[index] ?? 'CAIDA_ENERGIA',
+                    minedu_reason: reason[index] ?? 'CAIDA_ENLACE',
                     detail: detail[index] || null,
                   })
                 }}
               >
                 <FormField label="Motivo del grupo" className="min-w-56">
                   <Select
-                    value={reason[index] ?? 'CAIDA_ENERGIA'}
+                    value={reason[index] ?? 'CAIDA_ENLACE'}
                     onChange={(event) => setReason((prev) => ({ ...prev, [index]: event.target.value as MineduReason }))}
                   >
-                    <option value="CAIDA_ENERGIA">Caída de energía</option>
                     <option value="CAIDA_ENLACE">Caída de enlace</option>
                     <option value="REQUERIMIENTO">Requerimiento</option>
+                    <option value="QUEJA">Queja</option>
                   </Select>
                 </FormField>
                 <FormField label="Detalle común" className="min-w-72 flex-1">
@@ -121,7 +121,7 @@ export function SameHourOutagesPage() {
                     className="h-9 w-full rounded-lg border border-slate-200 px-3 text-sm dark:border-slate-700 dark:bg-slate-950"
                     value={detail[index] ?? ''}
                     onChange={(event) => setDetail((prev) => ({ ...prev, [index]: event.target.value }))}
-                    placeholder="Corte de energía en la zona"
+                    placeholder="Detalle común del grupo"
                   />
                 </FormField>
                 <Button type="submit" disabled={ids.length < 2} loading={apply.isPending}>

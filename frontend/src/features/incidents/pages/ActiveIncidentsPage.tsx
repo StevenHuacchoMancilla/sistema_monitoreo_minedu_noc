@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Clock3, Eye, History, Hourglass, Network, RefreshCw, Sparkles, SquarePen, TriangleAlert, Wrench } from 'lucide-react'
+import { Clock3, Eye, History, Hourglass, ImageDown, Network, RefreshCw, Sparkles, SquarePen, TriangleAlert, Wrench } from 'lucide-react'
 import { useAuth } from '../../auth/context/AuthContext'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
@@ -35,6 +35,7 @@ import { LocationMismatchBadge } from '../../locations/components/LocationMismat
 import { IncidentManageModal } from '../components/IncidentManageModal'
 import { RegisterLinkOutageModal } from '../components/RegisterLinkOutageModal'
 import { ManualTicketModal } from '../components/ManualTicketModal'
+import { downloadMassOutagePng } from '../lib/downloadMassOutagePng'
 import type { OutageRow } from '../../../types/api'
 
 const outageTd = `${tdClassName} !align-top`
@@ -79,6 +80,26 @@ function inManagement(row: OutageRow): boolean {
   return Boolean(row.in_management) || Boolean(row.reopened_from_management) || MANAGING.has(row.followup_status ?? '')
 }
 
+const RECENT_DOWN_MINUTES = 30
+
+/**
+ * Reciente = Ping CAÍDO hace menos de 30 min.
+ * Si venía de parcial/intermitente, se mira la hora en que pasó a caído (no el inicio del amarillo).
+ */
+function isRecentFullDown(row: OutageRow, nowMs: number): boolean {
+  if (row.estado_prtg !== 'CAIDO') return false
+  const escalatedSeconds = elapsedSeconds(row.escalated_at, nowMs)
+  if (escalatedSeconds !== null) {
+    return escalatedSeconds < RECENT_DOWN_MINUTES * 60
+  }
+  const seconds = elapsedSeconds(downClock(row, 'current_down'), nowMs)
+  return seconds !== null && seconds < RECENT_DOWN_MINUTES * 60
+}
+
+function isPartialRow(row: OutageRow): boolean {
+  return row.estado_prtg === 'PARCIAL'
+}
+
 function bucketOf(seconds: number | null): DurationBucket {
   if (seconds === null) return ''
   if (seconds < NEW_MINUTES * 60) return 'new'
@@ -105,6 +126,9 @@ export function ActiveIncidentsPage({
   durationSource = 'incident',
   showManagementTag = false,
   showManagementFilter = false,
+  source = 'outages',
+  clockTitle,
+  durationCaption = 'Fallo por PRTG',
 }: {
   title?: string
   description?: string
@@ -119,6 +143,10 @@ export function ActiveIncidentsPage({
   durationSource?: 'incident' | 'current_down'
   showManagementTag?: boolean
   showManagementFilter?: boolean
+  /** outages = caídas de este momento. managing = tickets abiertos en gestión. */
+  source?: 'outages' | 'managing'
+  clockTitle?: string
+  durationCaption?: string
 }) {
   const [searchParams] = useSearchParams()
   const [search, setSearch] = useState('')
@@ -136,6 +164,8 @@ export function ActiveIncidentsPage({
   const [manageId, setManageId] = useState<number | null>(null)
   const [linkOutageOpen, setLinkOutageOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
+  const [exportingPartials, setExportingPartials] = useState(false)
+  const [exportPartialError, setExportPartialError] = useState<string | null>(null)
   const client = useQueryClient()
   const { user } = useAuth()
   const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
@@ -163,7 +193,8 @@ export function ActiveIncidentsPage({
     setPage(1)
   }, [searchParams])
 
-  const outages = useOutages(useDebouncedValue(search.trim()), 30_000)
+  const outages = useOutages(useDebouncedValue(search.trim()), 30_000, source)
+  const openedLabel = clockTitle ?? (durationSource === 'current_down' ? 'Caída actual' : 'Caída')
   const summary = useDashboardSummary(30_000)
   const { prtg } = useManualSync()
   const syncing = prtg.isPending
@@ -211,6 +242,15 @@ export function ActiveIncidentsPage({
     })
     if (durationSource !== 'current_down') return filtered
     return [...filtered].sort((a, b) => {
+      // 1) Parciales (amarillos) siempre arriba.
+      const aPartial = isPartialRow(a) ? 1 : 0
+      const bPartial = isPartialRow(b) ? 1 : 0
+      if (bPartial !== aPartial) return bPartial - aPartial
+      // 2) Caídos recientes (< 30 min) después de los parciales.
+      const aRecent = isRecentFullDown(a, now) ? 1 : 0
+      const bRecent = isRecentFullDown(b, now) ? 1 : 0
+      if (bRecent !== aRecent) return bRecent - aRecent
+      // 3) Más nueva primero.
       const aMs = Date.parse(downClock(a, 'current_down') ?? '')
       const bMs = Date.parse(downClock(b, 'current_down') ?? '')
       const aTime = Number.isNaN(aMs) ? 0 : aMs
@@ -254,6 +294,43 @@ export function ActiveIncidentsPage({
     void summary.refetch()
   }
 
+  const partialRows = useMemo(() => {
+    if (title !== 'Caídas totales') return []
+    return scoped.filter((row) => row.estado_prtg === 'PARCIAL')
+  }, [scoped, title])
+
+  const exportPartials = async () => {
+    if (partialRows.length === 0) {
+      setExportPartialError('No hay parciales (amarillos) para exportar.')
+      return
+    }
+    setExportingPartials(true)
+    setExportPartialError(null)
+    try {
+      await downloadMassOutagePng({
+        nodo: 'Parciales actuales',
+        variant: 'partial',
+        rows: partialRows.map((row) => ({
+          tss: row.tss,
+          cid: row.cid,
+          local_educativo: row.local_educativo,
+          provincia: row.provincia,
+          distrito: row.distrito,
+          tecnologia: row.tecnologia,
+          down_started_at: downClock(row, durationSource),
+          duration_label:
+            row.prtg_down_since_raw ??
+            row.duration_label ??
+            formatDuration(elapsedSeconds(downClock(row, durationSource), now)),
+        })),
+      })
+    } catch (err) {
+      setExportPartialError(err instanceof Error ? err.message : 'No se pudo exportar.')
+    } finally {
+      setExportingPartials(false)
+    }
+  }
+
   return (
     <AppLayout
       bare
@@ -265,42 +342,65 @@ export function ActiveIncidentsPage({
         icon={<TriangleAlert className="h-5 w-5 text-red-600 dark:text-red-400" aria-hidden />}
         title={title}
         badges={
-          <Badge tone="danger">
-            {kpis.total.toLocaleString('es-PE')} {kpis.total === 1 ? 'activa' : 'activas'}
+          <Badge tone={source === 'managing' ? 'info' : 'danger'}>
+            {kpis.total.toLocaleString('es-PE')} {source === 'managing' ? (kpis.total === 1 ? 'abierto' : 'abiertos') : (kpis.total === 1 ? 'activa' : 'activas')}
           </Badge>
         }
         description={description}
         actions={
-          <>
+          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
             <span
-              className="text-[12px] font-medium text-slate-500 tabular-nums dark:text-slate-400"
+              className="text-[11px] font-medium text-slate-500 tabular-nums dark:text-slate-400"
               title="Hora de la última sincronización PRTG finalizada"
             >
-              Última sync PRTG: {lastPrtgSync ? formatTime(lastPrtgSync) : '—'}
+              Sync PRTG {lastPrtgSync ? formatTime(lastPrtgSync) : '—'}
             </span>
-            {canManage && title === 'Caídas totales' ? (
-              <>
-                <Button size="sm" variant="secondary" onClick={() => setManualOpen(true)}>
-                  Registrar ticket
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              {title === 'Caídas totales' ? (
+                <Button
+                  size="sm"
+                  variant="secondary"
+                  loading={exportingPartials}
+                  disabled={partialRows.length === 0}
+                  title="Exporta todos los parciales (amarillos) de PRTG"
+                  onClick={() => void exportPartials()}
+                >
+                  <ImageDown className="h-3.5 w-3.5" aria-hidden />
+                  Parciales{partialRows.length > 0 ? ` (${partialRows.length})` : ''}
                 </Button>
-                <Button size="sm" variant="secondary" onClick={() => setLinkOutageOpen(true)}>
-                  <Network className="h-3.5 w-3.5" aria-hidden />
-                  Caída de enlace
-                </Button>
-              </>
+              ) : null}
+              {canManage && title === 'Caídas totales' ? (
+                <>
+                  <Button size="sm" variant="secondary" onClick={() => setManualOpen(true)}>
+                    Registrar ticket
+                  </Button>
+                  <Button size="sm" variant="secondary" onClick={() => setLinkOutageOpen(true)}>
+                    <Network className="h-3.5 w-3.5" aria-hidden />
+                    Caída de enlace
+                  </Button>
+                </>
+              ) : null}
+              <Button size="sm" onClick={refresh} loading={outages.isFetching} aria-label="Refrescar caídas activas">
+                {!outages.isFetching ? <RefreshCw className="h-3.5 w-3.5" aria-hidden /> : null}
+                Refrescar
+              </Button>
+            </div>
+            {exportPartialError ? (
+              <span className="text-[12px] text-red-600 dark:text-red-300">{exportPartialError}</span>
             ) : null}
-            <Button size="sm" onClick={refresh} loading={outages.isFetching} aria-label="Refrescar caídas activas">
-              {!outages.isFetching ? <RefreshCw className="h-3.5 w-3.5" aria-hidden /> : null}
-              Refrescar
-            </Button>
-          </>
+          </div>
         }
       />
 
       <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-        <MetricCard label="Total activas" value={kpis.total} icon={<TriangleAlert className="h-4 w-4" />} tone="danger" />
         <MetricCard
-          label={durationSource === 'current_down' ? `Esta caída < ${NEW_MINUTES} min` : `Nuevas < ${NEW_MINUTES} min`}
+          label={source === 'managing' ? 'Total abiertos' : 'Total activas'}
+          value={kpis.total}
+          icon={<TriangleAlert className="h-4 w-4" />}
+          tone={source === 'managing' ? 'info' : 'danger'}
+        />
+        <MetricCard
+          label={source === 'managing' ? `Abiertos < ${NEW_MINUTES} min` : durationSource === 'current_down' ? `Esta caída < ${NEW_MINUTES} min` : `Nuevas < ${NEW_MINUTES} min`}
           value={kpis.new}
           icon={<Sparkles className="h-4 w-4" />}
           tone="info"
@@ -414,7 +514,10 @@ export function ActiveIncidentsPage({
           kpis.total === 0 && !search ? (
             <EmptyState title={emptyTitle} description={emptyDescription} />
           ) : (
-            <EmptyState title="Sin resultados" description="Ninguna caída activa coincide con los filtros." />
+            <EmptyState
+              title="Sin resultados"
+              description={source === 'managing' ? 'Ningún ticket en gestión coincide con los filtros.' : 'Ninguna caída activa coincide con los filtros.'}
+            />
           )
         ) : null}
 
@@ -445,12 +548,14 @@ export function ActiveIncidentsPage({
                       <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">N° colegio</span>
                     </th>
                     <th className={thClassName}>
-                      <span className="block">{durationSource === 'current_down' ? 'Caída actual' : 'Caída'}</span>
+                      <span className="block">{openedLabel}</span>
                       <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
                     </th>
                     <th className={thClassName}>
                       <span className="block">Duración</span>
-                      <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">Fallo por PRTG</span>
+                      <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">
+                        {title === 'Caídas totales' ? 'Fallo por PRTG' : durationCaption}
+                      </span>
                     </th>
                     <th className={thClassName}>Seguimiento</th>
                     <th className={thClassName}>Nodo/POP</th>
@@ -469,6 +574,7 @@ export function ActiveIncidentsPage({
                       now={now}
                       canManage={canManage}
                       durationSource={durationSource}
+                      durationCaption={durationCaption}
                       showManagementTag={showManagementTag}
                       onManage={setManageId}
                     />
@@ -529,24 +635,43 @@ function OutageTableRow({
   now,
   canManage,
   durationSource,
+  durationCaption,
   onManage,
 }: {
   row: OutageRow
   now: number
   canManage: boolean
   durationSource: 'incident' | 'current_down'
+  durationCaption: string
   showManagementTag?: boolean
   onManage: (id: number) => void
 }) {
   const clock = downClock(row, durationSource)
   const seconds = elapsedSeconds(clock, now)
   const bucket = bucketOf(seconds)
+  const isRecentDown = isRecentFullDown(row, now)
+  const prtgDuration = row.prtg_down_since_raw?.trim() || null
 
   return (
-    <tr className={`${trClassName} group`}>
+    <tr className={`${trClassName} group ${isRecentDown ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
       <td className={outageTd}>
         <div className="flex min-w-0 flex-col items-start gap-1">
-          <PrtgStatusBadge status={row.estado_prtg} />
+          <div className="flex flex-wrap items-center gap-1">
+            <PrtgStatusBadge status={row.estado_prtg} />
+            {isRecentDown ? (
+              <Badge
+                tone="danger"
+                className="!text-[10px]"
+                title={
+                  row.escalated_at
+                    ? 'Pasó de parcial a caído hace menos de 30 minutos'
+                    : 'Caído hace menos de 30 minutos'
+                }
+              >
+                Reciente
+              </Badge>
+            ) : null}
+          </div>
           {row.is_link_outage ? (
             <Badge tone="warning" className="!text-[10px]" title={row.affected_wan_node_label ?? undefined}>
               Enlace {row.affected_wan_node ?? 'parcial'}
@@ -560,7 +685,7 @@ function OutageTableRow({
           {row.local_educativo ?? '—'}
         </Truncate>
         <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
-          {[row.codigo_local, row.tecnologia].filter(Boolean).join(' · ') || '—'}
+          {[row.ticket_code, row.codigo_local, row.tecnologia].filter(Boolean).join(' · ') || '—'}
         </span>
       </td>
       <td className={outageTd}>
@@ -579,14 +704,12 @@ function OutageTableRow({
         <IsoDateTimeCell value={clock} />
       </td>
       <td className={`${outageTd} font-semibold tabular-nums ${DURATION_CLASS[bucket]}`}>
-        <span className="block truncate whitespace-nowrap" title={row.prtg_down_since_raw ?? undefined}>
-          {row.duration_label ?? formatDuration(seconds)}
+        <span
+          className="block truncate whitespace-nowrap"
+          title={prtgDuration ? `Fallo por PRTG: ${prtgDuration}` : durationCaption}
+        >
+          {prtgDuration ?? row.duration_label ?? formatDuration(seconds)}
         </span>
-        {row.prtg_down_since_raw ? (
-          <span className="block truncate text-[10px] font-normal text-slate-400" title="Texto PRTG Fallo por">
-            PRTG: {row.prtg_down_since_raw}
-          </span>
-        ) : null}
       </td>
       <td className={outageTd}>
         <div className="flex min-w-0 flex-col items-start gap-1">

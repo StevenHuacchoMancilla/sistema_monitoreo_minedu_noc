@@ -45,8 +45,6 @@ export type RecoveredRow = {
 export type RecoveryReviewAction =
   | 'ACKNOWLEDGE'
   | 'CONTINUE_MONITORING'
-  | 'CONTINUE_ONSITE'
-  | 'CANCEL_DISPATCH'
   | 'ADD_NOTE'
 
 export type RecoveredListResponse = {

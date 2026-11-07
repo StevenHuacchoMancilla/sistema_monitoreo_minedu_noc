@@ -7,10 +7,10 @@ import {
   Clock3,
   Eye,
   History,
+  ImageDown,
   Phone,
   PhoneOff,
   TriangleAlert,
-  Truck,
   Wrench,
 } from 'lucide-react'
 import { AppLayout } from '../../../layouts/AppLayout'
@@ -43,8 +43,41 @@ import { useManualSync } from '../../dashboard/hooks/useDashboard'
 import { PrtgLocationFilterFields } from '../../locations/components/PrtgLocationFilterFields'
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
 import { incidentCaseFilePath } from '../../history/api/historyApi'
+import { downloadRestorationsPng } from '../../restorations/lib/downloadRestorationsPng'
+import type { RestorationRow } from '../../restorations/types'
 import { fetchRecoveredIncidents, fetchRecoveredSummary } from '../api/recoveriesApi'
 import type { RecoveredRow } from '../types/recoveries'
+
+function toRestorationRows(rows: RecoveredRow[], nowMs: number): RestorationRow[] {
+  return rows.map((row) => {
+    const recoveredMs = row.recovered_at ? new Date(row.recovered_at.replace(' ', 'T')).getTime() : NaN
+    const isRecent = Number.isFinite(recoveredMs) && recoveredMs <= nowMs && nowMs - recoveredMs < 10 * 60 * 1000
+    return {
+      id: `restored-${row.id}`,
+      kind: 'restoration' as const,
+      incident_id: row.id,
+      school_id: row.school_id,
+      cid: row.cid,
+      tss: null,
+      local_educativo: row.local_educativo,
+      codigo_local: row.codigo_local,
+      provincia: row.provincia,
+      distrito: row.distrito,
+      tecnologia: row.tecnologia,
+      nodo_pop: null,
+      started_at: row.started_at,
+      recovered_at: row.recovered_at,
+      duration_seconds: row.duration_seconds,
+      duration: row.duration,
+      same_day: row.same_day,
+      is_recent: isRecent,
+      followup_status: row.followup_status,
+      followup_label: null,
+      pendiente_cierre: row.followup_status === 'PENDIENTE_CIERRE',
+      href: `/history/incidents/${row.id}`,
+    }
+  })
+}
 
 type Preset = 'today' | 'yesterday' | 'last_7_days' | 'this_month' | 'custom'
 
@@ -86,10 +119,11 @@ export function RecoveriesPage() {
   const [scope, setScope] = useState('')
   const [sameDay, setSameDay] = useState(false)
   const [duringManagement, setDuringManagement] = useState(false)
-  const [hadFieldTech, setHadFieldTech] = useState(false)
   const [reviewStatus, setReviewStatus] = useState(reviewFromUrl)
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(25)
+  const [exporting, setExporting] = useState(false)
+  const [exportError, setExportError] = useState<string | null>(null)
 
   const qDebounced = useDebouncedValue(q.trim())
 
@@ -118,7 +152,6 @@ export function RecoveriesPage() {
     scope: scope || undefined,
     same_day: sameDay || undefined,
     during_management: duringManagement || undefined,
-    had_field_tech: hadFieldTech || undefined,
     review_status: reviewStatus || undefined,
   }
 
@@ -150,6 +183,26 @@ export function RecoveriesPage() {
     setPage(1)
   }
 
+  const exportImage = async () => {
+    const mapped = toRestorationRows(rows, now)
+    const recent = mapped.filter((row) => row.is_recent)
+    // Un solo botón: si hay recientes, exporta esos; si no, la página visible.
+    const payload = recent.length > 0 ? recent : mapped
+    if (payload.length === 0) {
+      setExportError('No hay filas para exportar.')
+      return
+    }
+    setExporting(true)
+    setExportError(null)
+    try {
+      await downloadRestorationsPng({ rows: payload, windowMinutes: recent.length > 0 ? 10 : 60 })
+    } catch (err) {
+      setExportError(err instanceof Error ? err.message : 'No se pudo exportar la imagen.')
+    } finally {
+      setExporting(false)
+    }
+  }
+
   const clearFilters = () => {
     setPreset('today')
     setDateFrom('')
@@ -162,7 +215,6 @@ export function RecoveriesPage() {
     setScope('')
     setSameDay(false)
     setDuringManagement(false)
-    setHadFieldTech(false)
     setReviewStatus('')
     setPage(1)
   }
@@ -187,10 +239,23 @@ export function RecoveriesPage() {
       <PageHeader
         icon={<CircleCheck className="h-5 w-5" aria-hidden />}
         title="Recuperados"
-        description="Locales que estuvieron caídos y volvieron a estar operativos. La recuperación técnica no cancela la gestión humana."
+        description="Locales que estuvieron caídos y volvieron a estar operativos. La etiqueta Reciente marca los últimos 10 minutos. Exportar imagen prioriza los recientes; si no hay, exporta la página visible."
+        actions={
+          <Button
+            size="sm"
+            loading={exporting}
+            disabled={rows.length === 0}
+            title="Exporta los Reciente (10 min). Si no hay, exporta lo visible en la tabla."
+            onClick={() => void exportImage()}
+          >
+            <ImageDown className="h-3.5 w-3.5" aria-hidden />
+            Exportar imagen
+          </Button>
+        }
       />
+      {exportError ? <p className="mb-3 text-sm text-red-600 dark:text-red-300">{exportError}</p> : null}
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
+      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
         <MetricCard
           label="Recuperados hoy"
           value={stats?.recovered_today ?? 0}
@@ -209,13 +274,6 @@ export function RecoveriesPage() {
           value={stats?.recovered_during_management ?? 0}
           icon={<Wrench className="h-4 w-4" />}
           tone="warning"
-          description="En el periodo filtrado"
-        />
-        <MetricCard
-          label="Con técnico en campo"
-          value={stats?.recovered_with_field_tech ?? 0}
-          icon={<Truck className="h-4 w-4" />}
-          tone="danger"
           description="En el periodo filtrado"
         />
         <MetricCard
@@ -350,11 +408,6 @@ export function RecoveriesPage() {
                 label="Durante gestión"
                 checked={duringManagement}
                 onChange={withPageReset(setDuringManagement)}
-              />
-              <FlagCheckbox
-                label="Técnico en campo"
-                checked={hadFieldTech}
-                onChange={withPageReset(setHadFieldTech)}
               />
             </div>
           </FormField>
@@ -525,16 +578,6 @@ function RecoveryRow({
       <td className={`${tdClassName} hidden xl:table-cell`}>
         <div className="flex min-w-0 flex-col items-start gap-0.5">
           {row.requires_review ? <Badge tone="warning" className="max-w-full !text-[10px]">Revisar gestión</Badge> : null}
-          {row.had_field_tech && row.requires_review ? (
-            <Badge tone="danger" className="max-w-full !text-[10px]">
-              Personal movilizado
-            </Badge>
-          ) : null}
-          {row.active_field_dispatch ? (
-            <Badge tone="cyan" className="max-w-full !text-[10px]">
-              Desplazamiento activo
-            </Badge>
-          ) : null}
           {row.recovery_review_status === 'ACKNOWLEDGED' ? (
             <Badge tone="success" className="max-w-full !text-[10px]">
               Confirmada
@@ -545,7 +588,7 @@ function RecoveryRow({
               Seguir en reporte
             </Badge>
           ) : null}
-          {!row.requires_review && !row.active_field_dispatch && !row.recovery_review_status ? (
+          {!row.requires_review && !row.recovery_review_status ? (
             <span className="text-slate-400">—</span>
           ) : null}
         </div>

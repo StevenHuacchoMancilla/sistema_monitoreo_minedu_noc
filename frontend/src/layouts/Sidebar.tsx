@@ -9,6 +9,7 @@ import {
   CircleCheck,
   Clock,
   FileSpreadsheet,
+  Radio,
   Files,
   Gauge,
   GraduationCap,
@@ -26,6 +27,7 @@ import {
 } from 'lucide-react'
 import { useDashboardSummary } from '../features/dashboard/hooks/useDashboard'
 import { useOperationalAlerts } from '../features/notifications/hooks/useOperationalAlerts'
+import { useRecentRestorations } from '../features/restorations/hooks/useRecentRestorations'
 import { usePermissions } from '../features/auth/hooks/usePermissions'
 import { P, type Permission } from '../features/auth/permissions'
 import { useSidebar } from './AppLayout'
@@ -48,6 +50,7 @@ type NavItem = {
     | 'recuperados'
     | 'tracking_abiertos'
     | 'notificaciones'
+    | 'restablecimientos'
   tone?: 'danger' | 'warn' | 'info' | 'muted' | 'success'
   icon: LucideIcon
   accent?: 'prtg'
@@ -79,6 +82,7 @@ const NAV: NavItem[] = [
   { section: 'consulta', to: '/history/schools', label: 'Historial por colegio', icon: History, permission: P.historyView },
   { section: 'consulta', to: '/schools', label: 'Locales educativos', icon: GraduationCap, permission: P.schoolsView },
   { section: 'consulta', to: '/notifications', label: 'Notificaciones', badgeKey: 'notificaciones', tone: 'warn', icon: Bell, permission: P.incidentsView },
+  { section: 'consulta', to: '/restorations', label: 'Restablecimientos', badgeKey: 'restablecimientos', tone: 'success', icon: Radio, permission: P.recoveriesView },
   { section: 'consulta', to: '/admin', label: 'Administración', icon: Settings, permission: P.adminView },
 ]
 
@@ -100,8 +104,10 @@ export function Sidebar({
   const summary = useDashboardSummary(120_000)
   const { can } = usePermissions()
   const alerts = useOperationalAlerts(120_000, can(P.incidentsView))
+  const restorations = useRecentRestorations(60, 60_000, can(P.recoveriesView))
   const nav = summary.data?.nav as Record<string, number> | undefined
   const notifCount = alerts.data?.meta.pending_review ?? alerts.data?.data?.length ?? 0
+  const restorationCount = restorations.data?.meta.recent ?? 0
   const { collapsed, toggle } = useSidebar()
   const isCollapsed = forceExpanded ? false : collapsed
   const [sectionsOpen, setSectionsOpen] = useState<Record<NavSection, boolean>>(() => {
@@ -166,9 +172,11 @@ export function Sidebar({
                     const badge =
                       item.badgeKey === 'notificaciones'
                         ? notifCount
-                        : item.badgeKey
-                          ? (nav?.[item.badgeKey] ?? 0)
-                          : null
+                        : item.badgeKey === 'restablecimientos'
+                          ? restorationCount
+                          : item.badgeKey
+                            ? (nav?.[item.badgeKey] ?? 0)
+                            : null
                     return (
                       <li key={item.to}>
                         <NavLink

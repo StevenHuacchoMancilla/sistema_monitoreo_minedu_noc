@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bell, Truck } from 'lucide-react'
+import { Bell } from 'lucide-react'
 import { IconButton } from '../../../components/ui/IconButton'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/AuthContext'
@@ -164,12 +164,6 @@ export function NotificationBell() {
                     <div className="min-w-0 flex-1">
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{alert.title}</p>
                       <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">{alert.body}</p>
-                      {alert.active_field_dispatch ? (
-                        <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-medium text-red-700 dark:text-red-400">
-                          <Truck className="h-3 w-3" aria-hidden />
-                          Personal movilizado
-                        </p>
-                      ) : null}
                       <div className="mt-2 flex flex-wrap gap-2">
                         {canManage ? (
                           <button

@@ -13,6 +13,11 @@ function stampFilename(nodo: string, date = new Date()): string {
   return `caidas_masivas_${safe}_${y}${m}${d}_${h}${min}.png`
 }
 
+function stampPartialFilename(date = new Date()): string {
+  const pad = (n: number) => String(n).padStart(2, '0')
+  return `parciales_${date.getFullYear()}${pad(date.getMonth() + 1)}${pad(date.getDate())}_${pad(date.getHours())}${pad(date.getMinutes())}.png`
+}
+
 function downloadDataUrl(dataUrl: string, filename: string): void {
   const a = document.createElement('a')
   a.href = dataUrl
@@ -26,10 +31,16 @@ function downloadDataUrl(dataUrl: string, filename: string): void {
 export async function downloadMassOutagePng(opts: {
   nodo: string
   rows: MassOutageImageRow[]
+  variant?: 'mass' | 'partial'
 }): Promise<void> {
   if (opts.rows.length === 0) {
-    throw new Error('Selecciona al menos un colegio caído para la imagen.')
+    throw new Error(
+      opts.variant === 'partial'
+        ? 'No hay parciales (amarillos) para exportar.'
+        : 'Selecciona al menos un colegio caído para la imagen.',
+    )
   }
+  const variant = opts.variant ?? 'mass'
 
   const host = document.createElement('div')
   host.setAttribute('aria-hidden', 'true')
@@ -50,7 +61,12 @@ export async function downloadMassOutagePng(opts: {
   try {
     await new Promise<void>((resolve) => {
       root!.render(
-        <MassOutageImageTemplate nodo={opts.nodo} rows={opts.rows} generatedAt={generatedAt} />,
+        <MassOutageImageTemplate
+          nodo={opts.nodo}
+          rows={opts.rows}
+          generatedAt={generatedAt}
+          variant={variant}
+        />,
       )
       requestAnimationFrame(() => {
         requestAnimationFrame(() => resolve())
@@ -69,7 +85,10 @@ export async function downloadMassOutagePng(opts: {
       height: target.scrollHeight,
     })
 
-    downloadDataUrl(dataUrl, stampFilename(opts.nodo, generatedAt))
+    downloadDataUrl(
+      dataUrl,
+      variant === 'partial' ? stampPartialFilename(generatedAt) : stampFilename(opts.nodo, generatedAt),
+    )
   } finally {
     root?.unmount()
     root = null

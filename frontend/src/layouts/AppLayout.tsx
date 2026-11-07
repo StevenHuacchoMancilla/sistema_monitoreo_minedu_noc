@@ -4,6 +4,7 @@ import { Sidebar } from './Sidebar'
 import { Button } from '../components/ui/Button'
 import { IconButton } from '../components/ui/IconButton'
 import { NotificationBell } from '../features/notifications/components/NotificationBell'
+import { LiveOpsToastDock } from '../features/restorations/components/LiveOpsToastDock'
 import { UserMenu } from '../features/auth/components/UserMenu'
 import { ThemeToggle } from '../features/theme/ThemeToggle'
 
@@ -180,6 +181,7 @@ export function AppLayout({
             </main>
           </div>
         </div>
+        <LiveOpsToastDock />
       </div>
     </SidebarContext.Provider>
   )

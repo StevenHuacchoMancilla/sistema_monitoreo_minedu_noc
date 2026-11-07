@@ -18,12 +18,15 @@ export function MassOutageImageTemplate({
   nodo,
   rows,
   generatedAt = new Date(),
+  variant = 'mass',
 }: {
   nodo: string
   rows: MassOutageImageRow[]
   generatedAt?: Date
+  variant?: 'mass' | 'partial'
 }) {
   const when = formatDateTime(generatedAt.toISOString())
+  const partial = variant === 'partial'
 
   return (
     <div
@@ -31,7 +34,9 @@ export function MassOutageImageTemplate({
       style={{
         width: 1480,
         boxSizing: 'border-box',
-        background: 'linear-gradient(165deg, #0B1220 0%, #111827 55%, #0F172A 100%)',
+        background: partial
+          ? 'linear-gradient(165deg, #422006 0%, #111827 55%, #0F172A 100%)'
+          : 'linear-gradient(165deg, #0B1220 0%, #111827 55%, #0F172A 100%)',
         color: '#F8FAFC',
         fontFamily: 'Inter, system-ui, sans-serif',
         padding: 28,
@@ -40,7 +45,7 @@ export function MassOutageImageTemplate({
       <div
         style={{
           borderRadius: 16,
-          border: '1px solid rgba(248, 113, 113, 0.35)',
+          border: partial ? '1px solid rgba(251, 191, 36, 0.4)' : '1px solid rgba(248, 113, 113, 0.35)',
           background: 'rgba(15, 23, 42, 0.92)',
           overflow: 'hidden',
         }}
@@ -52,16 +57,28 @@ export function MassOutageImageTemplate({
             gap: 16,
             padding: '18px 22px',
             borderBottom: '1px solid rgba(148, 163, 184, 0.2)',
-            background: 'linear-gradient(90deg, rgba(127,29,29,0.35), transparent)',
+            background: partial
+              ? 'linear-gradient(90deg, rgba(120, 53, 15, 0.45), transparent)'
+              : 'linear-gradient(90deg, rgba(127,29,29,0.35), transparent)',
           }}
         >
           <div>
-            <p style={{ margin: 0, fontSize: 11, letterSpacing: '0.14em', fontWeight: 700, color: '#FCA5A5' }}>
-              CAÍDAS MASIVAS · NODO/POP
+            <p
+              style={{
+                margin: 0,
+                fontSize: 11,
+                letterSpacing: '0.14em',
+                fontWeight: 700,
+                color: partial ? '#FCD34D' : '#FCA5A5',
+              }}
+            >
+              {partial ? 'PARCIALES · PRTG' : 'CAÍDAS MASIVAS · NODO/POP'}
             </p>
             <h1 style={{ margin: '6px 0 0', fontSize: 26, fontWeight: 750 }}>{nodo}</h1>
             <p style={{ margin: '6px 0 0', fontSize: 13, color: '#94A3B8' }}>
-              Solo colegios caídos seleccionados · {rows.length} fila{rows.length === 1 ? '' : 's'}
+              {partial
+                ? `Ping en advertencia / parcial ahora · ${rows.length} fila${rows.length === 1 ? '' : 's'}`
+                : `Solo colegios caídos seleccionados · ${rows.length} fila${rows.length === 1 ? '' : 's'}`}
             </p>
           </div>
           <div style={{ textAlign: 'right', fontSize: 12, color: '#94A3B8' }}>
@@ -104,7 +121,9 @@ export function MassOutageImageTemplate({
                   <td style={{ ...td, fontVariantNumeric: 'tabular-nums' }}>
                     {row.down_started_at ? formatDateTime(row.down_started_at) : '—'}
                   </td>
-                  <td style={{ ...td, color: '#FCA5A5', fontWeight: 650 }}>{row.duration_label ?? '—'}</td>
+                  <td style={{ ...td, color: partial ? '#FCD34D' : '#FCA5A5', fontWeight: 650 }}>
+                    {row.duration_label ?? '—'}
+                  </td>
                 </tr>
               )
             })}

@@ -12,6 +12,7 @@ import { SchoolHistoryIndexPage } from '../features/history/pages/SchoolHistoryI
 import { SchoolHistoryDetailPage } from '../features/history/pages/SchoolHistoryDetailPage'
 import { IncidentCaseFilePage } from '../features/history/pages/IncidentCaseFilePage'
 import { RecoveriesPage } from '../features/recoveries/pages/RecoveriesPage'
+import { RestorationsPage } from '../features/restorations/pages/RestorationsPage'
 import { NotificationsPage } from '../features/notifications/pages/NotificationsPage'
 import { AdminPage } from '../features/administration/pages/AdminPage'
 import { SchoolDetailPage } from '../features/schools/pages/SchoolDetailPage'
@@ -62,7 +63,7 @@ export function AppRouter() {
                 <ActiveIncidentsPage
                   key="incidents-total"
                   title="Caídas totales"
-                  description="Todas las caídas que PRTG reporta en este momento, incluidas las que ya estaban en gestión. TSS = N° del colegio (mismo del reporte operativo)."
+                  description="Parciales (amarillos) arriba. Reciente = caído hace menos de 30 min (o acaba de pasar de parcial a caído). Duración = Fallo por de PRTG."
                   tableTitle="Caídas actuales en PRTG"
                   emptyTitle="No hay caídas en PRTG."
                   emptyDescription="Ningún local monitoreado está caído en este momento."
@@ -93,7 +94,7 @@ export function AppRouter() {
                 <ActiveIncidentsPage
                   key="incidents-managing"
                   title="En gestión"
-                  description="Seguimiento operativo del ticket. Si PRTG recupera, pasan a Pendiente de cierre. Puedes pasar el caso a Incidencias."
+                  description="Seguimiento operativo del ticket mientras el colegio sigue caído. Si PRTG recupera, pasan a Pendiente de cierre."
                   filter={(row) => MANAGING.has(row.followup_status ?? '')}
                   durationSource="current_down"
                 />
@@ -114,6 +115,7 @@ export function AppRouter() {
 
           <Route element={<RequirePermission permission={P.recoveriesView} />}>
             <Route path="/recoveries" element={<RecoveriesPage />} />
+            <Route path="/restorations" element={<RestorationsPage />} />
             <Route path="/incidents/recovered" element={<Navigate to="/recoveries" replace />} />
           </Route>
 

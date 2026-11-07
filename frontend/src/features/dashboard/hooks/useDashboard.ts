@@ -21,10 +21,10 @@ export function useDashboardSummary(refetchInterval = 90_000) {
   })
 }
 
-export function useOutages(search = '', refetchInterval = 60_000) {
+export function useOutages(search = '', refetchInterval = 60_000, source: 'outages' | 'managing' = 'outages') {
   return useQuery<{ data: OutageRow[] }>({
-    queryKey: ['dashboard', 'outages', search],
-    queryFn: () => endpoints.outages(search),
+    queryKey: ['dashboard', source, search],
+    queryFn: () => (source === 'managing' ? endpoints.managing(search) : endpoints.outages(search)),
     refetchInterval,
     staleTime: Math.min(30_000, Math.max(5_000, Math.floor(refetchInterval / 2))),
     placeholderData: keepPreviousData,

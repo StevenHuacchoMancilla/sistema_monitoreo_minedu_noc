@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bell, CheckCircle2, FileSpreadsheet, Truck } from 'lucide-react'
+import { Bell, CheckCircle2, FileSpreadsheet } from 'lucide-react'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
 import { Button } from '../../../components/ui/Button'
@@ -96,7 +96,7 @@ export function NotificationsPage() {
     <AppLayout bare>
       <PageHeader
         title="Notificaciones"
-        description="Cuando un colegio en gestión se recupera, queda en pendiente de cierre y aparece aquí."
+        description="Revisión de gestión: cuando un colegio en gestión se recupera y queda pendiente de cierre. Los avisos de restablecimiento (quién levantó) están en Restablecimientos."
         icon={<Bell className="h-5 w-5" aria-hidden />}
         actions={
           <Badge tone={rows.length > 0 ? 'warning' : 'neutral'}>
@@ -135,14 +135,6 @@ export function NotificationsPage() {
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <Badge tone={alert.severity === 'danger' ? 'danger' : 'warning'}>Pendiente de cierre</Badge>
-                    {alert.active_field_dispatch ? (
-                      <Badge tone="danger">
-                        <span className="inline-flex items-center gap-1">
-                          <Truck className="h-3 w-3" aria-hidden />
-                          Despacho activo
-                        </span>
-                      </Badge>
-                    ) : null}
                   </div>
                   <p className="mt-2 text-base font-semibold text-slate-900 dark:text-slate-100">
                     {alert.local_educativo ?? alert.title}

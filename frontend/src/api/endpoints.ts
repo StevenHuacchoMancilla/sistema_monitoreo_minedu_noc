@@ -37,6 +37,8 @@ export const endpoints = {
   dashboardPrtg: () => apiGet<PrtgDashboard>('/dashboard/prtg'),
   outages: (q = '') =>
     apiGet<{ data: OutageRow[] }>(`/dashboard/outages${q ? `?q=${encodeURIComponent(q)}` : ''}`),
+  managing: (q = '') =>
+    apiGet<{ data: OutageRow[] }>(`/dashboard/managing${q ? `?q=${encodeURIComponent(q)}` : ''}`),
   concentrations: () => apiGet<{ data: Concentration[] }>('/dashboard/concentrations'),
   concentrationZone: (provincia: string, distrito: string) =>
     apiGet<ConcentrationZone>(
@@ -122,23 +124,10 @@ export const endpoints = {
     classification: 'CONTACT_CONFIRMED' | 'LINK_OUTAGE' | 'NO_RESPONSE'
     detail?: string
   }) => apiPost<IncidentDetail>('/incidents/manual-partial', body),
-  fieldDispatch: (
-    id: number,
-    body: {
-      action: 'PLAN' | 'DISPATCH' | 'ARRIVE' | 'CANCEL' | 'COMPLETE'
-      technician_name?: string
-      observation?: string
-    },
-  ) => apiPost<IncidentDetail>(`/incidents/${id}/field-dispatches`, body),
   recoveryReview: (
     id: number,
     body: {
-      action:
-        | 'ACKNOWLEDGE'
-        | 'CONTINUE_MONITORING'
-        | 'CONTINUE_ONSITE'
-        | 'CANCEL_DISPATCH'
-        | 'ADD_NOTE'
+      action: 'ACKNOWLEDGE' | 'CONTINUE_MONITORING' | 'ADD_NOTE'
       observation?: string
     },
   ) => apiPost<IncidentDetail>(`/incidents/${id}/recovery-review`, body),
