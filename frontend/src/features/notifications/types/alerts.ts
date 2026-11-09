@@ -16,7 +16,9 @@ export type OperationalAlert = {
   tracking_id?: number | null
   management_classification?: string | null
   management_classification_label?: string | null
+  followup_status?: string | null
   href: string
+  case_href?: string
 }
 
 export type OperationalAlertsResponse = {

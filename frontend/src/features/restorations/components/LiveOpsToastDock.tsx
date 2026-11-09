@@ -233,11 +233,11 @@ export function LiveOpsToastDock() {
         <div className="flex flex-wrap items-center gap-2 border-t border-slate-100 bg-slate-50/80 px-3.5 py-2 dark:border-slate-800 dark:bg-slate-950/50">
           {downs.length > 0 ? (
             <Link
-              to="/incidents/total"
+              to="/outages"
               className="text-[12px] font-semibold text-red-700 hover:text-red-800 dark:text-red-300 dark:hover:text-red-200"
               onClick={dismissAll}
             >
-              Caídas totales
+              Caídas
             </Link>
           ) : null}
           {ups.length > 0 ? (

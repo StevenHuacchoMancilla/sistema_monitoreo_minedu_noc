@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { Link } from 'react-router-dom'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
-import { Bell, CheckCircle2, FileSpreadsheet } from 'lucide-react'
+import { Bell, CheckCircle2, Wrench } from 'lucide-react'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
 import { Button } from '../../../components/ui/Button'
@@ -9,6 +9,7 @@ import { Badge } from '../../../components/ui/SoftBadge'
 import { ErrorState, LoadingState } from '../../../components/ui/States'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/AuthContext'
+import { IncidentManageModal } from '../../incidents/components/IncidentManageModal'
 import { useOperationalAlerts } from '../hooks/useOperationalAlerts'
 import type { OperationalAlert } from '../types/alerts'
 import { formatDateTime } from '../../../lib/datetime'
@@ -35,38 +36,48 @@ function saveDismissed(ids: Set<string>) {
 }
 
 /**
- * Avisos cuando un colegio que estaba en gestión se recupera y pasa a pendiente de cierre.
+ * Avisos cuando un colegio en gestión se recupera y queda pendiente de cierre.
  */
 export function NotificationsPage() {
-  const navigate = useNavigate()
   const { user } = useAuth()
-  const canManage = Boolean(user?.permissions?.includes('recoveries.manage'))
+  const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
   const alerts = useOperationalAlerts(30_000)
   const client = useQueryClient()
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed())
   const [busyId, setBusyId] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [manageId, setManageId] = useState<number | null>(null)
 
   const rows = useMemo(
     () => (alerts.data?.data ?? []).filter((a) => !dismissed.has(a.id)),
     [alerts.data?.data, dismissed],
   )
 
-  const review = useMutation({
-    mutationFn: (payload: { incidentId: number; action: 'CONTINUE_MONITORING' | 'ACKNOWLEDGE' }) =>
-      endpoints.recoveryReview(payload.incidentId, { action: payload.action }),
-    onSuccess: async () => {
+  const invalidate = async () => {
+    await Promise.all([
+      client.invalidateQueries({ queryKey: ['notifications'] }),
+      client.invalidateQueries({ queryKey: ['recoveries'] }),
+      client.invalidateQueries({ queryKey: ['dashboard'] }),
+      client.invalidateQueries({ queryKey: ['incidents', 'queue'] }),
+    ])
+  }
+
+  const confirmClose = useMutation({
+    mutationFn: async (alert: OperationalAlert) => {
+      await endpoints.closeIncidentTicket(alert.incident_id, 'Cierre confirmado desde notificaciones.')
+      try {
+        await endpoints.recoveryReview(alert.incident_id, { action: 'ACKNOWLEDGE' })
+      } catch {
+        /* el cierre operativo ya bastó */
+      }
+    },
+    onSuccess: async (_data, alert) => {
       setError(null)
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ['notifications'] }),
-        client.invalidateQueries({ queryKey: ['recoveries'] }),
-        client.invalidateQueries({ queryKey: ['dashboard'] }),
-        client.invalidateQueries({ queryKey: ['reports'] }),
-        client.invalidateQueries({ queryKey: ['tracking'] }),
-      ])
+      dismiss(alert.id)
+      await invalidate()
     },
     onError: (err: unknown) => {
-      setError(err instanceof Error ? err.message : 'No se pudo registrar la acción.')
+      setError(err instanceof Error ? err.message : 'No se pudo cerrar el ticket.')
     },
     onSettled: () => setBusyId(null),
   })
@@ -80,23 +91,11 @@ export function NotificationsPage() {
     })
   }
 
-  const runAction = (alert: OperationalAlert, action: 'CONTINUE_MONITORING' | 'ACKNOWLEDGE') => {
-    if (!canManage) return
-    setBusyId(`${alert.id}:${action}`)
-    setError(null)
-    review.mutate(
-      { incidentId: alert.incident_id, action },
-      {
-        onSuccess: () => dismiss(alert.id),
-      },
-    )
-  }
-
   return (
     <AppLayout bare>
       <PageHeader
         title="Notificaciones"
-        description="Revisión de gestión: cuando un colegio en gestión se recupera y queda pendiente de cierre. Los avisos de restablecimiento (quién levantó) están en Restablecimientos."
+        description="Solo colegios que se recuperaron estando en gestión y quedaron en Pendiente de cierre. Los restablecimientos (quién levantó) están en Restablecimientos."
         icon={<Bell className="h-5 w-5" aria-hidden />}
         actions={
           <Badge tone={rows.length > 0 ? 'warning' : 'neutral'}>
@@ -119,7 +118,7 @@ export function NotificationsPage() {
           </div>
           <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Sin notificaciones pendientes</h2>
           <p className="mx-auto mt-2 max-w-md text-sm text-slate-500">
-            No hay colegios que hayan pasado de gestión a pendiente de cierre.
+            No hay recuperaciones desde En gestión pendientes de cierre.
           </p>
         </section>
       ) : null}
@@ -149,33 +148,29 @@ export function NotificationsPage() {
                 </div>
                 <div className="flex flex-wrap gap-2 lg:justify-end">
                   {canManage ? (
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="secondary"
-                      loading={busyId === `${alert.id}:CONTINUE_MONITORING`}
-                      disabled={review.isPending}
-                      onClick={() => runAction(alert, 'CONTINUE_MONITORING')}
-                    >
-                      <FileSpreadsheet className="h-3.5 w-3.5" aria-hidden />
-                      Seguir en reporte
+                    <Button type="button" size="sm" variant="primary" onClick={() => setManageId(alert.incident_id)}>
+                      <Wrench className="h-3.5 w-3.5" aria-hidden />
+                      Seguir caso
                     </Button>
                   ) : null}
                   {canManage ? (
                     <Button
                       type="button"
                       size="sm"
-                      loading={busyId === `${alert.id}:ACKNOWLEDGE`}
-                      disabled={review.isPending}
-                      onClick={() => runAction(alert, 'ACKNOWLEDGE')}
+                      variant="secondary"
+                      loading={busyId === alert.id}
+                      disabled={confirmClose.isPending}
+                      onClick={() => {
+                        if (!window.confirm('¿Cerrar este ticket operativamente?')) return
+                        setBusyId(alert.id)
+                        setError(null)
+                        confirmClose.mutate(alert)
+                      }}
                     >
                       <CheckCircle2 className="h-3.5 w-3.5" aria-hidden />
                       Confirmar cierre
                     </Button>
                   ) : null}
-                  <Button type="button" size="sm" variant="secondary" onClick={() => navigate(alert.href)}>
-                    Ver caso
-                  </Button>
                   <Button type="button" size="sm" variant="ghost" onClick={() => dismiss(alert.id)}>
                     Ocultar
                   </Button>
@@ -191,6 +186,18 @@ export function NotificationsPage() {
           Ir a pendiente de cierre
         </Link>
       </div>
+
+      {manageId !== null ? (
+        <IncidentManageModal
+          incidentId={manageId}
+          initialTab={canManage ? 'management' : 'summary'}
+          readOnly={!canManage}
+          onClose={() => {
+            setManageId(null)
+            void invalidate()
+          }}
+        />
+      ) : null}
     </AppLayout>
   )
 }

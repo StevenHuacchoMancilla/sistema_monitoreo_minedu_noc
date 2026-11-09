@@ -1,12 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { Bell } from 'lucide-react'
 import { IconButton } from '../../../components/ui/IconButton'
-import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/AuthContext'
 import { usePermissions } from '../../auth/hooks/usePermissions'
 import { P } from '../../auth/permissions'
+import { IncidentManageModal } from '../../incidents/components/IncidentManageModal'
 import { useOperationalAlerts } from '../hooks/useOperationalAlerts'
 import type { OperationalAlert } from '../types/alerts'
 
@@ -36,12 +35,11 @@ export function NotificationBell() {
   const { user } = useAuth()
   const { can } = usePermissions()
   const canSee = can(P.incidentsView)
-  const canManage = Boolean(user?.permissions?.includes('recoveries.manage'))
+  const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
   const alerts = useOperationalAlerts(60_000, canSee)
-  const client = useQueryClient()
   const [open, setOpen] = useState(false)
   const [dismissed, setDismissed] = useState<Set<string>>(() => loadDismissed())
-  const [busyId, setBusyId] = useState<string | null>(null)
+  const [manageId, setManageId] = useState<number | null>(null)
   const panelRef = useRef<HTMLDivElement | null>(null)
 
   const visible = useMemo(
@@ -78,30 +76,19 @@ export function NotificationBell() {
     })
   }
 
-  const openAlert = (alert: OperationalAlert) => {
+  const followCase = (alert: OperationalAlert) => {
     setOpen(false)
-    navigate(alert.href)
+    if (canManage) {
+      setManageId(alert.incident_id)
+      return
+    }
+    navigate(alert.case_href ?? alert.href)
   }
 
   const goAll = () => {
     setOpen(false)
     navigate('/notifications')
   }
-
-  const keepInReport = useMutation({
-    mutationFn: (incidentId: number) =>
-      endpoints.recoveryReview(incidentId, { action: 'CONTINUE_MONITORING' }),
-    onSuccess: async (_data, incidentId) => {
-      const alert = visible.find((a) => a.incident_id === incidentId)
-      if (alert) dismiss(alert.id)
-      await Promise.all([
-        client.invalidateQueries({ queryKey: ['notifications'], refetchType: 'active' }),
-        client.invalidateQueries({ queryKey: ['recoveries'], refetchType: 'active' }),
-        client.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' }),
-      ])
-    },
-    onSettled: () => setBusyId(null),
-  })
 
   if (!canSee) return null
 
@@ -130,7 +117,7 @@ export function NotificationBell() {
         <div className="absolute right-0 z-50 mt-2 w-[min(22rem,calc(100vw-1.5rem))] overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
           <div className="flex items-center justify-between border-b border-slate-100 px-3 py-2 dark:border-slate-800">
             <p className="text-xs font-semibold tracking-wide text-slate-600 uppercase dark:text-slate-300">
-              Alertas operativas
+              Recuperados en gestión
             </p>
             <button
               type="button"
@@ -147,7 +134,7 @@ export function NotificationBell() {
 
           {!alerts.isLoading && count === 0 ? (
             <p className="px-3 py-4 text-sm text-slate-500 dark:text-slate-400">
-              Sin recuperaciones pendientes de revisión.
+              Sin recuperaciones desde En gestión pendientes de cierre.
             </p>
           ) : null}
 
@@ -165,26 +152,12 @@ export function NotificationBell() {
                       <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">{alert.title}</p>
                       <p className="mt-0.5 text-xs text-slate-600 dark:text-slate-400">{alert.body}</p>
                       <div className="mt-2 flex flex-wrap gap-2">
-                        {canManage ? (
-                          <button
-                            type="button"
-                            className="rounded-lg border border-amber-300 bg-amber-50 px-2.5 py-1 text-xs font-semibold text-amber-900 hover:bg-amber-100 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-100"
-                            disabled={keepInReport.isPending}
-                            title="Mantener la gestión en el reporte aunque PRTG ya haya subido."
-                            onClick={() => {
-                              setBusyId(alert.id)
-                              keepInReport.mutate(alert.incident_id)
-                            }}
-                          >
-                            {busyId === alert.id && keepInReport.isPending ? '…' : 'Seguir en reporte'}
-                          </button>
-                        ) : null}
                         <button
                           type="button"
                           className="rounded-lg bg-blue-600 px-2.5 py-1 text-xs font-semibold text-white hover:bg-blue-700"
-                          onClick={() => openAlert(alert)}
+                          onClick={() => followCase(alert)}
                         >
-                          Revisar
+                          Seguir caso
                         </button>
                         <button
                           type="button"
@@ -213,6 +186,18 @@ export function NotificationBell() {
             </div>
           ) : null}
         </div>
+      ) : null}
+
+      {manageId !== null ? (
+        <IncidentManageModal
+          incidentId={manageId}
+          initialTab={canManage ? 'management' : 'summary'}
+          readOnly={!canManage}
+          onClose={() => {
+            setManageId(null)
+            void alerts.refetch()
+          }}
+        />
       ) : null}
     </div>
   )
