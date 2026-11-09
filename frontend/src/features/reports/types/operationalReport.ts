@@ -101,6 +101,9 @@ export type OperationalReportResponse = {
   lista_estados?: Array<{ value: string; label: string; group: string; tone: string }>
   zonas?: string[]
   resumen_prtg?: ResumenPrtg
+  report_date?: string
+  is_today?: boolean
+  available_dates?: string[]
 }
 
 export type ClosingPreviewResponse = {
@@ -138,6 +141,64 @@ export const CLASSIFICATION_ROW_CLASS: Record<string, string> = {
   cyan: 'bg-cyan-50 border-l-4 border-cyan-500',
   green: 'bg-emerald-50 border-l-4 border-emerald-500',
   slate: 'bg-slate-50 border-l-4 border-slate-300',
+  stone: 'bg-stone-700/90 border-l-4 border-stone-800 text-stone-50',
+  white: 'bg-white border-l-4 border-slate-200',
+}
+
+/** Orden Excel de ESTADO (LISTA DE LLEE). */
+export const LISTA_ESTADO_OPTIONS: ListaLleeEstado[] = [
+  'Averias',
+  'Descartes en curso',
+  'Sin respuesta',
+  'Equipos apagados',
+  'Energia',
+  'Requerimiento',
+  'Enlace parcial',
+  'Restablecido',
+  'Activo',
+]
+
+export const LISTA_ESTADO_CARD: Record<
+  string,
+  { soft: string; dot: string; text?: string }
+> = {
+  Averias: {
+    soft: 'bg-red-100 border-red-200 dark:bg-red-950/40 dark:border-red-800',
+    dot: 'bg-red-500',
+  },
+  'Descartes en curso': {
+    soft: 'bg-amber-100 border-amber-200 dark:bg-amber-950/40 dark:border-amber-800',
+    dot: 'bg-amber-500',
+  },
+  'Sin respuesta': {
+    soft: 'bg-sky-100 border-sky-200 dark:bg-sky-950/40 dark:border-sky-800',
+    dot: 'bg-sky-500',
+  },
+  'Equipos apagados': {
+    soft: 'bg-violet-100 border-violet-200 dark:bg-violet-950/40 dark:border-violet-800',
+    dot: 'bg-violet-500',
+  },
+  Energia: {
+    soft: 'bg-orange-100 border-orange-200 dark:bg-orange-950/40 dark:border-orange-800',
+    dot: 'bg-orange-400',
+  },
+  Requerimiento: {
+    soft: 'bg-slate-100 border-slate-200 dark:bg-slate-800/60 dark:border-slate-600',
+    dot: 'bg-slate-500',
+  },
+  'Enlace parcial': {
+    soft: 'bg-stone-700 border-stone-800 text-stone-50 dark:bg-stone-800 dark:border-stone-600',
+    dot: 'bg-stone-300',
+    text: 'text-stone-50',
+  },
+  Restablecido: {
+    soft: 'bg-emerald-100 border-emerald-200 dark:bg-emerald-950/40 dark:border-emerald-800',
+    dot: 'bg-emerald-500',
+  },
+  Activo: {
+    soft: 'bg-white border-slate-200 dark:bg-slate-900 dark:border-slate-700',
+    dot: 'bg-slate-400',
+  },
 }
 
 export const CLASSIFICATION_BADGE_CLASS: Record<string, string> = {
@@ -154,14 +215,14 @@ export const CLASSIFICATION_BADGE_CLASS: Record<string, string> = {
 
 export const LISTA_ESTADO_BADGE: Record<string, string> = {
   Averias: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
-  'Descartes en curso': 'bg-orange-100 text-orange-900 dark:bg-orange-500/20 dark:text-orange-300',
-  'Sin respuesta': 'bg-yellow-100 text-yellow-900 dark:bg-yellow-500/20 dark:text-yellow-200',
-  'Equipos apagados': 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-200',
-  Energia: 'bg-amber-200 text-amber-950 dark:bg-amber-500/25 dark:text-amber-100',
+  'Descartes en curso': 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300',
+  'Sin respuesta': 'bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-200',
+  'Equipos apagados': 'bg-violet-100 text-violet-900 dark:bg-violet-500/20 dark:text-violet-200',
+  Energia: 'bg-orange-100 text-orange-950 dark:bg-orange-500/25 dark:text-orange-100',
   Restablecido: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  Requerimiento: 'bg-violet-100 text-violet-800 dark:bg-violet-500/20 dark:text-violet-300',
-  'Enlace parcial': 'bg-cyan-100 text-cyan-800 dark:bg-cyan-500/20 dark:text-cyan-300',
-  Activo: 'bg-slate-100 text-slate-700 dark:bg-slate-700 dark:text-slate-200',
+  Requerimiento: 'bg-slate-100 text-slate-800 dark:bg-slate-500/20 dark:text-slate-200',
+  'Enlace parcial': 'bg-stone-700 text-stone-50 dark:bg-stone-600 dark:text-stone-50',
+  Activo: 'bg-white text-slate-800 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700',
 }
 
 export function techTypeBadgeClass(tipo?: string | null): string {

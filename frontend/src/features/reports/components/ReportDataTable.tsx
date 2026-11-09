@@ -1,16 +1,23 @@
-import { Clock } from 'lucide-react'
+import { Clock, MessageSquareText } from 'lucide-react'
 import { DataTableContainer } from '../../../components/ui/DataTableFrame'
 import {
   CLASSIFICATION_ROW_CLASS,
   LISTA_ESTADO_BADGE,
+  LISTA_ESTADO_OPTIONS,
   formatOutageDisplay,
+  type ListaLleeEstado,
   type ReportRow,
 } from '../types/operationalReport'
 
 type Props = {
   rows: ReportRow[]
   showAction?: boolean
-  onManage?: (incidentId: number) => void
+  /** Abre panel Ver detalle (lectura / edición). */
+  onVerDetalle?: (row: ReportRow) => void
+  /** Si viene, la columna ESTADO es lista desplegable editable. */
+  onListaEstadoChange?: (incidentId: number, value: ListaLleeEstado | null) => void
+  listaEstadoSavingId?: number | null
+  editable?: boolean
   dense?: boolean
   rowTone?: 'lista' | 'closing' | 'none'
 }
@@ -25,6 +32,8 @@ const ROW_DARK_CLASS: Record<string, string> = {
   cyan: 'dark:bg-cyan-950/40 dark:border-cyan-500',
   green: 'dark:bg-emerald-950/40 dark:border-emerald-500',
   slate: 'dark:bg-slate-800/80 dark:border-slate-600',
+  stone: 'dark:bg-stone-900/70 dark:border-stone-500',
+  white: 'dark:bg-slate-900 dark:border-slate-600',
 }
 
 function CellTruncate({ value, className = '' }: { value?: string | null; className?: string }) {
@@ -37,10 +46,20 @@ function CellTruncate({ value, className = '' }: { value?: string | null; classN
 }
 
 /** Columnas LISTA DE LLEE: TSS → ZONA (sin PEXT/PINT). */
+function previewDetalle(value?: string | null, max = 72): string {
+  const clean = (value ?? '').replace(/\s+/g, ' ').trim()
+  if (!clean) return '—'
+  if (clean.length <= max) return clean
+  return `${clean.slice(0, max).trim()}…`
+}
+
 export function ReportDataTable({
   rows,
   showAction = false,
-  onManage,
+  onVerDetalle,
+  onListaEstadoChange,
+  listaEstadoSavingId = null,
+  editable = false,
   dense = false,
   rowTone = 'lista',
 }: Props) {
@@ -67,7 +86,7 @@ export function ReportDataTable({
             <th className={`${th} min-w-[130px]`}>Provincia</th>
             <th className={`${th} min-w-[130px]`}>Distrito</th>
             <th className={`${th} w-28`}>Zona</th>
-            {showAction ? <th className={`${th} min-w-[100px]`}>Acción</th> : null}
+            {showAction ? <th className={`${th} min-w-[120px]`}>Acciones</th> : null}
           </tr>
         </thead>
         <tbody>
@@ -107,7 +126,32 @@ export function ReportDataTable({
                   </span>
                 </td>
                 <td className={td}>
-                  {row.lista_estado ? (
+                  {onListaEstadoChange ? (
+                    <select
+                      className={`h-8 max-w-[11.5rem] rounded-md border border-slate-300 bg-white px-1.5 text-[11px] font-semibold shadow-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 dark:border-slate-600 dark:bg-slate-950 ${
+                        row.lista_estado
+                          ? LISTA_ESTADO_BADGE[row.lista_estado] ?? ''
+                          : 'text-slate-500'
+                      }`}
+                      value={row.lista_estado ?? ''}
+                      disabled={listaEstadoSavingId === row.incident_id}
+                      aria-label={`Estado lista LLEE CID ${row.cid ?? row.incident_id}`}
+                      onChange={(e) => {
+                        const next = e.target.value
+                        onListaEstadoChange(
+                          row.incident_id,
+                          next === '' ? null : (next as ListaLleeEstado),
+                        )
+                      }}
+                    >
+                      <option value="">— Elegir —</option>
+                      {LISTA_ESTADO_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </select>
+                  ) : row.lista_estado ? (
                     <span
                       className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-bold ${
                         LISTA_ESTADO_BADGE[row.lista_estado] ?? LISTA_ESTADO_BADGE.Activo
@@ -136,9 +180,12 @@ export function ReportDataTable({
                     </span>
                   </span>
                 </td>
-                <td className={`${td} min-w-0 text-slate-700 dark:text-slate-300`}>
-                  <span className="block whitespace-pre-wrap break-words" title={row.detalle ?? undefined}>
-                    {row.detalle?.trim() ? row.detalle : '—'}
+                <td
+                  className={`${td} max-w-[220px] text-slate-700 dark:text-slate-300`}
+                  title={row.detalle?.trim() ? row.detalle : undefined}
+                >
+                  <span className="line-clamp-2 whitespace-pre-wrap break-words text-[12px] leading-snug">
+                    {previewDetalle(row.detalle)}
                   </span>
                 </td>
                 <td className={`${td} whitespace-nowrap text-slate-700 dark:text-slate-300`}>{row.provincia ?? '—'}</td>
@@ -148,13 +195,14 @@ export function ReportDataTable({
                 </td>
                 {showAction ? (
                   <td className={td}>
-                    {onManage ? (
+                    {onVerDetalle ? (
                       <button
                         type="button"
-                        className="text-left text-xs font-semibold text-blue-600 hover:underline dark:text-blue-400"
-                        onClick={() => onManage(row.incident_id)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-800 transition hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-950"
+                        onClick={() => onVerDetalle(row)}
                       >
-                        Gestionar →
+                        <MessageSquareText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                        {editable ? 'Ver / editar detalle' : 'Ver detalle'}
                       </button>
                     ) : null}
                   </td>
