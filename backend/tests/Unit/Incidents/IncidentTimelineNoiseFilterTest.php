@@ -3,8 +3,11 @@
 namespace Tests\Unit\Incidents;
 
 use App\Enums\CidStatus;
+use App\Enums\FollowupStatus;
+use App\Enums\ManagementClassification;
 use App\Domain\Incidents\Support\IncidentTimelineBuilder;
 use App\Models\Incident;
+use App\Models\IncidentManagement;
 use App\Models\IncidentUpdate;
 use App\Models\NetworkAssignment;
 use App\Models\School;
@@ -15,7 +18,7 @@ class IncidentTimelineNoiseFilterTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_timeline_keeps_creation_and_recovery_hides_sync_noise(): void
+    public function test_timeline_keeps_comments_and_milestones_hides_noise(): void
     {
         $school = School::query()->create([
             'codigo_local' => 'T1',
@@ -39,7 +42,7 @@ class IncidentTimelineNoiseFilterTest extends TestCase
         IncidentUpdate::query()->create([
             'incident_id' => $incident->id,
             'type' => 'SYSTEM',
-            'observation' => 'Incidencia creada. Estado CAÍDO (Ping).',
+            'observation' => 'Incidencia creada por transición a CAÍDO (Ping).',
             'status_after' => 'PENDIENTE_CONTACTO',
         ]);
         IncidentUpdate::query()->create([
@@ -49,23 +52,44 @@ class IncidentTimelineNoiseFilterTest extends TestCase
         ]);
         IncidentUpdate::query()->create([
             'incident_id' => $incident->id,
-            'type' => 'SYSTEM',
+            'type' => 'SYSTEM_RECOVERY',
             'observation' => 'PRTG reportó recuperación (Ping OPERATIVO). Requiere revisión operativa.',
             'status_before' => 'EN_GESTION',
-            'status_after' => 'RECUPERADO',
+            'status_after' => FollowupStatus::PendienteCierre->value,
+        ]);
+        IncidentUpdate::query()->create([
+            'incident_id' => $incident->id,
+            'type' => 'MANUAL',
+            'observation' => 'Ticket cerrado por el operador.',
+            'status_after' => FollowupStatus::Cerrado->value,
         ]);
 
-        $incident->load(['managements', 'updates.user']);
+        IncidentManagement::query()->create([
+            'incident_id' => $incident->id,
+            'classification' => ManagementClassification::ContactConfirmed,
+            'detail' => 'Equipos apagados por horario',
+            'observation' => null,
+            'created_at' => now(),
+        ]);
+
+        $incident->load(['managements.author', 'updates.user']);
         $timeline = IncidentTimelineBuilder::build($incident);
         $titles = array_column($timeline, 'title');
 
-        $this->assertContains('Incidencia creada', $titles);
-        $this->assertContains('PRTG reportó recuperación', $titles);
+        $this->assertContains('Enlace caído', $titles);
+        $this->assertContains('Enlace restablecido', $titles);
+        $this->assertContains('Ticket cerrado', $titles);
+        $this->assertContains('Comentario', $titles);
         $this->assertNotContains('Evento del sistema', $titles);
+
         foreach ($timeline as $event) {
             $detail = mb_strtolower((string) ($event['detail'] ?? ''));
             $this->assertStringNotContainsString('sync tard', $detail);
             $this->assertStringNotContainsString('downtimesince', $detail);
+            $this->assertStringNotContainsString('caída de enlace ·', $detail);
         }
+
+        $comment = collect($timeline)->firstWhere('title', 'Comentario');
+        $this->assertSame('Equipos apagados por horario', $comment['detail'] ?? null);
     }
 }

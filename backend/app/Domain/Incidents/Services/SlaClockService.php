@@ -4,6 +4,7 @@ namespace App\Domain\Incidents\Services;
 
 use App\Enums\MineduReason;
 use App\Models\Incident;
+use App\Models\School;
 use App\Support\OperationalTime;
 use Carbon\CarbonInterface;
 use Illuminate\Support\Carbon;
@@ -29,7 +30,7 @@ class SlaClockService
     public function snapshot(Incident $incident): array
     {
         $incident->loadMissing('school');
-        $zone = $this->zoneForClassification($incident->school?->clasificacion);
+        $zone = $this->zoneForSchool($incident->school);
         $cap = $zone['cap_seconds'];
         $reason = $incident->minedu_reason instanceof MineduReason
             ? $incident->minedu_reason
@@ -173,6 +174,16 @@ class SlaClockService
     }
 
     /**
+     * Ámbito del colegio: primero `ambito` (IMPLEMENTACION), luego clasificacion legacy.
+     *
+     * @return array{zone: string, label: string, cap_seconds: int}
+     */
+    public function zoneForSchool(?School $school): array
+    {
+        return $this->zoneForClassification($school?->ambito ?: $school?->clasificacion);
+    }
+
+    /**
      * @return array{zone: string, label: string, cap_seconds: int}
      */
     public function zoneForClassification(?string $clasificacion): array
@@ -195,7 +206,7 @@ class SlaClockService
 
         return [
             'zone' => 'SIN_ZONA',
-            'label' => 'Sin zona en el colegio · se toma rural, 36 h al mes',
+            'label' => 'Sin ámbito URBANA/RURAL · se toma rural, 36 h al mes',
             'cap_seconds' => self::RURAL_SECONDS,
         ];
     }

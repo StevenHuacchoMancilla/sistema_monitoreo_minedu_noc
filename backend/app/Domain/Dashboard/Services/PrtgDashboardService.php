@@ -60,10 +60,14 @@ class PrtgDashboardService
             ->active()
             ->whereIn('followup_status', FollowupStatus::managingValues())
             ->where(function ($q) {
+                $q->where('is_grave_incident', false)
+                    ->orWhereNotNull('grave_closed_at');
+            })
+            ->where(function ($q) {
                 $q->where('detection_source', Incident::DETECTION_MANUAL_PARTIAL)
                     ->orWhereHas(
                         'sensor',
-                        fn ($sensor) => $sensor->whereIn('normalized_status', MonitoringStatus::outageValues())
+                        fn ($sensor) => $sensor->where('normalized_status', MonitoringStatus::Caido->value)
                     );
             })
             ->count();
@@ -201,6 +205,10 @@ class PrtgDashboardService
                 'pendientes_contacto' => $pendingContact,
                 'en_gestion' => $enGestion,
                 'recaida_gestion' => $recaidaGestion,
+                'mantenimientos' => (int) \App\Models\ServiceTicket::query()
+                    ->where('is_maintenance', true)
+                    ->where('status', \App\Models\ServiceTicket::STATUS_OPEN)
+                    ->count(),
                 'concentraciones' => $concentrationCount,
                 'recuperados' => $recoveredToday,
                 'pending_reviews' => $pendingReviews,

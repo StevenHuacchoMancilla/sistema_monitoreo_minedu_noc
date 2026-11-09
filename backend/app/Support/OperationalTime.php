@@ -40,6 +40,16 @@ final class OperationalTime
         return $a !== null && $b !== null && self::localDate($a) === self::localDate($b);
     }
 
+    /** Sábado o domingo en zona operativa (America/Lima). */
+    public static function isWeekend(?CarbonInterface $at = null): bool
+    {
+        $local = $at === null
+            ? self::now()
+            : Carbon::instance($at)->setTimezone(self::tz());
+
+        return $local->isSaturday() || $local->isSunday();
+    }
+
     public static function format(?CarbonInterface $at, string $format): ?string
     {
         return $at?->copy()->setTimezone(self::tz())->format($format);

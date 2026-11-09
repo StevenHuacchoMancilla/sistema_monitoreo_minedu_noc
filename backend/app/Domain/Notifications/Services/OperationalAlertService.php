@@ -107,7 +107,7 @@ class OperationalAlertService
                 'estado_prtg' => MonitoringStatus::Caido->value,
                 'followup_status' => $incident->followup_status?->value,
                 'followup_label' => $incident->followup_status?->label(),
-                'href' => '/incidents/total',
+                'href' => '/history/incidents/'.$incident->id,
             ];
         })->values();
 
@@ -194,7 +194,7 @@ class OperationalAlertService
     }
 
     /**
-     * Alertas operativas in-app: recuperaciones pendientes de revisión.
+     * Alertas operativas: solo recuperados que estaban en gestión y siguen en Pendiente de cierre.
      *
      * @return array{data: list<array<string, mixed>>, meta: array<string, int>}
      */
@@ -210,12 +210,11 @@ class OperationalAlertService
                 'activeTracking' => fn ($q) => $q->select(['id', 'incident_id', 'status'])->limit(1),
             ])
             ->whereNotNull('recovered_at')
+            ->where('recovered_while_managing', true)
+            ->where('followup_status', FollowupStatus::PendienteCierre)
             ->where(function ($q) {
-                $q->where('recovery_review_status', RecoveryReviewStatus::PendingReview->value)
-                    ->orWhere(function ($q2) {
-                        $q2->where('recovered_while_managing', true)
-                            ->whereNull('recovery_review_status');
-                    });
+                $q->whereNull('recovery_review_status')
+                    ->orWhere('recovery_review_status', RecoveryReviewStatus::PendingReview->value);
             })
             ->orderByDesc('recovered_at')
             ->limit($limit)
@@ -264,7 +263,7 @@ class OperationalAlertService
         $bodyParts = array_values(array_filter([
             $cid ? 'CID '.$cid : null,
             $local,
-            'Estaba en gestión y ya se recuperó. Quedó en pendiente de cierre.',
+            'Se recuperó estando en gestión. Revisa el seguimiento o confirma el cierre.',
         ]));
 
         $trackingId = $incident->activeTracking->first()?->id
@@ -290,7 +289,9 @@ class OperationalAlertService
             'tracking_id' => $trackingId ? (int) $trackingId : null,
             'management_classification' => $incident->management_classification?->value,
             'management_classification_label' => $incident->management_classification?->label(),
-            'href' => '/history/incidents/'.$incident->id,
+            'followup_status' => $incident->followup_status?->value,
+            'href' => '/incidents/pendiente-cierre',
+            'case_href' => '/history/incidents/'.$incident->id,
         ];
     }
 }

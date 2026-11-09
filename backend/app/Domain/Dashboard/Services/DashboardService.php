@@ -53,12 +53,13 @@ class DashboardService
                 (SELECT COUNT(*)::int FROM incidents
                     WHERE recovered_at IS NULL
                       AND followup_status IN (?, ?, ?, ?, ?)
+                      AND NOT (is_grave_incident = true AND grave_closed_at IS NULL)
                       AND (
                         detection_source = ?
                         OR EXISTS (
                           SELECT 1 FROM prtg_sensors s
                           WHERE s.id = incidents.prtg_sensor_id
-                            AND s.normalized_status IN (?, ?)
+                            AND s.normalized_status = ?
                         )
                       )
                 ) AS en_gestion,
@@ -73,7 +74,6 @@ class DashboardService
                 ...$managing,
                 Incident::DETECTION_MANUAL_PARTIAL,
                 MonitoringStatus::Caido->value,
-                MonitoringStatus::Parcial->value,
                 $dayStart,
                 $dayEnd,
                 RecoveryReviewStatus::PendingReview->value,
@@ -123,6 +123,10 @@ class DashboardService
                 'en_gestion' => (int) $counts->en_gestion,
                 'pendiente_cierre' => $outageNav['pendiente_cierre'],
                 'incidencias_graves' => $outageNav['incidencias_graves'],
+                'mantenimientos' => (int) \App\Models\ServiceTicket::query()
+                    ->where('is_maintenance', true)
+                    ->where('status', \App\Models\ServiceTicket::STATUS_OPEN)
+                    ->count(),
                 'concentraciones' => $concentrationCount,
                 'caidas_masivas' => $massOutageCount,
                 'recuperados' => (int) $counts->recovered_today,
@@ -160,7 +164,7 @@ class DashboardService
                     OR EXISTS (
                         SELECT 1 FROM prtg_sensors s
                         WHERE s.id = incidents.prtg_sensor_id
-                          AND s.normalized_status IN (?, ?)
+                          AND s.normalized_status = ?
                     )
                   )
                 ORDER BY network_assignment_id, started_at DESC NULLS LAST, id DESC
@@ -169,7 +173,6 @@ class DashboardService
                 FollowupStatus::PendienteContacto->value,
                 Incident::DETECTION_MANUAL_PARTIAL,
                 MonitoringStatus::Caido->value,
-                MonitoringStatus::Parcial->value,
             ]
         );
 
@@ -542,13 +545,20 @@ class DashboardService
         $query = Incident::query()->active();
 
         if ($openManagement) {
-            // Tickets abiertos en gestión, aunque PRTG ya los vea operativos.
-            $query->whereIn('followup_status', FollowupStatus::managingValues());
+            // Tickets abiertos en gestión (incluye recuperados pendientes de cierre).
+            // Las incidencias graves abiertas viven solo en Incidencias.
+            $query->whereIn('followup_status', [
+                ...FollowupStatus::managingValues(),
+                FollowupStatus::PendienteCierre->value,
+            ])->where(function ($q) {
+                $q->where('is_grave_incident', false)
+                    ->orWhereNotNull('grave_closed_at');
+            });
         } else {
             $query->where(function ($q) {
                 $q->whereHas(
                     'sensor',
-                    fn ($sensor) => $sensor->whereIn('normalized_status', MonitoringStatus::outageValues())
+                    fn ($sensor) => $sensor->where('normalized_status', MonitoringStatus::Caido->value)
                 )->orWhere('detection_source', Incident::DETECTION_MANUAL_PARTIAL);
             });
         }

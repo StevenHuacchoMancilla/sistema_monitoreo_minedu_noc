@@ -31,6 +31,7 @@ class IncidentCaseFileService
         $incident->load([
             'school',
             'networkAssignment',
+            'serviceTicket',
             'sensor:id,prtg_sensor_id,network_assignment_id,name,device_name,normalized_status,status_text,last_check',
             'managements.author:'.self::USER_COLUMNS,
             'updates.user:'.self::USER_COLUMNS,
@@ -54,10 +55,15 @@ class IncidentCaseFileService
         $reviewStatus = $incident->recovery_review_status instanceof RecoveryReviewStatus
             ? $incident->recovery_review_status
             : RecoveryReviewStatus::tryFrom((string) $incident->recovery_review_status);
+        $ticket = $incident->serviceTicket;
+        $ticketStats = $this->ticketStats($incident);
 
         return [
             'incident' => [
                 'id' => $incident->id,
+                'ticket_code' => $ticket?->ticket_code,
+                'ticket_status' => $ticket?->status,
+                'display_code' => $ticket?->ticket_code ?: 'Sin ticket',
                 'started_at' => $incident->started_at?->toIso8601String(),
                 'recovered_at' => $incident->recovered_at?->toIso8601String(),
                 'is_active' => $incident->recovered_at === null,
@@ -67,8 +73,22 @@ class IncidentCaseFileService
                 'followup_status' => $incident->followup_status?->value,
                 'followup_label' => $incident->followup_status?->label(),
                 'case_status' => IncidentCaseStatus::resolve($incident, $tracking),
-                'reincidencia' => $this->reincidencia($incident),
+                'reincidencia' => $this->reincidencia($incident, $ticketStats),
             ],
+            'ticket' => $ticket ? [
+                'id' => $ticket->id,
+                'ticket_code' => $ticket->ticket_code,
+                'status' => $ticket->status,
+                'kind' => $ticket->kind,
+                'opened_at' => $ticket->opened_at?->toIso8601String(),
+                'closed_at' => $ticket->closed_at?->toIso8601String(),
+                'opened_by_name' => $ticket->opened_by_name,
+                'closed_by_name' => $ticket->closed_by_name,
+                'minedu' => $ticket->minedu,
+                'cause_code' => $ticket->cause_code,
+                'cause' => $ticket->cause,
+                'detail' => $ticket->detail,
+            ] : null,
             'gestion' => [
                 'classification' => $incident->management_classification?->value,
                 'classification_label' => $incident->management_classification?->label(),
@@ -131,14 +151,23 @@ class IncidentCaseFileService
     }
 
     /**
-     * Posición cronológica de la incidencia en el colegio, en una sola consulta.
+     * Posición del ticket en el colegio (o de la caída si aún no hay ticket).
      *
+     * @param  array{numero: int, total: int}  $ticketStats
      * @return array{numero: int, total: int, label: string}
      */
-    private function reincidencia(Incident $incident): array
+    private function reincidencia(Incident $incident, array $ticketStats): array
     {
-        $startedAt = $incident->getRawOriginal('started_at');
+        $ticket = $incident->serviceTicket;
+        if ($ticket !== null && $ticketStats['total'] > 0) {
+            return [
+                'numero' => $ticketStats['numero'],
+                'total' => $ticketStats['total'],
+                'label' => "Ticket {$ticketStats['numero']} de {$ticketStats['total']}",
+            ];
+        }
 
+        $startedAt = $incident->getRawOriginal('started_at');
         $row = Incident::query()
             ->where('school_id', $incident->school_id)
             ->selectRaw('count(*) as total')
@@ -155,109 +184,60 @@ class IncidentCaseFileService
         return [
             'numero' => $numero,
             'total' => $total,
-            'label' => "Incidencia {$numero} de {$total}",
+            'label' => "Caída {$numero} de {$total} · sin ticket",
         ];
     }
 
     /**
-     * Línea de tiempo unificada: gestiones, eventos del sistema, campo, revisión y Tracking.
+     * @return array{numero: int, total: int}
+     */
+    private function ticketStats(Incident $incident): array
+    {
+        $ticket = $incident->serviceTicket;
+        if ($ticket === null || $incident->school_id === null) {
+            return ['numero' => 0, 'total' => 0];
+        }
+
+        $total = \App\Models\ServiceTicket::query()
+            ->where('school_id', $incident->school_id)
+            ->count();
+
+        $openedAt = $ticket->getRawOriginal('opened_at') ?? $ticket->opened_at;
+        $numero = (int) \App\Models\ServiceTicket::query()
+            ->where('school_id', $incident->school_id)
+            ->where(function ($q) use ($openedAt, $ticket) {
+                $q->where('opened_at', '<', $openedAt)
+                    ->orWhere(function ($q2) use ($openedAt, $ticket) {
+                        $q2->where('opened_at', $openedAt)->where('id', '<=', $ticket->id);
+                    });
+            })
+            ->count();
+
+        return [
+            'numero' => max(1, $numero),
+            'total' => $total,
+        ];
+    }
+
+    /**
+     * Línea de tiempo limpia: comentarios de gestión + hitos (caída / restablecimiento / cierre).
+     * Sin Tracking duplicado ni ruido de sync.
      *
      * @return list<array<string, mixed>>
      */
     private function timeline(Incident $incident, ?TrackingRecord $tracking): array
     {
+        unset($tracking);
+
         $events = array_map(function (array $event) {
             [$group, $role] = $this->classify($event);
 
             return $event + ['group' => $group, 'role' => $role];
         }, IncidentTimelineBuilder::build($incident));
 
-        if ($tracking !== null) {
-            $ticket = $tracking->report_ticket ?? $tracking->ticket;
-            $events[] = [
-                'id' => 'tracking-open-'.$tracking->id,
-                'source' => 'tracking',
-                'at' => $tracking->opened_at?->toIso8601String() ?? $tracking->created_at?->toIso8601String(),
-                'kind' => 'TRACKING_OPEN',
-                'icon' => 'ticket',
-                'actor' => $tracking->openedByDisplayName() ?? 'Sistema',
-                'title' => 'Tracking abierto',
-                'detail' => implode(' · ', array_filter([
-                    $ticket ? 'Ticket '.$ticket : null,
-                    $tracking->case_code ? 'Caso '.$tracking->case_code : null,
-                    $tracking->description,
-                ])) ?: null,
-                'status_before' => null,
-                'status_after' => null,
-                'contact' => null,
-                'scope' => null,
-                'classification' => null,
-                'group' => 'TRACKING',
-                'role' => 'Abrió Tracking',
-            ];
-
-            foreach ($tracking->updates as $update) {
-                $events[] = $this->fromTrackingUpdate($update);
-            }
-
-            if ($tracking->isClosed()) {
-                $events[] = [
-                    'id' => 'tracking-close-'.$tracking->id,
-                    'source' => 'tracking',
-                    'at' => $tracking->closed_at?->toIso8601String() ?? $tracking->updated_at?->toIso8601String(),
-                    'kind' => 'TRACKING_CLOSE',
-                    'icon' => 'lock',
-                    'actor' => $tracking->closedByDisplayName() ?? 'Sistema',
-                    'title' => 'Tracking cerrado',
-                    'detail' => $tracking->closing_note,
-                    'status_before' => null,
-                    'status_after' => null,
-                    'contact' => null,
-                    'scope' => null,
-                    'classification' => null,
-                    'group' => 'TRACKING',
-                    'role' => 'Cerró Tracking',
-                ];
-            }
-        }
-
         usort($events, fn (array $a, array $b) => strcmp((string) ($a['at'] ?? ''), (string) ($b['at'] ?? '')));
 
         return array_values($events);
-    }
-
-    /**
-     * @return array<string, mixed>
-     */
-    private function fromTrackingUpdate(TrackingUpdate $update): array
-    {
-        $type = $update->event_type instanceof TrackingEventType
-            ? $update->event_type
-            : TrackingEventType::tryFrom((string) $update->event_type);
-
-        return [
-            'id' => 'tracking-update-'.$update->id,
-            'source' => 'tracking',
-            'at' => ($update->occurred_at ?? $update->created_at)?->toIso8601String(),
-            'kind' => 'TRACKING_'.($type?->value ?? 'OTHER'),
-            'icon' => match ($type) {
-                TrackingEventType::TechnicalRecovery => 'check',
-                TrackingEventType::Contact => 'phone',
-                TrackingEventType::FieldAction => 'truck',
-                TrackingEventType::SystemEvent => 'activity',
-                default => 'message',
-            },
-            'actor' => $update->actorDisplayName(),
-            'title' => 'Tracking · '.($type?->label() ?? 'Seguimiento'),
-            'detail' => $update->body,
-            'status_before' => null,
-            'status_after' => null,
-            'contact' => null,
-            'scope' => null,
-            'classification' => null,
-            'group' => ($type?->isSystem() ?? false) ? 'SISTEMA' : 'TRACKING',
-            'role' => 'Seguimiento Tracking',
-        ];
     }
 
     /**
@@ -267,14 +247,19 @@ class IncidentCaseFileService
     private function classify(array $event): array
     {
         if (($event['source'] ?? null) === 'management') {
-            return ['GESTION', 'Gestión'];
+            return ['GESTION', 'Comentario'];
         }
 
-        return match ((string) ($event['kind'] ?? '')) {
-            'FIELD_DISPATCH' => ['CAMPO', 'Desplazamiento'],
-            'RECOVERY_REVIEW' => ['REVISION', 'Revisión de recuperación'],
-            'NOTE' => ['GESTION', 'Observación'],
-            default => ['SISTEMA', 'Sistema'],
+        $title = (string) ($event['title'] ?? '');
+
+        return match (true) {
+            $title === 'Enlace caído' => ['SISTEMA', 'Caída'],
+            $title === 'Enlace restablecido' => ['SISTEMA', 'Restablecimiento'],
+            $title === 'Ticket cerrado' => ['SISTEMA', 'Cierre'],
+            default => match ((string) ($event['kind'] ?? '')) {
+                'NOTE' => ['GESTION', 'Comentario'],
+                default => ['SISTEMA', 'Hito'],
+            },
         };
     }
 

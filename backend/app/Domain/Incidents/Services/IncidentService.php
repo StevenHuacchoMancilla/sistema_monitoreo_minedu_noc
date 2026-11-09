@@ -38,14 +38,47 @@ class IncidentService
         ?CarbonInterface $stateSince = null,
         ?Closure $onAnomaly = null,
     ): void {
-        // CAÍDO (rojo) y PARCIAL/Advertencia (amarillo PRTG) abren o mantienen la caída.
-        if ($current?->isOutage()) {
+        // Solo CAÍDO (rojo) abre ticket. Intermitentes/parciales (amarillo) no cuentan como caída.
+        if ($current === MonitoringStatus::Caido) {
             $this->ensureOpen($assignment, $sensor, $stateSince, $onAnomaly);
 
             return;
         }
 
-        // Solo se recupera al volver a OPERATIVO (sale del amarillo o del rojo).
+        // Si ya había caída abierta y pasa a parcial, solo actualiza estado (no crea ticket nuevo).
+        if ($current === MonitoringStatus::Parcial) {
+            $active = Incident::query()
+                ->where('network_assignment_id', $assignment->id)
+                ->where('prtg_sensor_id', $sensor->id)
+                ->whereNull('recovered_at')
+                ->first();
+            if ($active !== null && ! $active->isManualPartial()) {
+                $beforeStatus = (string) ($active->current_status instanceof MonitoringStatus
+                    ? $active->current_status->value
+                    : ($active->current_status ?? ''));
+                $active->update([
+                    'current_status' => MonitoringStatus::Parcial->value,
+                    'prtg_down_started_at' => $stateSince !== null
+                        ? OperationalTime::toStorage($stateSince)
+                        : $active->prtg_down_started_at,
+                ]);
+                // Sin notePartialToDown: es el camino inverso (caído → parcial).
+                if ($beforeStatus !== MonitoringStatus::Parcial->value) {
+                    IncidentUpdate::query()->create([
+                        'incident_id' => $active->id,
+                        'type' => 'SYSTEM',
+                        'status_before' => $active->followup_status?->value,
+                        'status_after' => $active->followup_status?->value,
+                        'observation' => 'Ping pasó a Advertencia (parcial / intermitente). La caída sigue abierta hasta OPERATIVO.',
+                        'created_at' => now(),
+                    ]);
+                }
+            }
+
+            return;
+        }
+
+        // Se recupera al volver a OPERATIVO desde caído o parcial (si había ticket abierto).
         if ($previous?->isOutage() && $current === MonitoringStatus::Operativo) {
             $this->recover($assignment, $sensor, $stateSince, $onAnomaly);
         }
@@ -115,6 +148,19 @@ class IncidentService
             return $active->fresh() ?? $active;
         }
 
+        // Incidencia grave abierta (recuperó en PRTG pero no se cerró): re-cae sin ticket nuevo.
+        $openGrave = Incident::query()
+            ->where('network_assignment_id', $assignment->id)
+            ->where('is_grave_incident', true)
+            ->whereNull('grave_closed_at')
+            ->whereNotNull('recovered_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($openGrave !== null) {
+            return $this->reopenOpenGrave($openGrave, $sensor, $downSince, $onAnomaly);
+        }
+
         $startedAt = $this->resolveStartedAt($assignment, $downSince, $onAnomaly);
 
         $school = $assignment->school()->first();
@@ -155,11 +201,63 @@ class IncidentService
             'created_at' => now(),
         ]);
 
-        $this->serviceTickets->ensureForIncident($incident);
+        // El ticket TGS nace solo al gestionar (IncidentManagementService), no al detectar la caída.
         // Re-caída / nueva caída con Tracking abierto: avisar y vincular, sin cerrar Tracking.
         $this->trackingHooks->onIncidentTechnicallyDown($incident);
 
         return $incident;
+    }
+
+    /**
+     * Reabre una incidencia grave que había recuperado en PRTG: mismo caso y mismo ticket TGS.
+     *
+     * @param  ?Closure(string, string, array<string, mixed>): void  $onAnomaly
+     */
+    public function reopenOpenGrave(
+        Incident $incident,
+        PrtgSensor $sensor,
+        ?CarbonInterface $downSince = null,
+        ?Closure $onAnomaly = null,
+    ): Incident {
+        $before = $incident->followup_status?->value;
+        $incident->loadMissing('networkAssignment');
+        $assignment = $incident->networkAssignment;
+        $downAt = $downSince !== null
+            ? OperationalTime::toStorage($downSince)
+            : ($assignment
+                ? $this->resolveStartedAt($assignment, $downSince, $onAnomaly)
+                : now());
+
+        $keepFollowup = $incident->followup_status instanceof FollowupStatus
+            && in_array($incident->followup_status->value, FollowupStatus::managingValues(), true);
+        $followup = $keepFollowup ? $incident->followup_status : FollowupStatus::EnGestion;
+
+        $incident->forceFill([
+            'recovered_at' => null,
+            'prtg_up_at' => null,
+            'current_status' => $sensor->normalized_status?->value ?? MonitoringStatus::Caido->value,
+            'prtg_sensor_id' => $sensor->id,
+            'prtg_down_started_at' => $downAt,
+            'followup_status' => $followup,
+            'recovered_while_managing' => false,
+            'recovery_review_status' => null,
+            'recovery_reviewed_at' => null,
+        ])->save();
+
+        IncidentUpdate::query()->create([
+            'incident_id' => $incident->id,
+            'type' => 'SYSTEM',
+            'status_before' => $before,
+            'status_after' => $followup->value,
+            'observation' => 'Re-caída con incidencia abierta: se reutiliza el mismo caso y ticket (etiqueta En incidencia).',
+            'created_at' => now(),
+        ]);
+
+        $fresh = $incident->fresh() ?? $incident;
+        $this->serviceTickets->markDownAgain($fresh);
+        $this->trackingHooks->onIncidentTechnicallyDown($fresh);
+
+        return $fresh;
     }
 
     /** Solo parcial → caído. Una recuperación desde amarillo no marca nada. */
@@ -238,6 +336,8 @@ class IncidentService
         $wasManaging = $before !== null && in_array($before, FollowupStatus::managingValues(), true);
         $hadFieldTech = $before === FollowupStatus::TecnicoEnCampo->value;
         $needsReview = $wasManaging || $hadFieldTech;
+        // Sábado/domingo (hora Lima): no encolar Pendiente de cierre.
+        $weekendRecovery = OperationalTime::isWeekend($recoveredAt);
 
         $observationSuffix = $wasManaging
             ? ' Requiere cierre operativo (estaba en gestión).'
@@ -246,21 +346,29 @@ class IncidentService
         // Incidencias graves abiertas: PRTG UP no cierra ni quita el flag; solo marca recuperación técnica.
         $isOpenGrave = (bool) $incident->is_grave_incident && $incident->grave_closed_at === null;
 
-        // Incidencia grave: se queda en Incidencias hasta el cierre manual, aunque PRTG ya esté UP.
-        // El resto pasa a Pendiente de cierre. Una nueva caída abre otro ticket.
+        // Grave: sigue en gestión hasta cierre manual.
+        // Lun–vie: toda recuperación desde Caídas totales → Pendiente de cierre (no perder seguimiento).
+        // Sáb–dom: no pasa a Pendiente de cierre; cierre automático (sin cola operativa).
         if ($isOpenGrave) {
             $afterStatus = $incident->followup_status ?? FollowupStatus::EnGestion;
             $observationSuffix .= ' Incidencia grave permanece abierta (cierre manual).';
+        } elseif ($weekendRecovery) {
+            $afterStatus = FollowupStatus::Cerrado;
+            $observationSuffix .= ' Fin de semana (sáb/dom): recuperación sin Pendiente de cierre.';
         } else {
             $afterStatus = FollowupStatus::PendienteCierre;
+            $observationSuffix .= $needsReview
+                ? ' Recuperado en gestión: pasa a Pendiente de cierre.'
+                : ' Recuperado desde Caídas totales: pasa a Pendiente de cierre.';
         }
 
+        $queueClose = ! $isOpenGrave && ! $weekendRecovery;
         $payload = [
             'recovered_at' => $recoveredAt,
             'current_status' => MonitoringStatus::Operativo->value,
             'followup_status' => $afterStatus,
-            'recovered_while_managing' => $isOpenGrave ? false : $needsReview,
-            'recovery_review_status' => (! $isOpenGrave && $needsReview)
+            'recovered_while_managing' => $isOpenGrave || $weekendRecovery ? false : $needsReview,
+            'recovery_review_status' => ($queueClose && $needsReview)
                 ? RecoveryReviewStatus::PendingReview->value
                 : null,
             'recovery_reviewed_at' => null,
@@ -271,14 +379,13 @@ class IncidentService
         $incident->update($payload);
         $freshForTicket = $incident->fresh() ?? $incident;
         $this->serviceTickets->markRestored($freshForTicket, $recoveredAt);
+        if ($afterStatus === FollowupStatus::Cerrado && ! $isOpenGrave) {
+            $this->serviceTickets->close($freshForTicket, 'sistema', $recoveredAt);
+        }
 
         $clockNote = (bool) config('incidents.use_system_clock', false)
             ? ' Hora de cierre = reloj del sistema al detectar OPERATIVO.'
             : ' Hora de cierre = lastcheck − uptimesince PRTG.';
-
-        if (! $isOpenGrave) {
-            $observationSuffix .= ' Pasa a Pendiente de cierre. Una nueva caída abre otro ticket.';
-        }
 
         IncidentUpdate::query()->create([
             'incident_id' => $incident->id,

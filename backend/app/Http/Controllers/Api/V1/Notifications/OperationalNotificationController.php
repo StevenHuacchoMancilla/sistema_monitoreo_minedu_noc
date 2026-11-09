@@ -37,6 +37,21 @@ class OperationalNotificationController extends Controller
         );
     }
 
+    public function outages(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'minutes' => ['nullable', 'integer', 'min:5', 'max:1440'],
+            'limit' => ['nullable', 'integer', 'min:1', 'max:80'],
+        ]);
+
+        return response()->json(
+            $this->alerts->recentOutages(
+                (int) ($data['minutes'] ?? 60),
+                (int) ($data['limit'] ?? 40),
+            )
+        );
+    }
+
     public function live(Request $request): JsonResponse
     {
         $data = $request->validate([

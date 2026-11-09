@@ -2,15 +2,20 @@
 
 namespace App\Domain\Incidents\Support;
 
+use App\Enums\FollowupStatus;
 use App\Models\Incident;
 use App\Models\IncidentManagement;
 use App\Models\IncidentUpdate;
 
+/**
+ * Historial del caso para el operador:
+ * - comentarios/gestiones agregadas
+ * - hitos de sistema: caída, recuperación PRTG, cierre de ticket
+ * Sin ruido de sync, Tracking duplicado ni eventos técnicos.
+ */
 final class IncidentTimelineBuilder
 {
     /**
-     * Timeline operativo (sin ruido técnico de sync/jobs).
-     *
      * @return list<array<string, mixed>>
      */
     public static function build(Incident $incident): array
@@ -23,12 +28,11 @@ final class IncidentTimelineBuilder
 
         foreach ($incident->updates as $update) {
             $type = strtoupper((string) $update->type);
-            // MANAGEMENT ya se representa con incident_managements (más rico + snapshot).
+            // MANAGEMENT ya viene en incident_managements.
             if ($type === 'MANAGEMENT') {
                 continue;
             }
-            // Ocultar ruido técnico de sync/alineación; conservar creación y recuperaciones PRTG.
-            if (self::isNoisySystemUpdate($update)) {
+            if (! self::isMilestoneUpdate($update)) {
                 continue;
             }
             $events[] = self::fromUpdate($update);
@@ -46,31 +50,25 @@ final class IncidentTimelineBuilder
      */
     private static function fromManagement(IncidentManagement $m): array
     {
-        $classification = $m->classification?->value;
-        $icon = match ($classification) {
-            'CONTACT_CONFIRMED' => 'phone',
-            'LINK_OUTAGE' => 'network',
-            'NO_RESPONSE' => 'phone_missed',
-            'COMPLAINT' => 'message',
-            default => 'wrench',
-        };
+        $comment = trim(implode("\n", array_values(array_filter([
+            $m->detail ? trim((string) $m->detail) : null,
+            $m->observation ? trim((string) $m->observation) : null,
+        ]))));
 
-        $detailParts = array_values(array_filter([
-            $m->classification?->label(),
-            $m->scope?->value,
-            $m->detail,
-            $m->observation,
-        ]));
+        $classification = $m->classification?->value;
+        $hasComment = $comment !== '';
 
         return [
             'id' => 'management-'.$m->id,
             'source' => 'management',
             'at' => ($m->contact_attempted_at ?? $m->created_at)?->toIso8601String(),
             'kind' => 'MANAGEMENT',
-            'icon' => $icon,
+            'icon' => $hasComment ? 'message' : 'wrench',
             'actor' => $m->author?->name ?? ($m->created_by ? 'Operador #'.$m->created_by : 'Operador'),
-            'title' => $m->classification?->label() ?? 'Gestión operativa',
-            'detail' => $detailParts !== [] ? implode(' · ', $detailParts) : null,
+            'title' => $hasComment ? 'Comentario' : ($m->classification?->label() ?? 'Gestión'),
+            'detail' => $hasComment
+                ? $comment
+                : ($m->classification?->label() ?? null),
             'status_before' => null,
             'status_after' => null,
             'contact' => ($m->contact_name_snapshot || $m->contact_phone_snapshot || $m->contact_role_snapshot) ? [
@@ -89,32 +87,48 @@ final class IncidentTimelineBuilder
     private static function fromUpdate(IncidentUpdate $u): array
     {
         $type = strtoupper((string) $u->type);
-        $observation = (string) ($u->observation ?? '');
-        $isRecovery = in_array($type, ['SYSTEM', 'SYSTEM_RECOVERY'], true) && (
-            str_contains(mb_strtolower($observation), 'recuper')
-            || $u->status_after === 'RECUPERADO'
-            || $type === 'SYSTEM_RECOVERY'
+        $observation = trim((string) ($u->observation ?? ''));
+        $after = (string) ($u->status_after ?? '');
+
+        $isClose = $after === FollowupStatus::Cerrado->value
+            || str_contains(mb_strtolower($observation), 'ticket cerrado')
+            || str_contains(mb_strtolower($observation), 'cierre operativo');
+
+        $isRecovery = in_array($type, ['SYSTEM_RECOVERY', 'SYSTEM'], true) && (
+            $type === 'SYSTEM_RECOVERY'
+            || $after === FollowupStatus::Recuperado->value
+            || $after === FollowupStatus::PendienteCierre->value
+            || str_contains(mb_strtolower($observation), 'recuper')
+            || str_contains(mb_strtolower($observation), 'operativo')
+        ) && ! $isClose;
+
+        $isCreated = $type === 'SYSTEM' && (
+            str_contains(mb_strtolower($observation), 'incidencia creada')
+            || str_contains(mb_strtolower($observation), 'creada por')
+            || str_contains(mb_strtolower($observation), 'transición a caído')
+            || ($u->status_before === null && $after === FollowupStatus::PendienteContacto->value)
         );
-        $isReview = $type === 'RECOVERY_REVIEW';
-        $isDispatch = $type === 'FIELD_DISPATCH';
 
         $icon = match (true) {
-            $isReview => 'wrench',
-            $isDispatch => 'truck',
+            $isClose => 'lock',
             $isRecovery => 'check',
-            $type === 'SYSTEM' => 'activity',
-            $type === 'NOTE' => 'message',
+            $isCreated => 'activity',
             default => 'activity',
         };
 
         $title = match (true) {
-            $isReview => 'Revisión operativa de recuperación',
-            $isDispatch => 'Desplazamiento a campo',
-            $isRecovery => 'PRTG reportó recuperación',
-            $type === 'SYSTEM' && str_contains(mb_strtolower($observation), 'creada') => 'Incidencia creada',
-            $type === 'SYSTEM' => 'Evento del sistema',
-            $type === 'NOTE' => 'Observación',
-            default => 'Actualización',
+            $isClose => 'Ticket cerrado',
+            $isRecovery => 'Enlace restablecido',
+            $isCreated => 'Enlace caído',
+            default => 'Hito del sistema',
+        };
+
+        // Detalle corto para el operador (sin párrafos técnicos largos).
+        $detail = match (true) {
+            $isClose => $observation !== '' ? $observation : 'Cierre operativo del ticket.',
+            $isRecovery => 'PRTG reportó recuperación (Ping OPERATIVO).',
+            $isCreated => 'PRTG reportó caída (Ping CAÍDO).',
+            default => $observation !== '' ? $observation : null,
         };
 
         return [
@@ -125,7 +139,7 @@ final class IncidentTimelineBuilder
             'icon' => $icon,
             'actor' => $u->user?->name ?? ($u->user_id ? 'Operador #'.$u->user_id : 'Sistema'),
             'title' => $title,
-            'detail' => $observation !== '' ? $observation : null,
+            'detail' => $detail,
             'status_before' => $u->status_before,
             'status_after' => $u->status_after,
             'contact' => null,
@@ -134,55 +148,45 @@ final class IncidentTimelineBuilder
         ];
     }
 
-    /**
-     * Eventos SYSTEM de sync/alineación confunden al operador.
-     * Se mantienen: "Incidencia creada", recuperaciones PRTG, revisiones y campo.
-     */
-    private static function isNoisySystemUpdate(IncidentUpdate $u): bool
+    /** Solo caída, recuperación y cierre de ticket. */
+    private static function isMilestoneUpdate(IncidentUpdate $u): bool
     {
         $type = strtoupper((string) $u->type);
-        // Avisos automáticos del sistema no van al historial del ticket.
-        if (in_array($type, ['SYSTEM', 'SYSTEM_NOTE'], true)) {
+        $observation = mb_strtolower((string) ($u->observation ?? ''));
+        $after = (string) ($u->status_after ?? '');
+
+        if ($after === FollowupStatus::Cerrado->value) {
+            return true;
+        }
+        if ($type === 'MANUAL' && (
+            str_contains($observation, 'ticket cerrado')
+            || str_contains($observation, 'cierre operativo')
+            || str_contains($observation, 'cerrado por el operador')
+        )) {
             return true;
         }
 
-        $observation = mb_strtolower((string) ($u->observation ?? ''));
-
-        // Recuperación técnica / operativa: útil.
-        if (
-            str_contains($observation, 'recuper')
-            || $u->status_after === 'RECUPERADO'
-            || $type === 'SYSTEM_RECOVERY'
-        ) {
-            return false;
+        if ($type === 'SYSTEM_RECOVERY') {
+            return true;
         }
 
-        // Creación de incidencia: útil.
-        if (str_contains($observation, 'incidencia creada') || str_contains($observation, 'creada')) {
-            return false;
-        }
-
-        // Ruido típico de sync tardío / alineación de started_at.
-        $noiseMarkers = [
-            'sync tard',
-            'downtimesince',
-            'uptimesince',
-            'alinead',
-            'started_at',
-            'lastcheck',
-            're-aline',
-            'realine',
-            'timezone',
-            'utc',
-        ];
-
-        foreach ($noiseMarkers as $marker) {
-            if (str_contains($observation, $marker)) {
+        if ($type === 'SYSTEM') {
+            if (
+                str_contains($observation, 'incidencia creada')
+                || str_contains($observation, 'creada por')
+                || str_contains($observation, 'transición a caído')
+            ) {
+                return true;
+            }
+            if (
+                str_contains($observation, 'recuper')
+                || $after === FollowupStatus::Recuperado->value
+                || $after === FollowupStatus::PendienteCierre->value
+            ) {
                 return true;
             }
         }
 
-        // Cualquier otro SYSTEM genérico ("Evento del sistema") sin valor operativo.
-        return true;
+        return false;
     }
 }

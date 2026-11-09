@@ -1182,12 +1182,11 @@ class PrtgSyncService
         $stateSince = $since['at'];
 
         if ($previous === null || $previous === $current) {
-            // Caído (rojo) o Advertencia/parcial (amarillo): mantener ticket abierto.
-            if ($current?->isOutage()) {
+            // Solo CAÍDO abre/mantiene ticket nuevo. Parcial/intermitente no crea caída.
+            if ($current === MonitoringStatus::Caido) {
                 $key = $assignment->id.'|'.$sensor->id;
                 $open = $this->openIncidents?->get($key);
                 if ($open instanceof Incident && $this->downStartUnchanged($open, $stateSince)) {
-                    // Aun sin cambio de hora, reflejar si pasó de parcial ↔ caído.
                     if ($open->current_status !== $current->value) {
                         $before = $open->current_status instanceof MonitoringStatus
                             ? $open->current_status->value
@@ -1200,6 +1199,14 @@ class PrtgSyncService
                 }
                 $incident = $this->incidentService->ensureOpen($assignment, $sensor, $stateSince, $onAnomaly);
                 $this->openIncidents?->put($assignment->id.'|'.$incident->prtg_sensor_id, $incident);
+            } elseif ($current === MonitoringStatus::Parcial) {
+                $key = $assignment->id.'|'.$sensor->id;
+                $open = $this->openIncidents?->get($key);
+                if ($open instanceof Incident) {
+                    if ($open->current_status !== $current->value) {
+                        $open->update(['current_status' => $current->value]);
+                    }
+                }
             }
 
             return;

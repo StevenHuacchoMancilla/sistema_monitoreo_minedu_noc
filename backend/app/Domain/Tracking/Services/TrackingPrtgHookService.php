@@ -13,17 +13,16 @@ use App\Models\TrackingRecord;
 use App\Models\TrackingUpdate;
 use App\Services\AuditLogger;
 use Illuminate\Support\Facades\DB;
-use Throwable;
 
 /**
- * Puente PRTG → Tracking General.
+ * Puente PRTG → Tracking General (legado interno).
  * La recuperación técnica NUNCA cierra el Tracking.
+ * El ticket TGS de atención NO se crea aquí: solo al gestionar.
  */
 class TrackingPrtgHookService
 {
     public function __construct(
         private readonly AuditLogger $audit,
-        private readonly TrackingOpenService $trackingOpen,
     ) {}
 
     /**
@@ -209,25 +208,12 @@ class TrackingPrtgHookService
         TrackingUpdate::query()->create([
             'tracking_record_id' => $previousTracking->id,
             'event_type' => TrackingEventType::SystemEvent,
-            'body' => "Re-caída con ticket en Pendiente de cierre. Se abre un nuevo ticket para la incidencia #{$incident->id}. Este Tracking permanece para cierre operativo del ciclo anterior.",
+            'body' => "Re-caída con el ciclo anterior en Pendiente de cierre. Se registra la nueva caída #{$incident->id}. El ticket TGS se crea solo al gestionar.",
             'created_by_user_id' => null,
             'legacy_actor_name' => null,
             'occurred_on' => $now->toDateString(),
             'occurred_at' => $now,
         ]);
-
-        try {
-            $userId = (int) ($previousTracking->opened_by_user_id ?? 0);
-            if ($userId < 1) {
-                $userId = (int) (\App\Models\User::query()->orderBy('id')->value('id') ?? 0);
-            }
-            if ($userId > 0) {
-                $this->trackingOpen->openFromIncident($incident, $userId);
-            }
-        } catch (Throwable $e) {
-            // No bloquear sync PRTG si falla la apertura del ticket.
-            report($e);
-        }
     }
 
     private function findOpenTrackingForIncident(Incident $incident): ?TrackingRecord

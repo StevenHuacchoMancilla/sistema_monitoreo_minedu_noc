@@ -90,10 +90,24 @@ class IncidentHistoryService
 
         if ($search !== '') {
             $like = '%'.mb_strtolower($search).'%';
-            $schoolQuery->where(function (Builder $q) use ($like) {
+            $schoolQuery->where(function (Builder $q) use ($like, $search) {
                 $q->whereRaw('lower(coalesce(schools.local_educativo, \'\')) like ?', [$like])
                     ->orWhereRaw('lower(coalesce(schools.codigo_local, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(na.cid, \'\')) like ?', [$like]);
+                    ->orWhereRaw('lower(coalesce(na.cid, \'\')) like ?', [$like])
+                    ->orWhereExists(function ($sub) use ($like) {
+                        $sub->selectRaw('1')
+                            ->from('service_tickets')
+                            ->whereColumn('service_tickets.school_id', 'schools.id')
+                            ->whereRaw('lower(service_tickets.ticket_code) like ?', [$like]);
+                    });
+                if (preg_match('/^TGS_/i', $search)) {
+                    $q->orWhereExists(function ($sub) use ($search) {
+                        $sub->selectRaw('1')
+                            ->from('service_tickets')
+                            ->whereColumn('service_tickets.school_id', 'schools.id')
+                            ->whereRaw('upper(service_tickets.ticket_code) = ?', [mb_strtoupper($search)]);
+                    });
+                }
             });
         }
         if ($provincia !== '') {
@@ -246,6 +260,11 @@ class IncidentHistoryService
         }
 
         $location = PrtgOperationalLocation::apiFields($assignment, $school);
+        $ticketsTotal = \App\Models\ServiceTicket::query()->where('school_id', $school->id)->count();
+        $ticketsOpen = \App\Models\ServiceTicket::query()
+            ->where('school_id', $school->id)
+            ->where('status', \App\Models\ServiceTicket::STATUS_OPEN)
+            ->count();
 
         return [
             'school' => [
@@ -278,6 +297,8 @@ class IncidentHistoryService
             ],
             'statistics' => [
                 'total_caidas' => $incidents->count(),
+                'tickets_total' => $ticketsTotal,
+                'tickets_abiertos' => $ticketsOpen,
                 'recuperaciones' => $recovered,
                 'caidas_activas' => $active,
                 'ultima_caida' => optional($incidents->first())->started_at?->toIso8601String(),
@@ -317,9 +338,10 @@ class IncidentHistoryService
             ->where('school_id', $school->id)
             ->select([
                 'id', 'school_id', 'started_at', 'recovered_at', 'followup_status',
-                'management_scope', 'recovery_review_status', 'cause',
+                'management_scope', 'recovery_review_status', 'cause', 'root_cause_code',
             ])
             ->with([
+                'serviceTicket:id,incident_id,school_id,ticket_code,status,kind,is_maintenance,opened_at,closed_at',
                 'trackingRecords' => fn ($q) => $q
                     ->select([
                         'id', 'incident_id', 'status', 'report_ticket', 'ticket', 'case_code',
@@ -339,6 +361,16 @@ class IncidentHistoryService
             ->withCount(['managements', 'fieldDispatches'])
             ->orderByDesc('started_at')
             ->orderByDesc('id');
+
+        if (! empty($filters['q']) || ! empty($filters['search'])) {
+            $term = '%'.mb_strtolower(trim((string) ($filters['q'] ?? $filters['search']))).'%';
+            $query->where(function ($q) use ($term) {
+                $q->whereHas('serviceTicket', function ($t) use ($term) {
+                    $t->whereRaw('LOWER(ticket_code) like ?', [$term]);
+                })->orWhereRaw('LOWER(COALESCE(cause, \'\')) like ?', [$term])
+                    ->orWhereRaw('LOWER(COALESCE(root_cause_code, \'\')) like ?', [$term]);
+            });
+        }
 
         if (! empty($filters['date_from'])) {
             $query->where('started_at', '>=', OperationalTime::dayStart((string) $filters['date_from']));
@@ -377,8 +409,20 @@ class IncidentHistoryService
             $tracking = $incident->trackingRecords->first();
             $lastUpdate = $tracking?->latestUpdate;
 
+            $ticket = $incident->serviceTicket;
+
             return [
                 'id' => $incident->id,
+                'ticket_code' => $ticket?->ticket_code,
+                'ticket_status' => $ticket?->status,
+                'ticket_kind' => $ticket?->kind,
+                'ticket_kind_label' => $ticket
+                    ? \App\Models\ServiceTicket::kindLabel($ticket->kind)
+                    : null,
+                'is_maintenance' => (bool) ($ticket?->is_maintenance || \App\Models\ServiceTicket::isMaintenanceCause($incident->root_cause_code)),
+                'root_cause_code' => $incident->root_cause_code,
+                'detection_source' => $incident->detection_source,
+                'display_code' => $ticket?->ticket_code ?: 'Sin ticket',
                 'started_at' => $incident->started_at?->toIso8601String(),
                 'recovered_at' => $incident->recovered_at?->toIso8601String(),
                 'duration_seconds' => $seconds,
@@ -411,7 +455,9 @@ class IncidentHistoryService
                 'reincidencia' => [
                     'numero' => $ordinal,
                     'total' => $totalForSchool,
-                    'label' => $ordinal ? "Incidencia {$ordinal} de {$totalForSchool}" : null,
+                    'label' => $ticket?->ticket_code
+                        ? $ticket->ticket_code
+                        : ($ordinal ? "Caída {$ordinal} de {$totalForSchool}" : null),
                 ],
             ];
         });

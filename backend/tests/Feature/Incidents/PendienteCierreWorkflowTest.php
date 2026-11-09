@@ -11,7 +11,9 @@ use App\Models\Incident;
 use App\Models\NetworkAssignment;
 use App\Models\PrtgSensor;
 use App\Models\School;
+use App\Support\OperationalTime;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Carbon;
 use Tests\TestCase;
 
 class PendienteCierreWorkflowTest extends TestCase
@@ -22,6 +24,20 @@ class PendienteCierreWorkflowTest extends TestCase
     {
         parent::setUp();
         $this->actingAsUser();
+        // Lunes laboral en Lima (evita sáb/dom de la fecha real del runner).
+        $this->freezeLima('2026-11-09 10:00:00');
+    }
+
+    protected function tearDown(): void
+    {
+        Carbon::setTestNow();
+        parent::tearDown();
+    }
+
+    private function freezeLima(string $wallClock): void
+    {
+        $now = Carbon::parse($wallClock, OperationalTime::tz())->setTimezone(OperationalTime::storageTz());
+        Carbon::setTestNow($now);
     }
 
     private function seedManagingIncident(): Incident
@@ -75,7 +91,49 @@ class PendienteCierreWorkflowTest extends TestCase
 
         $incident->refresh();
         $this->assertNotNull($incident->recovered_at);
+        $this->assertTrue((bool) $incident->recovered_while_managing);
         $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+    }
+
+    public function test_recovery_without_management_goes_to_pendiente_cierre_on_weekday(): void
+    {
+        $incident = $this->seedManagingIncident();
+        $incident->update(['followup_status' => FollowupStatus::PendienteContacto]);
+
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'Test recovery unmanaged');
+
+        $incident->refresh();
+        $this->assertNotNull($incident->recovered_at);
+        $this->assertFalse((bool) $incident->recovered_while_managing);
+        $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+    }
+
+    public function test_weekend_recovery_does_not_go_to_pendiente_cierre(): void
+    {
+        // Domingo 8 nov 2026 Lima
+        $this->freezeLima('2026-11-08 16:00:00');
+        $incident = $this->seedManagingIncident();
+
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'Weekend recovery');
+
+        $incident->refresh();
+        $this->assertNotNull($incident->recovered_at);
+        $this->assertSame(FollowupStatus::Cerrado, $incident->followup_status);
+        $this->assertNotSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+    }
+
+    public function test_saturday_recovery_from_caidas_auto_closes(): void
+    {
+        // Sábado 7 nov 2026 Lima
+        $this->freezeLima('2026-11-07 11:30:00');
+        $incident = $this->seedManagingIncident();
+        $incident->update(['followup_status' => FollowupStatus::PendienteContacto]);
+
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'Saturday recovery');
+
+        $incident->refresh();
+        $this->assertNotNull($incident->recovered_at);
+        $this->assertSame(FollowupStatus::Cerrado, $incident->followup_status);
     }
 
     public function test_mark_and_close_grave_endpoints(): void

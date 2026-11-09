@@ -10,6 +10,7 @@ use App\Enums\MonitoringStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Incident;
 use App\Models\School;
+use App\Models\ServiceTicket;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -42,6 +43,8 @@ class SchoolHistoryController extends Controller
     public function incidents(Request $request, School $school): JsonResponse
     {
         $filters = $request->validate([
+            'q' => ['nullable', 'string', 'max:120'],
+            'search' => ['nullable', 'string', 'max:120'],
             'date_from' => ['nullable', 'date'],
             'date_to' => ['nullable', 'date', 'after_or_equal:date_from'],
             'status' => ['nullable', 'string', Rule::in(['ALL', 'RECOVERED', 'ACTIVE', 'RECUPERADOS', 'ACTIVOS'])],
@@ -66,6 +69,22 @@ class SchoolHistoryController extends Controller
 
     public function incidentCaseFile(Incident $incident, IncidentCaseFileService $caseFile): JsonResponse
     {
+        return response()->json($caseFile->build($incident));
+    }
+
+    public function ticketCaseFile(string $ticketCode, IncidentCaseFileService $caseFile): JsonResponse
+    {
+        $code = strtoupper(trim($ticketCode));
+        $ticket = ServiceTicket::query()
+            ->whereRaw('UPPER(ticket_code) = ?', [$code])
+            ->first();
+
+        if ($ticket === null || $ticket->incident_id === null) {
+            return response()->json(['message' => 'Ticket no encontrado.'], 404);
+        }
+
+        $incident = Incident::query()->findOrFail($ticket->incident_id);
+
         return response()->json($caseFile->build($incident));
     }
 }
