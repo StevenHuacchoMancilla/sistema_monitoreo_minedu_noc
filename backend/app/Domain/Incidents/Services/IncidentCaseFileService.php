@@ -121,6 +121,8 @@ class IncidentCaseFileService
                 'codigo_local' => $school?->codigo_local,
                 'codigo_modular' => $school?->codigo_modular,
                 'centro_poblado' => $school?->centro_poblado,
+                'ambito' => $school?->ambito,
+                'energy_type' => $school?->energy_type,
                 'cid' => $assignment?->cid,
                 'tecnologia' => $assignment?->tecnologia_acceso,
                 'nodo_pop' => $assignment?->nodo_pop,

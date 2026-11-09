@@ -279,6 +279,8 @@ class IncidentHistoryService
                 'location_source' => $location['location_source'],
                 'location_mismatch' => $location['location_mismatch'],
                 'centro_poblado' => $school->centro_poblado,
+                'ambito' => $school->ambito,
+                'energy_type' => $school->energy_type,
             ],
             'network' => [
                 'cid' => $assignment?->cid,

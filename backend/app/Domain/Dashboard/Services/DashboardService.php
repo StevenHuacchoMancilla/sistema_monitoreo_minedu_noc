@@ -650,6 +650,8 @@ class DashboardService
                 'tss' => $school?->current_sequence,
                 'local_educativo' => $school?->local_educativo,
                 'codigo_local' => $school?->codigo_local,
+                'ambito' => $school?->ambito,
+                'energy_type' => $school?->energy_type,
                 ...$location,
                 'tecnologia' => $assignment?->tecnologia_acceso,
                 'nodo_pop' => $assignment?->nodo_pop,

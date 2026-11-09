@@ -198,6 +198,8 @@ class IncidentController extends Controller
                 'departamento' => $school?->departamento,
                 'centro_poblado' => $school?->centro_poblado,
                 'clasificacion' => $school?->clasificacion,
+                'ambito' => $school?->ambito,
+                'energy_type' => $school?->energy_type,
                 'cid' => $assignment?->cid,
                 'tecnologia' => $assignment?->tecnologia_acceso,
                 'nodo_pop' => $assignment?->nodo_pop,
