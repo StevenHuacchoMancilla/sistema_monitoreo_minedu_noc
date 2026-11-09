@@ -58,6 +58,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/history/schools/{school}', [SchoolHistoryController::class, 'show']);
         Route::get('/history/schools/{school}/incidents', [SchoolHistoryController::class, 'incidents']);
         Route::get('/history/incidents/{incident}', [SchoolHistoryController::class, 'incidentCaseFile']);
+        Route::get('/history/tickets/{ticketCode}', [SchoolHistoryController::class, 'ticketCaseFile'])
+            ->where('ticketCode', 'TGS_[A-Za-z0-9_]+');
     });
 
     Route::middleware('permission:'.PermissionCatalog::SCHOOLS_VIEW)->group(function () {
@@ -75,9 +77,11 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/incidents/queues/pendiente-cierre', [IncidentController::class, 'pendienteCierre']);
         Route::get('/incidents/queues/graves', [IncidentController::class, 'graves']);
         Route::get('/incidents/lookup', [IncidentController::class, 'lookupSchool']);
+        Route::get('/incidents/maintenance', [IncidentController::class, 'maintenanceIndex']);
         Route::get('/incidents/same-hour', [IncidentController::class, 'sameHour']);
         Route::get('/notifications/operational', [OperationalNotificationController::class, 'index']);
         Route::get('/notifications/restorations', [OperationalNotificationController::class, 'restorations']);
+        Route::get('/notifications/outages', [OperationalNotificationController::class, 'outages']);
         Route::get('/notifications/live', [OperationalNotificationController::class, 'live']);
         Route::get('/incidents/{incident}', [IncidentController::class, 'show']);
         Route::get('/assignments/{assignment}/prtg-sensors', [PrtgSensorController::class, 'byAssignment']);
@@ -154,6 +158,9 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('/incidents/{incident}/close-ticket', [IncidentController::class, 'closeTicket']);
             Route::post('/incidents/{incident}/clock-stop', [IncidentController::class, 'clockStop']);
             Route::put('/incidents/{incident}/visit', [IncidentController::class, 'recordVisit']);
+            Route::post('/incidents/{incident}/ensure-ticket', [IncidentController::class, 'ensureTicket']);
+            Route::put('/incidents/{incident}/lista-estado', [ReportController::class, 'updateListaEstado']);
+            Route::put('/incidents/{incident}/lista-detalle', [ReportController::class, 'updateListaDetalle']);
         });
 
     Route::middleware('permission:'.PermissionCatalog::RECOVERIES_MANAGE)->group(function () {

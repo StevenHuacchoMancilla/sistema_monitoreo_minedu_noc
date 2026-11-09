@@ -94,7 +94,7 @@ class TicketeraGestionWriter
             'followup_status' => $closed ? FollowupStatus::Cerrado : FollowupStatus::EnGestion,
             'management_classification' => ManagementClassification::Unclassified,
             'school_snapshot' => $school?->only([
-                'id', 'current_sequence', 'codigo_local', 'local_educativo', 'provincia', 'distrito', 'clasificacion',
+                'id', 'current_sequence', 'codigo_local', 'local_educativo', 'provincia', 'distrito', 'clasificacion', 'ambito', 'energy_type',
             ]),
             'network_snapshot' => $assignment->only(['id', 'cid']),
         ]);

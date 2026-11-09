@@ -15,6 +15,7 @@ use App\Domain\Incidents\Services\IncidentService;
 use App\Domain\Incidents\Services\RecoveryReviewService;
 use App\Domain\Incidents\Services\SameHourOutageService;
 use App\Domain\Incidents\Services\SlaClockService;
+use App\Domain\Reports\Services\ListaLleeDayService;
 use App\Domain\Ticketera\Services\ServiceTicketService;
 use App\Models\School;
 use App\Domain\Incidents\Support\IncidentTimelineBuilder;
@@ -43,6 +44,7 @@ class IncidentController extends Controller
         private readonly SlaClockService $slaClock,
         private readonly SameHourOutageService $sameHour,
         private readonly ServiceTicketService $serviceTickets,
+        private readonly ListaLleeDayService $listaDays,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -161,6 +163,7 @@ class IncidentController extends Controller
                         || $u->status_before === FollowupStatus::TecnicoEnCampo->value
                         || strtoupper((string) $u->type) === 'FIELD_DISPATCH'),
                 'active_tracking_id' => $incident->activeTracking->first()?->id,
+                'is_grave_incident' => $incident->isOpenGrave(),
             ],
             'active_tracking' => ($active = $incident->activeTracking->first())
                 ? [
@@ -423,7 +426,7 @@ class IncidentController extends Controller
             'root_cause_group_code' => ['nullable', 'string', 'max:8'],
             'root_cause_code' => ['nullable', 'string', 'max:16'],
             'cause' => ['nullable', 'string', 'max:500'],
-            'minedu_reason' => ['required', Rule::in(MineduReason::operableValues())],
+            'minedu_reason' => ['nullable', Rule::in(MineduReason::operableValues())],
         ]);
 
         if (($data['scope'] ?? null) === '') {
@@ -432,10 +435,25 @@ class IncidentController extends Controller
         if (! empty($data['contact_via_descartes'])) {
             $data['contact_id'] = null;
         }
-        // La razón MINEDU define el resultado; la clasificación interna sigue el mapeo del reporte.
-        $data['classification'] = MineduReason::from((string) $data['minedu_reason'])
-            ->toManagementClassification()
-            ->value;
+        // Razón MINEDU opcional: si viene, define la clasificación.
+        // Si no viene, respeta classification explícita; si tampoco, mantiene la actual o ContactConfirmed.
+        if (! empty($data['minedu_reason'])) {
+            $data['classification'] = MineduReason::from((string) $data['minedu_reason'])
+                ->toManagementClassification()
+                ->value;
+        } else {
+            $data['minedu_reason'] = null;
+            if (empty($data['classification'])) {
+                $current = $incident->management_classification;
+                $data['classification'] = (
+                    $current instanceof ManagementClassification
+                    && $current !== ManagementClassification::Unclassified
+                    && $current !== ManagementClassification::NewOutage
+                )
+                    ? $current->value
+                    : ManagementClassification::ContactConfirmed->value;
+            }
+        }
 
         $userId = $request->user()?->id;
         if (! $userId) {
@@ -512,9 +530,17 @@ class IncidentController extends Controller
         $data = $request->validate([
             'q' => ['required', 'string', 'max:40'],
             'detail' => ['nullable', 'string', 'max:5000'],
+            'kind' => ['nullable', Rule::in(\App\Models\ServiceTicket::kinds())],
             'minedu_reason' => ['nullable', Rule::in(MineduReason::operableValues())],
             'root_cause_group_code' => ['required', 'string', 'max:8'],
             'root_cause_code' => ['required', 'string', 'max:16'],
+            'arrived_at' => ['nullable', 'date'],
+            'departed_at' => ['nullable', 'date'],
+            'restored_at' => ['nullable', 'date'],
+            'technician_name' => ['nullable', 'string', 'max:160'],
+            'technician_phone' => ['nullable', 'string', 'max:40'],
+            'activities' => ['nullable', 'string', 'max:5000'],
+            'materials' => ['nullable', 'string', 'max:5000'],
         ]);
         $userId = (int) ($request->user()?->id ?? 0);
         if ($userId < 1) {
@@ -538,6 +564,11 @@ class IncidentController extends Controller
             return response()->json(['message' => 'No hay un colegio activo con ese CID o TSS.'], 422);
         }
 
+        $kind = strtoupper((string) ($data['kind'] ?? \App\Models\ServiceTicket::KIND_CORRECTIVE));
+        if ($kind === \App\Models\ServiceTicket::KIND_PREVENTIVE) {
+            return $this->storePreventive($request);
+        }
+
         try {
             $incident = $this->incidents->openManualReported($assignment, $userId, $data['detail'] ?? null);
         } catch (InvalidArgumentException $e) {
@@ -545,6 +576,16 @@ class IncidentController extends Controller
         }
 
         $this->applyOpeningGestion($incident, $data, $request->user()?->name);
+        $this->serviceTickets->ensureTicketForIncident(
+            $incident->fresh() ?? $incident,
+            array_merge($data, ['kind' => $kind]),
+            $request->user()?->name,
+        );
+
+        // Correctivo → Incidencias. Asignación libre solo si MINEDU (Queja / Caída enlace) lo marca.
+        if ($kind === \App\Models\ServiceTicket::KIND_CORRECTIVE) {
+            $this->forceMarkGrave($incident->fresh() ?? $incident, $userId);
+        }
 
         return $this->show($incident->fresh() ?? $incident);
     }
@@ -558,6 +599,13 @@ class IncidentController extends Controller
             'minedu_reason' => ['nullable', Rule::in(MineduReason::operableValues())],
             'root_cause_group_code' => ['required', 'string', 'max:8'],
             'root_cause_code' => ['required', 'string', 'max:16'],
+            'arrived_at' => ['nullable', 'date'],
+            'departed_at' => ['nullable', 'date'],
+            'restored_at' => ['nullable', 'date'],
+            'technician_name' => ['nullable', 'string', 'max:160'],
+            'technician_phone' => ['nullable', 'string', 'max:40'],
+            'activities' => ['nullable', 'string', 'max:5000'],
+            'materials' => ['nullable', 'string', 'max:5000'],
         ]);
         $userId = (int) ($request->user()?->id ?? 0);
         if ($userId < 1) {
@@ -591,8 +639,77 @@ class IncidentController extends Controller
         }
 
         $this->applyOpeningGestion($incident, $data, $request->user()?->name);
+        $this->serviceTickets->ensureTicketForIncident(
+            $incident->fresh() ?? $incident,
+            array_merge($data, ['kind' => \App\Models\ServiceTicket::KIND_PREVENTIVE]),
+            $request->user()?->name,
+        );
 
         return $this->show($incident->fresh() ?? $incident);
+    }
+
+    public function ensureTicket(Request $request, Incident $incident): JsonResponse
+    {
+        foreach (['opened_at', 'restored_at', 'closed_at', 'arrived_at', 'departed_at'] as $field) {
+            if ($request->input($field) === '') {
+                $request->merge([$field => null]);
+            }
+        }
+
+        $data = $request->validate([
+            'kind' => ['required', Rule::in(\App\Models\ServiceTicket::kinds())],
+            'opened_at' => ['nullable', 'date'],
+            'restored_at' => ['nullable', 'date'],
+            'closed_at' => ['nullable', 'date'],
+            'arrived_at' => ['nullable', 'date'],
+            'departed_at' => ['nullable', 'date'],
+            'technician_name' => ['nullable', 'string', 'max:160'],
+            'technician_phone' => ['nullable', 'string', 'max:40'],
+            'polygon' => ['nullable', 'string', 'max:160'],
+            'visit_reason' => ['nullable', 'string', 'max:500'],
+            'activities' => ['nullable', 'string', 'max:5000'],
+            'materials' => ['nullable', 'string', 'max:5000'],
+            'detail' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $userId = (int) ($request->user()?->id ?? 0);
+        $actor = $request->user()?->name;
+
+        try {
+            $this->serviceTickets->ensureTicketForIncident($incident, $data, $actor);
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        if (! empty($data['detail'])) {
+            $incident->forceFill(['detail_text' => $data['detail']])->save();
+        }
+
+        $kind = strtoupper((string) $data['kind']);
+        if ($kind === \App\Models\ServiceTicket::KIND_CORRECTIVE) {
+            $this->forceMarkGrave($incident->fresh() ?? $incident, $userId);
+        }
+
+        return $this->show($incident->fresh() ?? $incident);
+    }
+
+    public function maintenanceIndex(Request $request): JsonResponse
+    {
+        $data = $request->validate([
+            'status' => ['nullable', Rule::in(['ABIERTO', 'CERRADO'])],
+            'q' => ['nullable', 'string', 'max:120'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:100'],
+        ]);
+
+        $payload = $this->serviceTickets->listMaintenance(
+            (string) ($data['status'] ?? 'ABIERTO'),
+            $data['q'] ?? null,
+            (int) ($data['page'] ?? 1),
+            (int) ($data['per_page'] ?? 25),
+        );
+
+        return response()->json($payload);
     }
 
     public function recordVisit(Request $request, Incident $incident): JsonResponse
@@ -610,6 +727,7 @@ class IncidentController extends Controller
             'arrived_at' => ['nullable', 'date'],
             'departed_at' => ['nullable', 'date'],
             'technician_name' => ['nullable', 'string', 'max:160'],
+            'technician_phone' => ['nullable', 'string', 'max:40'],
             'polygon' => ['nullable', 'string', 'max:160'],
             'visit_reason' => ['nullable', 'string', 'max:500'],
             'activities' => ['nullable', 'string', 'max:5000'],
@@ -860,7 +978,13 @@ class IncidentController extends Controller
     public function pendienteCierre(Request $request): JsonResponse
     {
         $rows = Incident::query()
-            ->with(['school', 'networkAssignment', 'sensor', 'trackingRecords' => fn ($q) => $q->orderByDesc('id')])
+            ->with([
+                'school',
+                'networkAssignment',
+                'sensor',
+                'serviceTicket',
+                'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
+            ])
             ->where('followup_status', FollowupStatus::PendienteCierre)
             ->whereNotNull('recovered_at')
             ->orderByDesc('recovered_at')
@@ -875,7 +999,13 @@ class IncidentController extends Controller
     public function graves(Request $request): JsonResponse
     {
         $rows = Incident::query()
-            ->with(['school', 'networkAssignment', 'sensor', 'trackingRecords' => fn ($q) => $q->orderByDesc('id')])
+            ->with([
+                'school',
+                'networkAssignment',
+                'sensor',
+                'serviceTicket',
+                'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
+            ])
             ->where('is_grave_incident', true)
             ->whereNull('grave_closed_at')
             ->orderByDesc('grave_opened_at')
@@ -915,6 +1045,8 @@ class IncidentController extends Controller
             'created_at' => now(),
         ]);
 
+        $this->listaDays->markAverias($incident->fresh() ?? $incident);
+
         return response()->json($this->show($incident->fresh())->getData(true));
     }
 
@@ -941,6 +1073,8 @@ class IncidentController extends Controller
             'last_contact_at' => now(),
         ]);
 
+        $this->listaDays->markRestablecido($closed->fresh() ?? $closed);
+
         return response()->json($this->show($closed->fresh() ?? $closed)->getData(true));
     }
 
@@ -958,6 +1092,7 @@ class IncidentController extends Controller
             $userId,
         );
         $this->serviceTickets->close($result['incident'], $request->user()?->name);
+        $this->listaDays->markRestablecido($result['incident']->fresh() ?? $result['incident']);
 
         return response()->json($this->show($result['incident']->fresh() ?? $result['incident'])->getData(true));
     }
@@ -992,6 +1127,12 @@ class IncidentController extends Controller
             'estado_prtg' => $incident->current_status,
             'responsible_area' => $incident->responsible_area,
             'glpi_ticket' => $incident->glpi_ticket,
+            'ticket_code' => $incident->serviceTicket?->ticket_code,
+            'ticket_kind' => $incident->serviceTicket?->kind,
+            'ticket_kind_label' => $incident->serviceTicket
+                ? \App\Models\ServiceTicket::kindLabel($incident->serviceTicket->kind)
+                : null,
+            'has_ticket' => $incident->serviceTicket !== null,
             'tracking' => $tracking ? [
                 'id' => $tracking->id,
                 'status' => $tracking->status?->value,
@@ -1020,16 +1161,28 @@ class IncidentController extends Controller
             ? ManagementScope::from((string) $row['attention'])
             : $incident->management_scope;
 
+        $minedu = ! empty($data['minedu_reason'])
+            ? MineduReason::from((string) $data['minedu_reason'])
+            : ($incident->minedu_reason instanceof MineduReason ? $incident->minedu_reason : null);
+
         $incident->fill([
             'root_cause_group_code' => $row['group_code'],
             'root_cause_code' => $row['code'],
             'cause' => $row['cause'],
             'detail_text' => $data['detail'] ?? $incident->detail_text,
-            'minedu_reason' => ! empty($data['minedu_reason'])
-                ? MineduReason::from((string) $data['minedu_reason'])
-                : $incident->minedu_reason,
+            'minedu_reason' => $minedu ?? $incident->minedu_reason,
             'management_scope' => $scope,
         ])->save();
+
+        if ($minedu instanceof MineduReason && $minedu->marksAsIncident() && ! $incident->isOpenGrave()) {
+            $incident->forceFill([
+                'is_grave_incident' => true,
+                'grave_opened_at' => now(),
+                'grave_opened_by_user_id' => request()->user()?->id,
+                'grave_closed_at' => null,
+            ])->save();
+            $this->listaDays->markAverias($incident->fresh() ?? $incident);
+        }
 
         IncidentManagement::query()->create([
             'incident_id' => $incident->id,
@@ -1042,7 +1195,27 @@ class IncidentController extends Controller
             'created_by' => request()->user()?->id,
         ]);
 
-        $this->serviceTickets->syncFromIncident($incident->fresh() ?? $incident, $actor);
+        $fresh = $incident->fresh() ?? $incident;
+        $this->serviceTickets->syncFromIncident($fresh, $actor);
+        if (\App\Models\ServiceTicket::isMaintenanceCause((string) $row['code'])) {
+            $this->serviceTickets->markMaintenance($fresh);
+        }
+    }
+
+    private function forceMarkGrave(Incident $incident, int $userId): void
+    {
+        if ($incident->isOpenGrave()) {
+            return;
+        }
+
+        $incident->forceFill([
+            'is_grave_incident' => true,
+            'grave_opened_at' => $incident->grave_opened_at ?? now(),
+            'grave_opened_by_user_id' => $incident->grave_opened_by_user_id ?? ($userId > 0 ? $userId : null),
+            'grave_closed_at' => null,
+        ])->save();
+
+        $this->listaDays->markAverias($incident->fresh() ?? $incident);
     }
 
     private static function loopbackFromRow(int $excelRow): ?string

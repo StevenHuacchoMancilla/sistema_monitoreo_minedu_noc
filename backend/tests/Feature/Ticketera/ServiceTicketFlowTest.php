@@ -50,7 +50,7 @@ class ServiceTicketFlowTest extends TestCase
         $this->assertStringContainsString('Cambio de patchcord', app(ServiceTicketService::class)->eventText($ticket));
         $this->assertStringContainsString('Patchcord LC', app(ServiceTicketService::class)->eventText($ticket));
 
-        $this->assertSame('TGS_258900_2', app(ServiceTicketService::class)->nextCode('258900'));
+        $this->assertMatchesRegularExpression('/^TGS_258900_2_\d{14}$/', app(ServiceTicketService::class)->nextCode('258900'));
     }
 
     public function test_preventive_ticket_is_rejected_while_ping_is_down_and_stays_out_of_outages(): void
@@ -73,7 +73,7 @@ class ServiceTicketFlowTest extends TestCase
 
         $this->assertNotNull($ticket);
         $this->assertSame(ServiceTicket::KIND_PREVENTIVE, $ticket->kind);
-        $this->assertSame('TGS_258901_1', $ticket->ticket_code);
+        $this->assertMatchesRegularExpression('/^TGS_258901_1_\d{14}$/', (string) $ticket->ticket_code);
         $this->assertSame(Incident::DETECTION_PREVENTIVE, $preventive->detection_source);
 
         $visible = Incident::query()

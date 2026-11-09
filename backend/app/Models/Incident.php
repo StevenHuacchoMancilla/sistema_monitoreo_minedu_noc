@@ -4,6 +4,7 @@ namespace App\Models;
 
 use App\Enums\AffectedWanNode;
 use App\Enums\FollowupStatus;
+use App\Enums\ListaLleeEstado;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Enums\MineduReason;
@@ -18,6 +19,9 @@ class Incident extends Model
     public const DETECTION_MANUAL_PARTIAL = 'MANUAL_PARTIAL';
 
     public const DETECTION_PREVENTIVE = 'PREVENTIVE';
+
+    /** Correctivo de mantenimiento programado con el colegio operativo (no es caída PRTG). */
+    public const DETECTION_MAINTENANCE = 'MAINTENANCE';
 
     public const DETECTION_HISTORICAL = 'HISTORICAL';
 
@@ -43,6 +47,7 @@ class Incident extends Model
             'grave_opened_at' => 'datetime',
             'grave_closed_at' => 'datetime',
             'minedu_reason' => MineduReason::class,
+            'lista_llee_estado' => ListaLleeEstado::class,
             'clock_paused_at' => 'datetime',
             'clock_pause_seconds' => 'integer',
             'clock_pauses' => 'array',
@@ -67,17 +72,28 @@ class Incident extends Model
         return $this->detection_source === self::DETECTION_PREVENTIVE;
     }
 
+    public function isMaintenanceCase(): bool
+    {
+        return $this->detection_source === self::DETECTION_MAINTENANCE
+            || $this->serviceTicket?->is_maintenance === true
+            || ServiceTicket::isMaintenanceCause($this->root_cause_code);
+    }
+
     public function serviceTicket(): HasOne
     {
         return $this->hasOne(ServiceTicket::class);
     }
 
-    /** Caídas reales. El preventivo y el histórico cargado no entran en las colas de caída. */
+    /** Caídas reales. Preventivo, mantenimiento programado e histórico no entran en colas de caída. */
     public function scopeFalls($query)
     {
         return $query->where(function ($q) {
             $q->whereNull('detection_source')
-                ->orWhereNotIn('detection_source', [self::DETECTION_PREVENTIVE, self::DETECTION_HISTORICAL]);
+                ->orWhereNotIn('detection_source', [
+                    self::DETECTION_PREVENTIVE,
+                    self::DETECTION_MAINTENANCE,
+                    self::DETECTION_HISTORICAL,
+                ]);
         });
     }
 

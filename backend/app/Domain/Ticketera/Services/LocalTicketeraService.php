@@ -67,7 +67,7 @@ class LocalTicketeraService
             'incident_id' => $ticket->incident_id,
             'ticket' => $ticket->ticket_code,
             'kind' => $ticket->kind,
-            'kind_label' => $ticket->isPreventive() ? 'Preventivo' : 'Correctivo',
+            'kind_label' => \App\Models\ServiceTicket::kindLabel($ticket->kind),
             'cid' => (string) ($ticket->cid ?? ''),
             'tss' => (string) ($ticket->tss ?? ''),
             'nombre' => (string) ($ticket->school_name ?? ''),

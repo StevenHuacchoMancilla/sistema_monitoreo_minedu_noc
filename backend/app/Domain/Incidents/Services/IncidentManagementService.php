@@ -138,7 +138,7 @@ class IncidentManagementService
                 ManagementClassification::Complaint => FollowupStatus::EnGestion,
             };
 
-            // No degradar técnico en campo / escalado al registrar contacto.
+            // No degradar técnico en campo / escalado / pendiente de cierre al registrar seguimiento.
             $current = $incident->followup_status;
             if (
                 $current === FollowupStatus::TecnicoEnCampo
@@ -151,6 +151,11 @@ class IncidentManagementService
                 ], true)) {
                     $followup = $current;
                 }
+            }
+            // Caso recuperado en gestión: al guardar mensajes pasa a En gestión (seguimiento)
+            // y sale de la cola Pendiente de cierre.
+            if ($current === FollowupStatus::PendienteCierre) {
+                $followup = FollowupStatus::EnGestion;
             }
 
             $incident->fill([
@@ -167,16 +172,31 @@ class IncidentManagementService
                 'minedu_reason' => $mineduProvided ? $minedu : $incident->minedu_reason,
             ])->save();
 
+            // Caída de enlace / Queja = incidencia: pasa al apartado Incidencias.
+            $markedGrave = false;
+            if ($minedu instanceof MineduReason && $minedu->marksAsIncident() && ! $incident->isOpenGrave()) {
+                $incident->forceFill([
+                    'is_grave_incident' => true,
+                    'grave_opened_at' => now(),
+                    'grave_opened_by_user_id' => $userId > 0 ? $userId : null,
+                    'grave_closed_at' => null,
+                ])->save();
+                $markedGrave = true;
+                app(\App\Domain\Reports\Services\ListaLleeDayService::class)
+                    ->markAverias($incident->fresh() ?? $incident);
+            }
+
             IncidentUpdate::query()->create([
                 'incident_id' => $incident->id,
                 'type' => 'MANAGEMENT',
                 'status_before' => $before['followup_status'],
                 'status_after' => $followup->value,
                 'observation' => sprintf(
-                    'Gestión %s%s%s',
+                    'Gestión %s%s%s%s',
                     $classification->label(),
                     $scope ? ' · '.$scope->value : '',
-                    ! empty($payload['detail']) ? ' · '.$payload['detail'] : ''
+                    ! empty($payload['detail']) ? ' · '.$payload['detail'] : '',
+                    $markedGrave ? ' · Pasó a incidencia ('.($minedu?->label() ?? '').').' : ''
                 ),
                 'user_id' => $userId,
                 'created_at' => now(),
@@ -193,7 +213,11 @@ class IncidentManagementService
             }
 
             $actorName = $userId > 0 ? User::query()->find($userId)?->name : null;
-            $this->serviceTickets->syncFromIncident($incident->fresh() ?? $incident, is_string($actorName) ? $actorName : null);
+            $fresh = $incident->fresh() ?? $incident;
+            $this->serviceTickets->syncFromIncident($fresh, is_string($actorName) ? $actorName : null);
+            if (\App\Models\ServiceTicket::isMaintenanceCause($fresh->root_cause_code)) {
+                $this->serviceTickets->markMaintenance($fresh);
+            }
 
             $this->audit->record(
                 $incident,
