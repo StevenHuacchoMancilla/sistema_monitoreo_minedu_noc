@@ -485,8 +485,9 @@ export function IncidentManageModal({
               >
                 <p className="mb-3 text-[12px] text-slate-500">
                   Puedes cambiarlo durante el seguimiento. Caída de enlace y Queja van a Incidencias;
-                  Requerimiento va a Requerimientos. Si PRTG se restablece y vuelve a caer, se mantiene la
-                  etiqueta salvo que cambies este resultado.
+                  Requerimiento va a Requerimientos (también si está en Pendiente de cierre: sale solo al
+                  guardar). Si PRTG se restablece y vuelve a caer, se mantiene la etiqueta salvo que cambies
+                  este resultado.
                 </p>
                 <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Razón MINEDU (opcional)">
                   {MINEDU_RESULT_OPTIONS.map((opt) => {

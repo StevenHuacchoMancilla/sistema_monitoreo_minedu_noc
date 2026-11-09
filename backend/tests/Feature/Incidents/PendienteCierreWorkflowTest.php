@@ -244,4 +244,62 @@ class PendienteCierreWorkflowTest extends TestCase
         $this->assertTrue((bool) ($row['gestion_lista'] ?? false));
         $this->assertSame(99, $row['tss'] ?? null);
     }
+
+    public function test_minedu_caida_enlace_leaves_pendiente_cierre_to_incidencias(): void
+    {
+        $incident = $this->seedManagingIncident();
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'Recovery');
+        $incident->refresh();
+        $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+
+        $this->postJson("/api/incidents/{$incident->id}/managements", [
+            'minedu_reason' => 'CAIDA_ENLACE',
+            'detail' => 'Confirmado caída de enlace',
+        ])->assertOk();
+
+        $incident->refresh();
+        $this->assertSame(FollowupStatus::EnGestion, $incident->followup_status);
+        $this->assertTrue((bool) $incident->is_grave_incident);
+        $this->assertNull($incident->grave_closed_at);
+        $this->assertTrue($incident->isKeptInManagement());
+        $this->assertSame('CAIDA_ENLACE', $incident->minedu_reason?->value);
+
+        $pendiente = $this->getJson('/api/incidents/queues/pendiente-cierre')->assertOk();
+        $this->assertFalse(
+            collect($pendiente->json('data'))->pluck('incident_id')->contains($incident->id)
+        );
+
+        $graves = $this->getJson('/api/incidents/queues/graves')->assertOk();
+        $this->assertTrue(
+            collect($graves->json('data'))->pluck('incident_id')->contains($incident->id)
+        );
+    }
+
+    public function test_minedu_requerimiento_leaves_pendiente_cierre_to_requerimientos(): void
+    {
+        $incident = $this->seedManagingIncident();
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'Recovery');
+        $incident->refresh();
+
+        $this->postJson("/api/incidents/{$incident->id}/managements", [
+            'minedu_reason' => 'REQUERIMIENTO',
+            'detail' => 'Pedido del colegio',
+        ])->assertOk();
+
+        $incident->refresh();
+        $this->assertSame(FollowupStatus::EnGestion, $incident->followup_status);
+        $this->assertTrue((bool) $incident->is_requirement_case);
+        $this->assertNull($incident->requirement_closed_at);
+        $this->assertTrue($incident->isKeptInManagement());
+
+        $pendiente = $this->getJson('/api/incidents/queues/pendiente-cierre')->assertOk();
+        $this->assertFalse(
+            collect($pendiente->json('data'))->pluck('incident_id')->contains($incident->id)
+        );
+
+        $reqs = $this->getJson('/api/incidents/queues/requerimientos')->assertOk();
+        $this->assertTrue(
+            collect($reqs->json('data'))->pluck('incident_id')->contains($incident->id)
+        );
+    }
 }

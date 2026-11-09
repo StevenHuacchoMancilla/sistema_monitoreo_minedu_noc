@@ -93,4 +93,24 @@ enum ListaLleeEstado: string
             self::Activo,
         ];
     }
+
+    /**
+     * Rank para ordenar la Lista para reporte (menor = más arriba).
+     * Sin estado queda al final (después de Activo).
+     */
+    public static function listSortRank(mixed $value): int
+    {
+        $raw = $value instanceof self ? $value->value : trim((string) ($value ?? ''));
+        if ($raw === '') {
+            return count(self::legendOrder());
+        }
+
+        foreach (self::legendOrder() as $index => $estado) {
+            if ($estado->value === $raw) {
+                return $index;
+            }
+        }
+
+        return count(self::legendOrder());
+    }
 }

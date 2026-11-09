@@ -210,12 +210,29 @@ export function OperationalReportPage() {
     : [day]
   const isToday = report.data?.is_today ?? day === limaToday()
 
-  const patchRow = (incidentId: number, patch: Partial<(typeof pageRows)[number]>) => {
+  const sortListaRows = <T extends { lista_estado?: string | null; caida?: string | null; cid?: string | null }>(
+    rows: T[],
+  ): T[] => {
+    const rank = (value: string | null | undefined) => {
+      const idx = LISTA_ESTADO_OPTIONS.indexOf(value as ListaLleeEstado)
+      return idx >= 0 ? idx : LISTA_ESTADO_OPTIONS.length
+    }
+    return [...rows].sort((a, b) => {
+      const byEstado = rank(a.lista_estado) - rank(b.lista_estado)
+      if (byEstado !== 0) return byEstado
+      const byCaida = String(a.caida ?? '').localeCompare(String(b.caida ?? ''))
+      if (byCaida !== 0) return byCaida
+      return String(a.cid ?? '').localeCompare(String(b.cid ?? ''))
+    })
+  }
+
+  const patchRow = (incidentId: number, patch: Partial<(typeof pageRows)[number]>, resort = false) => {
     client.setQueryData(reportKey, (prev: typeof report.data) => {
       if (!prev) return prev
+      const rows = prev.rows.map((row) => (row.incident_id === incidentId ? { ...row, ...patch } : row))
       return {
         ...prev,
-        rows: prev.rows.map((row) => (row.incident_id === incidentId ? { ...row, ...patch } : row)),
+        rows: resort ? sortListaRows(rows) : rows,
       }
     })
   }
@@ -225,11 +242,15 @@ export function OperationalReportPage() {
     setListaEstadoSavingId(incidentId)
     try {
       const updated = await endpoints.updateListaEstado(incidentId, value)
-      patchRow(incidentId, {
-        lista_estado: updated.lista_estado,
-        lista_estado_tone: updated.lista_estado_tone,
-        lista_estado_group: updated.lista_estado_group,
-      })
+      patchRow(
+        incidentId,
+        {
+          lista_estado: updated.lista_estado,
+          lista_estado_tone: updated.lista_estado_tone,
+          lista_estado_group: updated.lista_estado_group,
+        },
+        true,
+      )
     } finally {
       setListaEstadoSavingId(null)
     }

@@ -167,6 +167,21 @@ class ListaLleeDayService
             ));
         }
 
+        usort($rows, function (array $a, array $b): int {
+            $rank = ListaLleeEstado::listSortRank($a['lista_estado'] ?? null)
+                <=> ListaLleeEstado::listSortRank($b['lista_estado'] ?? null);
+            if ($rank !== 0) {
+                return $rank;
+            }
+
+            $caida = strcmp((string) ($a['caida'] ?? ''), (string) ($b['caida'] ?? ''));
+            if ($caida !== 0) {
+                return $caida;
+            }
+
+            return strcmp((string) ($a['cid'] ?? ''), (string) ($b['cid'] ?? ''));
+        });
+
         $zonas = collect($resumenRows)
             ->pluck('zona')
             ->filter(fn ($z) => is_string($z) && trim($z) !== '')

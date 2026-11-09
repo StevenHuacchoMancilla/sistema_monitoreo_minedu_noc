@@ -11,6 +11,7 @@ use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Enums\MineduReason;
+use App\Enums\RecoveryReviewStatus;
 use App\Models\Incident;
 use App\Models\IncidentManagement;
 use App\Models\IncidentUpdate;
@@ -140,11 +141,20 @@ class IncidentManagementService
                 ManagementClassification::Unclassified => FollowupStatus::EnGestion,
             };
 
-            // No degradar técnico en campo / escalado / pendiente de cierre al registrar seguimiento.
-            // Pendiente de cierre: la gestión se guarda ahí (etiqueta «Gestión lista»);
-            // solo «Cerrar ticket» saca el caso de esa cola.
+            // No degradar técnico en campo / escalado al registrar seguimiento.
+            // Pendiente de cierre:
+            // - Comentario / causa sin resultado MINEDU → se queda («Gestión lista»).
+            // - Caída de enlace / Queja / Requerimiento → sale solo a Incidencias o Requerimientos
+            //   (sticky: re-cae sin ticket nuevo), sin pulsar «Mantener en gestión».
             $current = $incident->followup_status;
-            if (
+            $leavingPendienteViaMinedu = $current === FollowupStatus::PendienteCierre
+                && $mineduProvided
+                && $minedu instanceof MineduReason
+                && ($minedu->marksAsIncident() || $minedu->marksAsRequirement());
+
+            if ($leavingPendienteViaMinedu) {
+                $followup = FollowupStatus::EnGestion;
+            } elseif (
                 $current === FollowupStatus::TecnicoEnCampo
                 || $current === FollowupStatus::Escalado
                 || $current === FollowupStatus::PendienteCierre
@@ -158,7 +168,7 @@ class IncidentManagementService
                 }
             }
 
-            $incident->fill([
+            $fill = [
                 'management_classification' => $classification,
                 'management_scope' => $scope,
                 'outage_text' => $payload['outage_text'] ?? $incident->outage_text,
@@ -170,7 +180,15 @@ class IncidentManagementService
                 'root_cause_code' => $rootCause !== null ? $rootCause['code'] : $incident->root_cause_code,
                 'cause' => $rootCause !== null ? $rootCause['cause'] : ($payload['cause'] ?? $incident->cause),
                 'minedu_reason' => $mineduProvided ? $minedu : $incident->minedu_reason,
-            ])->save();
+            ];
+
+            if ($leavingPendienteViaMinedu) {
+                $fill['recovery_review_status'] = RecoveryReviewStatus::ContinueMonitoring;
+                $fill['recovery_reviewed_at'] = now();
+                $fill['reopened_from_management'] = true;
+            }
+
+            $incident->fill($fill)->save();
 
             // Resultado MINEDU → cola sticky (Incidencias / Requerimientos).
             $queueNote = '';
