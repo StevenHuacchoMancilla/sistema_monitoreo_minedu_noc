@@ -279,6 +279,9 @@ class IncidentManagementService
                 app(\App\Domain\Reports\Services\ListaLleeDayService::class)
                     ->markAverias($incident->fresh() ?? $incident);
             }
+            if ($this->leavePendienteCierreForSticky($incident)) {
+                $notes[] = 'Salió de Pendiente de cierre';
+            }
 
             return implode('. ', $notes);
         }
@@ -297,6 +300,9 @@ class IncidentManagementService
                 ])->save();
                 $notes[] = 'Pasó a Requerimientos';
             }
+            if ($this->leavePendienteCierreForSticky($incident)) {
+                $notes[] = 'Salió de Pendiente de cierre';
+            }
 
             return implode('. ', $notes);
         }
@@ -312,5 +318,29 @@ class IncidentManagementService
         }
 
         return implode('. ', $notes);
+    }
+
+    /**
+     * Si ya está en Incidencias/Requerimientos, no puede seguir en Pendiente de cierre.
+     */
+    private function leavePendienteCierreForSticky(Incident $incident): bool
+    {
+        $incident->refresh();
+        if ($incident->followup_status !== FollowupStatus::PendienteCierre) {
+            return false;
+        }
+        if (! $incident->isOpenGrave() && ! $incident->isOpenRequirement()) {
+            return false;
+        }
+
+        $incident->forceFill([
+            'followup_status' => FollowupStatus::EnGestion,
+            'recovery_review_status' => RecoveryReviewStatus::ContinueMonitoring,
+            'recovery_reviewed_at' => now(),
+            'reopened_from_management' => true,
+            'last_contact_at' => now(),
+        ])->save();
+
+        return true;
     }
 }

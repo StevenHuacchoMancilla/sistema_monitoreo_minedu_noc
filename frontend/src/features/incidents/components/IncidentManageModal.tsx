@@ -280,6 +280,9 @@ export function IncidentManageModal({
     onSuccess: async (data) => {
       const becameIncident = Boolean(data?.estado?.is_grave_incident)
       const becameRequirement = Boolean(data?.estado?.is_requirement_case)
+      const leftPendiente =
+        (becameIncident && (mineduReason === 'CAIDA_ENLACE' || mineduReason === 'QUEJA')) ||
+        (becameRequirement && mineduReason === 'REQUERIMIENTO')
       setSavedMsg(
         becameIncident && (mineduReason === 'CAIDA_ENLACE' || mineduReason === 'QUEJA')
           ? 'Gestión registrada · pasó a Incidencias'
@@ -300,7 +303,15 @@ export function IncidentManageModal({
       }
       client.setQueryData(['incidents', incidentId], data)
       await invalidateOps()
-      window.setTimeout(() => setSavedMsg(null), 3500)
+      await client.invalidateQueries({ queryKey: ['incidents', 'queue'], refetchType: 'active' })
+      if (leftPendiente) {
+        window.setTimeout(() => {
+          setSavedMsg(null)
+          onClose()
+        }, 900)
+      } else {
+        window.setTimeout(() => setSavedMsg(null), 3500)
+      }
     },
   })
 
@@ -687,11 +698,17 @@ export function IncidentManageModal({
                 loading={save.isPending}
                 onClick={() => save.mutate()}
               >
-                {hasPriorManagements
-                  ? classificationChanged && !followupNote
-                    ? 'Actualizar gestión'
-                    : 'Agregar comentario'
-                  : 'Guardar gestión'}
+                {data?.estado?.followup_status === 'PENDIENTE_CIERRE' &&
+                (mineduReason === 'CAIDA_ENLACE' || mineduReason === 'QUEJA')
+                  ? 'Guardar y pasar a Incidencias'
+                  : data?.estado?.followup_status === 'PENDIENTE_CIERRE' &&
+                      mineduReason === 'REQUERIMIENTO'
+                    ? 'Guardar y pasar a Requerimientos'
+                    : hasPriorManagements
+                      ? classificationChanged && !followupNote
+                        ? 'Actualizar gestión'
+                        : 'Agregar comentario'
+                      : 'Guardar gestión'}
               </Button>
             </>
           ) : null}

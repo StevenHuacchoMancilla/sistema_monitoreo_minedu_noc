@@ -1016,6 +1016,9 @@ class IncidentController extends Controller
             ->withCount('managements')
             ->where('followup_status', FollowupStatus::PendienteCierre)
             ->whereNotNull('recovered_at')
+            // Ya clasificados a Incidencias / Requerimientos no deben aparecer aquí.
+            ->whereRaw('NOT (COALESCE(is_grave_incident, false) = true AND grave_closed_at IS NULL)')
+            ->whereRaw('NOT (COALESCE(is_requirement_case, false) = true AND requirement_closed_at IS NULL)')
             ->orderByDesc('recovered_at')
             ->limit(500)
             ->get()
@@ -1077,19 +1080,28 @@ class IncidentController extends Controller
         }
 
         $before = $incident->followup_status?->value;
-        $incident->update([
+        $payload = [
             'is_grave_incident' => true,
             'grave_opened_at' => now(),
             'grave_opened_by_user_id' => $request->user()?->id,
             'grave_closed_at' => null,
             'last_contact_at' => now(),
-        ]);
+        ];
+        // Si estaba en Pendiente de cierre, pasa a Incidencias sticky (no se queda en esa cola).
+        if ($incident->followup_status === FollowupStatus::PendienteCierre) {
+            $payload['followup_status'] = FollowupStatus::EnGestion;
+            $payload['recovery_review_status'] = \App\Enums\RecoveryReviewStatus::ContinueMonitoring;
+            $payload['recovery_reviewed_at'] = now();
+            $payload['reopened_from_management'] = true;
+        }
+        $incident->update($payload);
+        $after = $incident->fresh()?->followup_status?->value ?? $before;
 
         IncidentUpdate::query()->create([
             'incident_id' => $incident->id,
             'type' => 'MANUAL',
             'status_before' => $before,
-            'status_after' => $before,
+            'status_after' => $after,
             'observation' => $data['observation'] ?? 'Marcado como incidencia grave.',
             'user_id' => $request->user()?->id,
             'created_at' => now(),

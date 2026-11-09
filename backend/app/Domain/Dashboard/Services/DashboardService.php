@@ -190,6 +190,8 @@ class DashboardService
         $pendienteCierre = (int) Incident::query()
             ->where('followup_status', FollowupStatus::PendienteCierre)
             ->whereNotNull('recovered_at')
+            ->whereRaw('NOT (COALESCE(is_grave_incident, false) = true AND grave_closed_at IS NULL)')
+            ->whereRaw('NOT (COALESCE(is_requirement_case, false) = true AND requirement_closed_at IS NULL)')
             ->count();
 
         $graves = (int) Incident::query()
