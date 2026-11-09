@@ -10,6 +10,7 @@ use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Enums\RecoveryReviewStatus;
 use App\Models\Incident;
+use App\Support\OperationalTime;
 use Carbon\CarbonInterface;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Collection;
@@ -66,17 +67,14 @@ class OperationalReportService
         return [
             'rows' => $listRows,
             'total' => count($listRows),
-            'legend' => [
-                ['key' => '✖', 'color' => 'red', 'label' => '✖ PRTG caído / sin servicio'],
-                ['key' => '✔', 'color' => 'green', 'label' => '✔ PRTG operativo'],
-                ['key' => ListaLleeEstado::Energia->value, 'color' => 'amber', 'label' => 'Energia (ej. LE05)'],
-                ['key' => ListaLleeEstado::Averias->value, 'color' => 'red', 'label' => 'Averias'],
-                ['key' => ListaLleeEstado::DescartesEnCurso->value, 'color' => 'orange', 'label' => 'Descartes en curso'],
-                ['key' => ListaLleeEstado::Requerimiento->value, 'color' => 'violet', 'label' => 'Requerimiento'],
-            ],
+            'legend' => collect(ListaLleeEstado::legendOrder())->map(fn (ListaLleeEstado $e) => [
+                'key' => $e->value,
+                'color' => $e->tone(),
+                'label' => $e->value,
+            ])->values()->all(),
             'filters_applied' => $filters,
             'columns' => self::officialColumns(),
-            'lista_estados' => collect(ListaLleeEstado::cases())->map(fn (ListaLleeEstado $e) => [
+            'lista_estados' => collect(ListaLleeEstado::legendOrder())->map(fn (ListaLleeEstado $e) => [
                 'value' => $e->value,
                 'label' => $e->value,
                 'group' => $e->group(),
@@ -218,36 +216,10 @@ class OperationalReportService
             : null;
         $apiLocation = PrtgOperationalLocation::apiFields($assignment, $school);
 
-        $detail = $incident->detail_text;
-        if ($incident->isManualPartial() && $incident->affected_wan_node) {
-            $prefix = 'ENLACE '.$incident->affected_wan_node->value;
-            $detail = $detail
-                ? $prefix.' · '.$detail
-                : $prefix;
-        }
-
-        $causeLine = RootCauseLegend::display($incident->root_cause_code, $incident->cause);
-        if ($causeLine) {
-            if ($causeLine !== '' && ! str_contains((string) $detail, $causeLine)) {
-                $detail = $detail ? $detail.' · '.$causeLine : $causeLine;
-            }
-        }
-
-        if ($incident->relationLoaded('managements')) {
-            $lines = [];
-            foreach ($incident->managements as $management) {
-                foreach ([$management->detail, $management->observation] as $bit) {
-                    $bit = trim((string) $bit);
-                    if ($bit === '' || str_contains((string) $detail, $bit) || in_array($bit, $lines, true)) {
-                        continue;
-                    }
-                    $lines[] = $bit;
-                }
-            }
-            if ($lines !== []) {
-                $detail = $detail ? $detail.' · '.implode(' · ', $lines) : implode(' · ', $lines);
-            }
-        }
+        // DETALLE = solo lo que escribió el operador (con hora). Sin códigos ni causa raíz.
+        $detail = filled($incident->lista_detalle)
+            ? (string) $incident->lista_detalle
+            : $this->operatorDetailOnly($incident);
 
         $listaEstado = ListaLleeEstadoResolver::resolve($incident);
         $provincia = $apiLocation['provincia'] ?? $snapshotProvince;
@@ -264,9 +236,9 @@ class OperationalReportService
             'local_educativo' => $school?->local_educativo ?? ($snapshotSchool['local_educativo'] ?? null),
             'presentacion_nombre_prtg' => $nombrePrtg !== '' ? $nombrePrtg : null,
             'estado_prtg' => ListaLleeEstadoResolver::prtgMark($incident),
-            'lista_estado' => $listaEstado->value,
-            'lista_estado_tone' => $listaEstado->tone(),
-            'lista_estado_group' => $listaEstado->group(),
+            'lista_estado' => $listaEstado?->value,
+            'lista_estado_tone' => $listaEstado?->tone(),
+            'lista_estado_group' => $listaEstado?->group(),
             'root_cause_code' => $rootCode,
             'root_cause' => $rootCause,
             'outage_at' => $outageAt?->toIso8601String(),
@@ -293,6 +265,10 @@ class OperationalReportService
             'location_mismatch' => $apiLocation['location_mismatch'],
             'codigo_local' => $school?->codigo_local ?? ($snapshotSchool['codigo_local'] ?? null),
             'clasificacion' => $school?->clasificacion,
+            'ambito' => $school?->ambito,
+            'energy_type' => $school?->energy_type,
+            'implementation_zone' => $school?->implementation_zone,
+            'installation_type' => $school?->installation_type,
             'capacidad' => $assignment?->capacidad_mbps,
             'management_classification' => $classification?->value,
             'management_classification_label' => $classification?->label(),
@@ -474,33 +450,8 @@ class OperationalReportService
      */
     public function closingRows(): Collection
     {
-        $incidents = Incident::query()
-            ->with([
-                'school',
-                'networkAssignment',
-                'sensor',
-                'managements' => fn ($q) => $q->orderBy('id'),
-            ])
-            ->where(function (Builder $q) {
-                $q->where(function (Builder $grave) {
-                    $grave->where('is_grave_incident', true)->whereNull('grave_closed_at');
-                })->orWhere(function (Builder $active) {
-                    $active->whereNull('recovered_at')
-                        ->where(function (Builder $notGrave) {
-                            $notGrave->where('is_grave_incident', false)->orWhereNull('is_grave_incident');
-                        });
-                });
-            })
-            ->orderByRaw('CASE WHEN is_grave_incident = true AND grave_closed_at IS NULL THEN 0 ELSE 1 END')
-            ->orderBy('started_at')
-            ->get();
-
-        return $incidents->values()->map(function (Incident $incident, int $index) {
-            $row = $this->mapRow($incident, $index + 1);
-            $row['color_key'] = $incident->isOpenGrave() ? 'red' : 'yellow';
-
-            return $row;
-        });
+        // El Excel / preview usa la lista del día y excluye Activo y Restablecido.
+        return collect(app(ListaLleeDayService::class)->exportRowsForDate());
     }
 
     public function normalizeTechnology(?string $raw): ?string
@@ -520,5 +471,49 @@ class OperationalReportService
         }
 
         return $value;
+    }
+
+    /**
+     * Solo comentarios del operador, con hora Lima. Sin códigos ni causa raíz.
+     */
+    public function operatorDetailOnly(Incident $incident): ?string
+    {
+        if ($incident->relationLoaded('managements') && $incident->managements->isNotEmpty()) {
+            $lines = [];
+            foreach ($incident->managements->sortBy('id') as $management) {
+                $text = trim((string) ($management->detail ?: $management->observation ?: ''));
+                if ($text === '') {
+                    continue;
+                }
+                // Quitar prefijos de sistema tipo "Caída de enlace · PINT ·"
+                $text = preg_replace('/^(Caída de enlace|Queja|Requerimiento|Gestión)[^\n]*·\s*/iu', '', $text) ?: $text;
+                $text = trim($text);
+                if ($text === '' || in_array($text, $lines, true)) {
+                    continue;
+                }
+                $at = $management->created_at ?? $management->contact_attempted_at ?? null;
+                $stamp = $at ? OperationalTime::format($at, 'd/m/Y H:i') : null;
+                $lines[] = $stamp ? $stamp.' · '.$text : $text;
+            }
+            if ($lines !== []) {
+                return implode("\n", $lines);
+            }
+        }
+
+        $fallback = trim((string) ($incident->detail_text ?? ''));
+        if ($fallback === '') {
+            return null;
+        }
+        // Si el detail_text parece solo causa/código, no mostrarlo.
+        $code = strtoupper(trim((string) ($incident->root_cause_code ?? '')));
+        $cause = trim((string) ($incident->cause ?? ''));
+        if ($code !== '' && str_contains($fallback, $code)) {
+            return null;
+        }
+        if ($cause !== '' && $fallback === $cause) {
+            return null;
+        }
+
+        return $fallback;
     }
 }

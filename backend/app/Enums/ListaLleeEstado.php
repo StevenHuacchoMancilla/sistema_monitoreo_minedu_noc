@@ -64,13 +64,33 @@ enum ListaLleeEstado: string
         return match ($this) {
             self::Averias => 'red',
             self::DescartesEnCurso => 'orange',
-            self::SinRespuesta => 'yellow',
-            self::EquiposApagados => 'amber',
+            self::SinRespuesta => 'blue',
+            self::EquiposApagados => 'violet',
             self::Energia => 'amber',
             self::Restablecido => 'green',
-            self::Requerimiento => 'violet',
-            self::EnlaceParcial => 'cyan',
-            self::Activo => 'slate',
+            self::Requerimiento => 'slate',
+            self::EnlaceParcial => 'stone',
+            self::Activo => 'white',
         };
+    }
+
+    /**
+     * Orden de las tarjetas / lista desplegable (como en el Excel).
+     *
+     * @return list<self>
+     */
+    public static function legendOrder(): array
+    {
+        return [
+            self::Averias,
+            self::DescartesEnCurso,
+            self::SinRespuesta,
+            self::EquiposApagados,
+            self::Energia,
+            self::Requerimiento,
+            self::EnlaceParcial,
+            self::Restablecido,
+            self::Activo,
+        ];
     }
 }

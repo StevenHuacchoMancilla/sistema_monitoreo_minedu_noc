@@ -25,7 +25,7 @@ class ClosingReportService
         return [
             'total' => count($rows),
             'rows' => $rows,
-            'note' => 'Lista de LLEE · columnas hasta ZONA · ESTADO y ESTADO PRTG automáticos.',
+            'note' => 'Lista de LLEE del día · sin Activo ni Restablecido · DETALLE manual.',
             'columns' => OperationalReportService::officialColumns(),
         ];
     }

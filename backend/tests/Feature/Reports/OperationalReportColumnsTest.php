@@ -94,7 +94,7 @@ class OperationalReportColumnsTest extends TestCase
         $this->assertSame('387025', $row['codigo_local']);
         $this->assertStringContainsString('CID258632', (string) $row['presentacion_nombre_prtg']);
         $this->assertSame('✖', $row['estado_prtg']);
-        $this->assertSame('Energia', $row['lista_estado']);
+        $this->assertNull($row['lista_estado']);
         $this->assertSame('LE05', $row['root_cause_code']);
         $this->assertSame('IQUITOS', $row['zona']);
         $this->assertContains('ZONA', $response->json('columns'));
