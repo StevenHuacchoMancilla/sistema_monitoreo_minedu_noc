@@ -73,7 +73,22 @@ class Incident extends Model
     /** Incidencia o requerimiento sticky: PRTG UP no cierra; re-caída reutiliza el caso. */
     public function isStickyOpen(): bool
     {
-        return $this->isOpenGrave() || $this->isOpenRequirement();
+        return $this->isOpenGrave() || $this->isOpenRequirement() || $this->isKeptInManagement();
+    }
+
+    /** Recuperado en PRTG pero mantenido en gestión (re-cae sin ticket nuevo). */
+    public function isKeptInManagement(): bool
+    {
+        if ($this->recovered_at === null) {
+            return false;
+        }
+        if ($this->recovery_review_status !== RecoveryReviewStatus::ContinueMonitoring) {
+            return false;
+        }
+        $followup = $this->followup_status;
+
+        return $followup instanceof FollowupStatus
+            && in_array($followup->value, FollowupStatus::managingValues(), true);
     }
 
     public function isManualPartial(): bool

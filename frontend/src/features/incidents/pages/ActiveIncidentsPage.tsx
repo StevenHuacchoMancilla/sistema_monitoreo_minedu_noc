@@ -718,6 +718,14 @@ function OutageTableRow({
             >
               En requerimiento
             </Badge>
+          ) : row.kept_in_management ? (
+            <Badge
+              tone="cyan"
+              title="Recuperado en PRTG pero mantenido en gestión. Si vuelve a caer, se reutiliza el mismo ticket."
+              className="!text-[10px] !font-medium"
+            >
+              Mantenido en gestión
+            </Badge>
           ) : (
             <FollowupBadge status={row.followup_status} />
           )}

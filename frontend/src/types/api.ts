@@ -119,6 +119,9 @@ export type OutageRow = {
   is_grave_incident?: boolean
   has_open_requirement?: boolean
   is_requirement_case?: boolean
+  recovered_at?: string | null
+  recovery_review_status?: string | null
+  kept_in_management?: boolean
   tracking?: {
     id: number
     status: string | null

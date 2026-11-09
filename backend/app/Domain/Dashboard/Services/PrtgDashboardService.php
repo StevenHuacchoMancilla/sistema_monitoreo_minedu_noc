@@ -57,7 +57,6 @@ class PrtgDashboardService
         $activeIncidents = $outageNav['activas'];
         $pendingContact = $outageNav['pendientes'];
         $enGestion = Incident::query()
-            ->active()
             ->whereIn('followup_status', FollowupStatus::managingValues())
             ->where(function ($q) {
                 $q->where('is_grave_incident', false)
@@ -67,11 +66,19 @@ class PrtgDashboardService
                     ->orWhereNotNull('requirement_closed_at');
             })
             ->where(function ($q) {
-                $q->where('detection_source', Incident::DETECTION_MANUAL_PARTIAL)
-                    ->orWhereHas(
-                        'sensor',
-                        fn ($sensor) => $sensor->where('normalized_status', MonitoringStatus::Caido->value)
-                    );
+                $q->where(function ($active) {
+                    $active->whereNull('recovered_at')
+                        ->where(function ($down) {
+                            $down->where('detection_source', Incident::DETECTION_MANUAL_PARTIAL)
+                                ->orWhereHas(
+                                    'sensor',
+                                    fn ($sensor) => $sensor->where('normalized_status', MonitoringStatus::Caido->value)
+                                );
+                        });
+                })->orWhere(function ($kept) {
+                    $kept->whereNotNull('recovered_at')
+                        ->where('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value);
+                });
             })
             ->count();
         $recaidaGestion = $outageNav['recaidas'];

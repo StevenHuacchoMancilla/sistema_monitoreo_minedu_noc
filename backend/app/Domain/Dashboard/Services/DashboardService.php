@@ -51,16 +51,24 @@ class DashboardService
                 (SELECT COUNT(*)::int FROM network_assignments WHERE is_active = true AND cid_status IN (?, ?, ?)) AS without_cid,
                 (SELECT COUNT(*)::int FROM network_assignments WHERE is_active = true AND monitoring_eligible = true) AS eligible,
                 (SELECT COUNT(*)::int FROM incidents
-                    WHERE recovered_at IS NULL
-                      AND followup_status IN (?, ?, ?, ?, ?)
+                    WHERE followup_status IN (?, ?, ?, ?, ?)
                       AND NOT (is_grave_incident = true AND grave_closed_at IS NULL)
                       AND NOT (is_requirement_case = true AND requirement_closed_at IS NULL)
                       AND (
-                        detection_source = ?
-                        OR EXISTS (
-                          SELECT 1 FROM prtg_sensors s
-                          WHERE s.id = incidents.prtg_sensor_id
-                            AND s.normalized_status = ?
+                        (
+                          recovered_at IS NULL
+                          AND (
+                            detection_source = ?
+                            OR EXISTS (
+                              SELECT 1 FROM prtg_sensors s
+                              WHERE s.id = incidents.prtg_sensor_id
+                                AND s.normalized_status = ?
+                            )
+                          )
+                        )
+                        OR (
+                          recovered_at IS NOT NULL
+                          AND recovery_review_status = ?
                         )
                       )
                 ) AS en_gestion,
@@ -75,6 +83,7 @@ class DashboardService
                 ...$managing,
                 Incident::DETECTION_MANUAL_PARTIAL,
                 MonitoringStatus::Caido->value,
+                RecoveryReviewStatus::ContinueMonitoring->value,
                 $dayStart,
                 $dayEnd,
                 RecoveryReviewStatus::PendingReview->value,
@@ -550,23 +559,28 @@ class DashboardService
         $sort = in_array($sort, ['started_at', 'id'], true) ? $sort : 'started_at';
         $direction = strtolower((string) $direction) === 'asc' ? 'asc' : 'desc';
 
-        $query = Incident::query()->active();
+        $query = Incident::query();
 
         if ($openManagement) {
-            // Tickets abiertos en gestión (incluye recuperados pendientes de cierre).
+            // En gestión: caídos activos + recuperados “mantener en gestión”.
             // Incidencias / requerimientos sticky viven en sus apartados.
-            $query->whereIn('followup_status', [
-                ...FollowupStatus::managingValues(),
-                FollowupStatus::PendienteCierre->value,
-            ])->where(function ($q) {
-                $q->where('is_grave_incident', false)
-                    ->orWhereNotNull('grave_closed_at');
-            })->where(function ($q) {
-                $q->where('is_requirement_case', false)
-                    ->orWhereNotNull('requirement_closed_at');
-            });
+            $query->whereIn('followup_status', FollowupStatus::managingValues())
+                ->where(function ($q) {
+                    $q->whereNull('recovered_at')
+                        ->orWhere(function ($kept) {
+                            $kept->whereNotNull('recovered_at')
+                                ->where('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value);
+                        });
+                })
+                ->where(function ($q) {
+                    $q->where('is_grave_incident', false)
+                        ->orWhereNotNull('grave_closed_at');
+                })->where(function ($q) {
+                    $q->where('is_requirement_case', false)
+                        ->orWhereNotNull('requirement_closed_at');
+                });
         } else {
-            $query->where(function ($q) {
+            $query->active()->where(function ($q) {
                 $q->whereHas(
                     'sensor',
                     fn ($sensor) => $sensor->where('normalized_status', MonitoringStatus::Caido->value)
@@ -726,6 +740,11 @@ class DashboardService
                 'glpi_ticket' => $incident->glpi_ticket,
                 'responsible_area' => $incident->responsible_area,
                 'reopened_from_management' => (bool) $incident->reopened_from_management,
+                'recovered_at' => $incident->recovered_at?->toIso8601String(),
+                'recovery_review_status' => $incident->recovery_review_status instanceof RecoveryReviewStatus
+                    ? $incident->recovery_review_status->value
+                    : $incident->recovery_review_status,
+                'kept_in_management' => $incident->isKeptInManagement(),
             ];
         });
     }

@@ -55,7 +55,7 @@ const META: Record<
   'pendiente-cierre': {
     title: 'Pendiente de cierre',
     description:
-      'Recuperados en día laboral (lun–vie). Guarda la gestión (queda «Gestión lista») y cierra el ticket cuando termines; solo entonces sale de esta cola. Sáb/dom no entran aquí.',
+      'Recuperados en día laboral (lun–vie). Guarda la gestión («Gestión lista»), cierra el ticket o mantén en gestión si aún lo necesitas (re-cae sin ticket nuevo). Sáb/dom no entran aquí.',
     fetcher: () => endpoints.incidentsPendienteCierre() as Promise<{ data: QueueRow[] }>,
   },
   graves: {
@@ -84,6 +84,8 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
   const [actionError, setActionError] = useState<string | null>(null)
   const [closeRow, setCloseRow] = useState<QueueRow | null>(null)
   const [closing, setClosing] = useState(false)
+  const [keepRow, setKeepRow] = useState<QueueRow | null>(null)
+  const [keeping, setKeeping] = useState(false)
 
   const query = useQuery({
     queryKey: ['incidents', 'queue', kind],
@@ -203,9 +205,14 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                           </Button>
                         )}
                         {canManage && kind === 'pendiente-cierre' ? (
-                          <Button size="sm" variant="secondary" onClick={() => setCloseRow(row)}>
-                            Cerrar ticket
-                          </Button>
+                          <>
+                            <Button size="sm" variant="secondary" onClick={() => setKeepRow(row)}>
+                              Mantener en gestión
+                            </Button>
+                            <Button size="sm" variant="secondary" onClick={() => setCloseRow(row)}>
+                              Cerrar ticket
+                            </Button>
+                          </>
                         ) : null}
                         {canManage && (kind === 'graves' || kind === 'requerimientos') ? (
                           <Button size="sm" variant="primary" onClick={() => setTicketRow(row)}>
@@ -324,6 +331,41 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
               setActionError(err instanceof Error ? err.message : 'No se pudo cerrar el ticket.')
             })
             .finally(() => setClosing(false))
+        }}
+      />
+
+      <ConfirmDialog
+        open={keepRow !== null}
+        title="Mantener en gestión"
+        description={
+          keepRow
+            ? `Aunque esté recuperado en PRTG, el caso${keepRow.cid ? ` CID ${keepRow.cid}` : ''}${
+                keepRow.local_educativo ? ` · ${keepRow.local_educativo}` : ''
+              } seguirá en En gestión. Si vuelve a caer, se reutiliza el mismo ticket (no se crea uno nuevo).`
+            : undefined
+        }
+        confirmLabel="Mantener en gestión"
+        cancelLabel="Cancelar"
+        tone="primary"
+        loading={keeping}
+        onClose={() => {
+          if (!keeping) setKeepRow(null)
+        }}
+        onConfirm={() => {
+          if (!keepRow) return
+          setKeeping(true)
+          setActionError(null)
+          void endpoints
+            .keepIncidentManaging(keepRow.incident_id)
+            .then(() => {
+              setKeepRow(null)
+              refresh()
+              void client.invalidateQueries({ queryKey: ['dashboard', 'managing'], refetchType: 'active' })
+            })
+            .catch((err: unknown) => {
+              setActionError(err instanceof Error ? err.message : 'No se pudo mantener en gestión.')
+            })
+            .finally(() => setKeeping(false))
         }}
       />
     </AppLayout>

@@ -224,6 +224,8 @@ export const endpoints = {
     apiPost(`/incidents/${id}/close-grave`, { observation }),
   closeIncidentRequirement: (id: number, observation?: string) =>
     apiPost(`/incidents/${id}/close-requirement`, { observation }),
+  keepIncidentManaging: (id: number, observation?: string) =>
+    apiPost(`/incidents/${id}/keep-managing`, { observation }),
   closeIncidentTicket: (id: number, observation?: string) =>
     apiPost(`/incidents/${id}/close-ticket`, { observation }),
   assignmentPrtgSensors: (assignmentId: number) =>

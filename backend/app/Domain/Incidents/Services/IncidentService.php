@@ -148,7 +148,7 @@ class IncidentService
             return $active->fresh() ?? $active;
         }
 
-        // Incidencia / requerimiento sticky abierto (recuperó en PRTG pero no se cerró): re-cae sin ticket nuevo.
+        // Sticky abierto (incidencia, requerimiento o mantenido en gestión): re-cae sin ticket nuevo.
         $openSticky = Incident::query()
             ->where('network_assignment_id', $assignment->id)
             ->whereNotNull('recovered_at')
@@ -157,6 +157,9 @@ class IncidentService
                     $g->where('is_grave_incident', true)->whereNull('grave_closed_at');
                 })->orWhere(function ($r) {
                     $r->where('is_requirement_case', true)->whereNull('requirement_closed_at');
+                })->orWhere(function ($k) {
+                    $k->where('recovery_review_status', \App\Enums\RecoveryReviewStatus::ContinueMonitoring->value)
+                        ->whereIn('followup_status', FollowupStatus::managingValues());
                 });
             })
             ->orderByDesc('id')
@@ -251,6 +254,16 @@ class IncidentService
             && in_array($incident->followup_status->value, FollowupStatus::managingValues(), true);
         $followup = $keepFollowup ? $incident->followup_status : FollowupStatus::EnGestion;
 
+        $wasKeptManaging = $incident->isKeptInManagement()
+            || $incident->recovery_review_status === \App\Enums\RecoveryReviewStatus::ContinueMonitoring;
+        $label = $incident->isOpenRequirement()
+            ? 'Re-caída con requerimiento abierto: se reutiliza el mismo caso y ticket (etiqueta En requerimiento).'
+            : ($incident->isOpenGrave()
+                ? 'Re-caída con incidencia abierta: se reutiliza el mismo caso y ticket (etiqueta En incidencia).'
+                : ($wasKeptManaging
+                    ? 'Re-caída con caso mantenido en gestión: se reutiliza el mismo caso y ticket.'
+                    : 'Re-caída sticky: se reutiliza el mismo caso y ticket.'));
+
         $incident->forceFill([
             'recovered_at' => null,
             'prtg_up_at' => null,
@@ -261,11 +274,8 @@ class IncidentService
             'recovered_while_managing' => false,
             'recovery_review_status' => null,
             'recovery_reviewed_at' => null,
+            'reopened_from_management' => $wasKeptManaging ? true : $incident->reopened_from_management,
         ])->save();
-
-        $label = $incident->isOpenRequirement()
-            ? 'Re-caída con requerimiento abierto: se reutiliza el mismo caso y ticket (etiqueta En requerimiento).'
-            : 'Re-caída con incidencia abierta: se reutiliza el mismo caso y ticket (etiqueta En incidencia).';
 
         IncidentUpdate::query()->create([
             'incident_id' => $incident->id,

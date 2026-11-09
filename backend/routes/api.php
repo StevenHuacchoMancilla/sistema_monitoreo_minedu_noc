@@ -157,6 +157,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('/incidents/{incident}/mark-grave', [IncidentController::class, 'markGrave']);
             Route::post('/incidents/{incident}/close-grave', [IncidentController::class, 'closeGrave']);
             Route::post('/incidents/{incident}/close-requirement', [IncidentController::class, 'closeRequirement']);
+            Route::post('/incidents/{incident}/keep-managing', [IncidentController::class, 'keepManaging']);
             Route::post('/incidents/{incident}/close-ticket', [IncidentController::class, 'closeTicket']);
             Route::post('/incidents/{incident}/clock-stop', [IncidentController::class, 'clockStop']);
             Route::put('/incidents/{incident}/visit', [IncidentController::class, 'recordVisit']);

@@ -954,6 +954,26 @@ class IncidentController extends Controller
         );
     }
 
+    /** Mantener en gestión aunque esté recuperado; re-cae sin ticket nuevo. */
+    public function keepManaging(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'observation' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        try {
+            $updated = $this->recoveryReviews->keepManaging(
+                $incident,
+                (int) ($request->user()?->id ?? 0),
+                $data['observation'] ?? null,
+            );
+        } catch (InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json($this->show($updated)->getData(true));
+    }
+
     public function addUpdate(Request $request, Incident $incident): JsonResponse
     {
         $data = $request->validate([
