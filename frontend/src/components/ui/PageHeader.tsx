@@ -23,8 +23,10 @@ export function PageHeader({
         {breadcrumb ? <div className="mb-2">{breadcrumb}</div> : null}
         <div className="flex items-start gap-3">
           {icon ? (
-            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-blue-50 text-blue-600 sm:h-10 sm:w-10 dark:bg-blue-950/50 dark:text-blue-300">
-              {icon}
+            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-blue-50 text-blue-600 sm:h-10 sm:w-10 dark:bg-blue-950/50 dark:text-blue-300">
+              <span className="pointer-events-none inline-flex h-5 w-5 shrink-0 items-center justify-center [&>svg]:!h-5 [&>svg]:!w-5 [&>svg]:!max-h-5 [&>svg]:!max-w-5">
+                {icon}
+              </span>
             </div>
           ) : null}
           <div className="min-w-0">

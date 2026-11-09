@@ -170,27 +170,27 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
         }
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-6">
-        <SummaryTile label="Caída (fecha · hora)" icon={<TriangleAlert className="h-4 w-4" />} tone="danger">
+      <div className="mb-5 grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+        <SummaryTile label="Caída (fecha · hora)" icon={<TriangleAlert />} tone="danger">
           <DateTimeValue value={incident.started_at} />
         </SummaryTile>
-        <SummaryTile label="Recuperación (fecha · hora)" icon={<CircleCheck className="h-4 w-4" />} tone="success">
+        <SummaryTile label="Recuperación (fecha · hora)" icon={<CircleCheck />} tone="success">
           {incident.recovered_at ? (
             <DateTimeValue value={incident.recovered_at} hint={incident.same_day ? 'Mismo día' : undefined} />
           ) : (
             <span className="font-semibold text-red-700 dark:text-red-400">Sigue caída</span>
           )}
         </SummaryTile>
-        <SummaryTile label="Duración" icon={<Clock3 className="h-4 w-4" />}>
+        <SummaryTile label="Duración" icon={<Clock3 />}>
           <span className="font-semibold tabular-nums">{incident.duration ?? '—'}</span>
         </SummaryTile>
-        <SummaryTile label="Gestiones" icon={<Phone className="h-4 w-4" />} tone="info">
+        <SummaryTile label="Gestiones" icon={<Phone />} tone="info">
           <span className="font-semibold tabular-nums">{gestion.managements_count}</span>
           <span className="ml-1.5">
             <ContactOutcomeBadge classification={gestion.classification} label={gestion.classification_label} />
           </span>
         </SummaryTile>
-        <SummaryTile label="Cerrado por" icon={<Lock className="h-4 w-4" />}>
+        <SummaryTile label="Cerrado por" icon={<Lock />}>
           {tracking?.closed_at ? (
             <span className="flex flex-col">
               <span className="truncate font-semibold">{tracking.closed_by_name ?? '—'}</span>
@@ -468,9 +468,13 @@ function SummaryTile({
   }
   return (
     <div className="min-w-0 rounded-xl border border-slate-200 bg-white px-3.5 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
-        <span className={toneClass[tone]}>{icon}</span>
-        {label}
+      <p className="flex min-w-0 items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
+        <span
+          className={`inline-flex h-4 w-4 shrink-0 items-center justify-center [&>svg]:!h-4 [&>svg]:!w-4 ${toneClass[tone]}`}
+        >
+          {icon}
+        </span>
+        <span className="min-w-0 truncate">{label}</span>
       </p>
       <div className="mt-1.5 min-w-0 text-[13px] text-slate-900 dark:text-slate-100">{children}</div>
     </div>

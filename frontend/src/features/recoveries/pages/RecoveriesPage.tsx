@@ -19,6 +19,7 @@ import { SectionCard } from '../../../components/ui/Card'
 import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, Input, SearchField, Select } from '../../../components/ui/FormControls'
 import { MetricCard } from '../../../components/ui/MetricCard'
+import { MetricsGrid } from '../../../components/ui/MetricsGrid'
 import { Button } from '../../../components/ui/Button'
 import { Badge } from '../../../components/ui/SoftBadge'
 import {
@@ -255,41 +256,41 @@ export function RecoveriesPage() {
       />
       {exportError ? <p className="mb-3 text-sm text-red-600 dark:text-red-300">{exportError}</p> : null}
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-5">
+      <MetricsGrid dense>
         <MetricCard
           label="Recuperados hoy"
           value={stats?.recovered_today ?? 0}
-          icon={<CircleCheck className="h-4 w-4" />}
+          icon={<CircleCheck />}
           tone="success"
           description="Día calendario America/Lima"
         />
         <MetricCard
           label="Esta semana"
           value={stats?.recovered_this_week ?? 0}
-          icon={<Clock3 className="h-4 w-4" />}
+          icon={<Clock3 />}
           description="Semana calendario Lima"
         />
         <MetricCard
           label="Durante gestión"
           value={stats?.recovered_during_management ?? 0}
-          icon={<Wrench className="h-4 w-4" />}
+          icon={<Wrench />}
           tone="warning"
           description="En el periodo filtrado"
         />
         <MetricCard
           label="Sin contacto"
           value={stats?.recovered_without_contact ?? 0}
-          icon={<PhoneOff className="h-4 w-4" />}
+          icon={<PhoneOff />}
           description="En el periodo filtrado"
         />
         <MetricCard
           label="Con contacto"
           value={stats?.recovered_with_contact ?? 0}
-          icon={<Phone className="h-4 w-4" />}
+          icon={<Phone />}
           tone="info"
           description="En el periodo filtrado"
         />
-      </div>
+      </MetricsGrid>
 
       <div className="mb-3 flex flex-wrap items-center gap-2 rounded-xl border border-slate-200 bg-white px-3 py-2.5 shadow-sm dark:border-slate-800 dark:bg-slate-900">
         <span className="inline-flex items-center gap-1.5 text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">

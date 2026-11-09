@@ -32,6 +32,7 @@ import {
 import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, Input, Select } from '../../../components/ui/FormControls'
 import { MetricCard } from '../../../components/ui/MetricCard'
+import { MetricsGrid } from '../../../components/ui/MetricsGrid'
 import { PaginationBar } from '../../../components/ui/PaginationBar'
 import { useManualSync } from '../../dashboard/hooks/useDashboard'
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
@@ -216,60 +217,33 @@ export function SchoolHistoryDetailPage() {
             </p>
           ) : null}
 
-          <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            <MetricCard label="Total caídas" value={statistics.total_caidas} icon={<TriangleAlert className="h-4 w-4" />} />
-            <MetricCard
-              label="Tickets"
-              value={statistics.tickets_total ?? 0}
-              icon={<History className="h-4 w-4" />}
-              tone="info"
-            />
+          <MetricsGrid dense>
+            <MetricCard label="Total caídas" value={statistics.total_caidas} icon={<TriangleAlert />} />
+            <MetricCard label="Tickets" value={statistics.tickets_total ?? 0} icon={<History />} tone="info" />
             <MetricCard
               label="Tickets abiertos"
               value={statistics.tickets_abiertos ?? 0}
-              icon={<TriangleAlert className="h-4 w-4" />}
+              icon={<TriangleAlert />}
               tone={(statistics.tickets_abiertos ?? 0) > 0 ? 'warning' : 'neutral'}
             />
-            <MetricCard
-              label="Recuperaciones"
-              value={statistics.recuperaciones}
-              icon={<CircleCheck className="h-4 w-4" />}
-              tone="success"
-            />
+            <MetricCard label="Recuperaciones" value={statistics.recuperaciones} icon={<CircleCheck />} tone="success" />
             <MetricCard
               label="Caídas activas"
               value={statistics.caidas_activas}
-              icon={<TriangleAlert className="h-4 w-4" />}
+              icon={<TriangleAlert />}
               tone={statistics.caidas_activas > 0 ? 'danger' : 'neutral'}
             />
-            <MetricCard
-              label="Tiempo total caído"
-              value={statistics.tiempo_total_caido ?? '—'}
-              icon={<Clock3 className="h-4 w-4" />}
-            />
-            <MetricCard
-              label="Última caída"
-              value={formatRelativeDateTime(statistics.ultima_caida)}
-              icon={<History className="h-4 w-4" />}
-            />
+            <MetricCard label="Tiempo total caído" value={statistics.tiempo_total_caido ?? '—'} icon={<Clock3 />} />
+            <MetricCard label="Última caída" value={formatRelativeDateTime(statistics.ultima_caida)} icon={<History />} />
             <MetricCard
               label="Última recuperación"
               value={formatRelativeDateTime(statistics.ultima_recuperacion)}
-              icon={<CircleCheck className="h-4 w-4" />}
+              icon={<CircleCheck />}
               tone="success"
             />
-            <MetricCard
-              label="Duración promedio"
-              value={statistics.duracion_promedio ?? '—'}
-              icon={<Clock3 className="h-4 w-4" />}
-            />
-            <MetricCard
-              label="Mayor caída"
-              value={statistics.mayor_caida ?? '—'}
-              icon={<TriangleAlert className="h-4 w-4" />}
-              tone="warning"
-            />
-          </div>
+            <MetricCard label="Duración promedio" value={statistics.duracion_promedio ?? '—'} icon={<Clock3 />} />
+            <MetricCard label="Mayor caída" value={statistics.mayor_caida ?? '—'} icon={<TriangleAlert />} tone="warning" />
+          </MetricsGrid>
 
           <div className="mb-4">
             <SectionCard title="Últimos 30 días">

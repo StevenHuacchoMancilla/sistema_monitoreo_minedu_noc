@@ -11,6 +11,7 @@ import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, Input, Select } from '../../../components/ui/FormControls'
 import { Button } from '../../../components/ui/Button'
 import { MetricCard } from '../../../components/ui/MetricCard'
+import { MetricsGrid } from '../../../components/ui/MetricsGrid'
 import { SectionCard } from '../../../components/ui/Card'
 import { DataTableContainer, tableClassName, thClassName, theadClassName, trClassName } from '../../../components/ui/DataTableFrame'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
@@ -299,14 +300,14 @@ export function TicketeraPage() {
           </p>
           {prepared.error ? <ErrorState message={prepared.error} /> : null}
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-6">
-            <MetricCard icon={<Ticket className="h-4 w-4" />} label="Incidencias" value={stats.total} description="Una fila es una incidencia" />
-            <MetricCard icon={<Ticket className="h-4 w-4" />} label="CIDs afectados" value={stats.cids} description="CIDs distintos" tone="info" />
-            <MetricCard icon={<Ticket className="h-4 w-4" />} label="Abiertos" value={stats.open} description="Sin cierre" tone="warning" />
-            <MetricCard icon={<Ticket className="h-4 w-4" />} label="Cerrados" value={stats.closed} description={stats.review ? `${stats.review} por revisar` : 'Fechas consistentes'} tone="success" />
-            <MetricCard icon={<Ticket className="h-4 w-4" />} label="Energía · G4" value={stats.energy} description={stats.total ? `${((stats.energy / stats.total) * 100).toFixed(1)}% del total` : '0%'} />
-            <MetricCard icon={<Ticket className="h-4 w-4" />} label="Desconexiones · CR45" value={stats.disconnect} description={stats.total ? `${((stats.disconnect / stats.total) * 100).toFixed(1)}% del total` : '0%'} tone="danger" />
-          </div>
+          <MetricsGrid dense>
+            <MetricCard icon={<Ticket />} label="Incidencias" value={stats.total} description="Una fila es una incidencia" />
+            <MetricCard icon={<Ticket />} label="CIDs afectados" value={stats.cids} description="CIDs distintos" tone="info" />
+            <MetricCard icon={<Ticket />} label="Abiertos" value={stats.open} description="Sin cierre" tone="warning" />
+            <MetricCard icon={<Ticket />} label="Cerrados" value={stats.closed} description={stats.review ? `${stats.review} por revisar` : 'Fechas consistentes'} tone="success" />
+            <MetricCard icon={<Ticket />} label="Energía · G4" value={stats.energy} description={stats.total ? `${((stats.energy / stats.total) * 100).toFixed(1)}% del total` : '0%'} />
+            <MetricCard icon={<Ticket />} label="Desconexiones · CR45" value={stats.disconnect} description={stats.total ? `${((stats.disconnect / stats.total) * 100).toFixed(1)}% del total` : '0%'} tone="danger" />
+          </MetricsGrid>
 
           <div className="flex w-fit gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
             {(
@@ -523,14 +524,14 @@ export function TicketeraPage() {
 
           {view === 'quality' ? (
             <div className="space-y-4">
-              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <MetricCard icon={<Ticket className="h-4 w-4" />} label="Filas leídas" value={query.data.audit.read_rows} description="Toda la hoja" />
-                <MetricCard icon={<Ticket className="h-4 w-4" />} label="Con observaciones" value={query.data.audit.affected_rows} description="Puede haber varias por fila" tone="warning" />
-                <MetricCard icon={<Ticket className="h-4 w-4" />} label="MINEDU vacío" value={query.data.audit.missing_minedu} />
-                <MetricCard icon={<Ticket className="h-4 w-4" />} label="Aperturas inválidas" value={query.data.audit.invalid_open} tone="danger" />
-                <MetricCard icon={<Ticket className="h-4 w-4" />} label="Cierres inválidos" value={query.data.audit.invalid_close + query.data.audit.inverted_dates} />
-                <MetricCard icon={<Ticket className="h-4 w-4" />} label="Tickets duplicados" value={query.data.audit.duplicate_tickets} description="Se conservan las filas" />
-              </div>
+              <MetricsGrid dense>
+                <MetricCard icon={<Ticket />} label="Filas leídas" value={query.data.audit.read_rows} description="Toda la hoja" />
+                <MetricCard icon={<Ticket />} label="Con observaciones" value={query.data.audit.affected_rows} description="Puede haber varias por fila" tone="warning" />
+                <MetricCard icon={<Ticket />} label="MINEDU vacío" value={query.data.audit.missing_minedu} />
+                <MetricCard icon={<Ticket />} label="Aperturas inválidas" value={query.data.audit.invalid_open} tone="danger" />
+                <MetricCard icon={<Ticket />} label="Cierres inválidos" value={query.data.audit.invalid_close + query.data.audit.inverted_dates} />
+                <MetricCard icon={<Ticket />} label="Tickets duplicados" value={query.data.audit.duplicate_tickets} description="Se conservan las filas" />
+              </MetricsGrid>
               <SectionCard title="Observaciones" action={<span className="text-xs text-slate-500">{query.data.warning_count.toLocaleString('es-PE')}</span>}>
                 {query.data.warnings.length ? (
                   <DataTableContainer>

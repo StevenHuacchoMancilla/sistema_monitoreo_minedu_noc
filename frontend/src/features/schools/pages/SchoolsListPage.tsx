@@ -22,6 +22,7 @@ import { IconButton } from '../../../components/ui/IconButton'
 import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, Input, SearchField, Select } from '../../../components/ui/FormControls'
 import { MetricCard } from '../../../components/ui/MetricCard'
+import { MetricsGrid } from '../../../components/ui/MetricsGrid'
 import { MasterSourceBadge, PageHeader } from '../../../components/ui/PageHeader'
 import { PaginationBar } from '../../../components/ui/PaginationBar'
 import { Badge } from '../../../components/ui/SoftBadge'
@@ -127,32 +128,12 @@ export function SchoolsListPage() {
           }
         />
 
-        <div className="grid min-w-0 gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          <MetricCard
-            icon={<GraduationCap className="h-5 w-5" />}
-            label="Total locales"
-            value={stats?.total ?? meta?.total ?? '—'}
-            tone="info"
-          />
-          <MetricCard
-            icon={<Network className="h-5 w-5" />}
-            label="Con CID"
-            value={stats?.with_cid ?? '—'}
-            tone="cyan"
-          />
-          <MetricCard
-            icon={<WifiOff className="h-5 w-5" />}
-            label="Sin CID"
-            value={stats?.without_cid ?? '—'}
-            tone="warning"
-          />
-          <MetricCard
-            icon={<CircleCheck className="h-5 w-5" />}
-            label="Activos"
-            value={stats?.active ?? '—'}
-            tone="success"
-          />
-        </div>
+        <MetricsGrid>
+          <MetricCard icon={<GraduationCap />} label="Total locales" value={stats?.total ?? meta?.total ?? '—'} tone="info" />
+          <MetricCard icon={<Network />} label="Con CID" value={stats?.with_cid ?? '—'} tone="cyan" />
+          <MetricCard icon={<WifiOff />} label="Sin CID" value={stats?.without_cid ?? '—'} tone="warning" />
+          <MetricCard icon={<CircleCheck />} label="Activos" value={stats?.active ?? '—'} tone="success" />
+        </MetricsGrid>
 
         <FilterCard
           actions={

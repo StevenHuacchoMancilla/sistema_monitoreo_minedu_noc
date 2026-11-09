@@ -26,6 +26,7 @@ import {
 import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, SearchField, Select } from '../../../components/ui/FormControls'
 import { MetricCard } from '../../../components/ui/MetricCard'
+import { MetricsGrid } from '../../../components/ui/MetricsGrid'
 import { PaginationBar } from '../../../components/ui/PaginationBar'
 import { Button } from '../../../components/ui/Button'
 import { useManualSync } from '../../dashboard/hooks/useDashboard'
@@ -89,30 +90,12 @@ export function SchoolHistoryIndexPage() {
         description="Analiza caídas, recuperaciones, duración y estado actual de cada local educativo."
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-        <MetricCard
-          label="Colegios con historial"
-          value={stats?.colegios_con_historial ?? 0}
-          icon={<History className="h-4 w-4" />}
-        />
-        <MetricCard
-          label="Incidencias históricas"
-          value={stats?.incidencias_historicas ?? 0}
-          icon={<TriangleAlert className="h-4 w-4" />}
-        />
-        <MetricCard
-          label="Recuperadas"
-          value={stats?.recuperadas ?? 0}
-          icon={<CircleCheck className="h-4 w-4" />}
-          tone="success"
-        />
-        <MetricCard
-          label="Actualmente caídos"
-          value={stats?.activas ?? 0}
-          icon={<TriangleAlert className="h-4 w-4" />}
-          tone="danger"
-        />
-      </div>
+      <MetricsGrid>
+        <MetricCard label="Colegios con historial" value={stats?.colegios_con_historial ?? 0} icon={<History />} />
+        <MetricCard label="Incidencias históricas" value={stats?.incidencias_historicas ?? 0} icon={<TriangleAlert />} />
+        <MetricCard label="Recuperadas" value={stats?.recuperadas ?? 0} icon={<CircleCheck />} tone="success" />
+        <MetricCard label="Actualmente caídos" value={stats?.activas ?? 0} icon={<TriangleAlert />} tone="danger" />
+      </MetricsGrid>
 
       <div className="mb-4">
         <FilterCard

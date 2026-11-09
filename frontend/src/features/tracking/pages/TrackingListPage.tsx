@@ -14,6 +14,7 @@ import {
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
 import { MetricCard } from '../../../components/ui/MetricCard'
+import { MetricsGrid } from '../../../components/ui/MetricsGrid'
 import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, SearchField, Select } from '../../../components/ui/FormControls'
 import { DateRangeFields, quickApertureRange } from '../../../components/ui/DateRangeFields'
@@ -187,38 +188,19 @@ export function TrackingListPage() {
         }
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
-        <MetricCard
-          label="Abiertos"
-          value={kpis?.abiertos ?? 0}
-          icon={<PlayCircle className="h-4 w-4" />}
-          tone="warning"
-        />
-        <MetricCard
-          label="En seguimiento"
-          value={kpis?.en_seguimiento ?? 0}
-          icon={<MessageSquareText className="h-4 w-4" />}
-          tone="info"
-        />
+      <MetricsGrid dense>
+        <MetricCard label="Abiertos" value={kpis?.abiertos ?? 0} icon={<PlayCircle />} tone="warning" />
+        <MetricCard label="En seguimiento" value={kpis?.en_seguimiento ?? 0} icon={<MessageSquareText />} tone="info" />
         <MetricCard
           label="Recuperados téc. pendientes"
           value={kpis?.tecnicamente_recuperados ?? 0}
-          icon={<Activity className="h-4 w-4" />}
+          icon={<Activity />}
           tone="success"
           description="PRTG OK, Tracking abierto"
         />
-        <MetricCard
-          label="Cerrados hoy"
-          value={kpis?.cerrados_hoy ?? 0}
-          icon={<CircleCheck className="h-4 w-4" />}
-          tone="success"
-        />
-        <MetricCard
-          label="Total en periodo"
-          value={kpis?.total_periodo ?? 0}
-          icon={<ClipboardList className="h-4 w-4" />}
-        />
-      </div>
+        <MetricCard label="Cerrados hoy" value={kpis?.cerrados_hoy ?? 0} icon={<CircleCheck />} tone="success" />
+        <MetricCard label="Total en periodo" value={kpis?.total_periodo ?? 0} icon={<ClipboardList />} />
+      </MetricsGrid>
 
       <div className="mb-4">
         <FilterCard

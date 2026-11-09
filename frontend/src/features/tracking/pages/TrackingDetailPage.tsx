@@ -201,7 +201,7 @@ export function TrackingDetailPage() {
 
           <TrackingTicketCard tracking={data} />
 
-          <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="mb-5 grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
             <SummaryTile label="TSS" value={data.tss_snapshot || '—'} />
             <SummaryTile label="CID" value={data.cid_snapshot || '—'} />
             <SummaryTile label="Duración" value={formatDuration(data.duration_seconds)} />
@@ -324,8 +324,8 @@ export function TrackingDetailPage() {
 
 function SummaryTile({ label, value, hint }: { label: string; value: string; hint?: string }) {
   return (
-    <article className="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-      <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</p>
+    <article className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900">
+      <p className="truncate text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</p>
       <p className="mt-1 truncate text-sm font-bold text-slate-950 dark:text-slate-50" title={value}>
         {value}
       </p>

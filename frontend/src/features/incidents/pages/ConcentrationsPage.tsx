@@ -4,6 +4,7 @@ import { useConcentrations, useDashboardSummary, useManualSync } from '../../das
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
 import { MetricCard } from '../../../components/ui/MetricCard'
+import { MetricsGrid } from '../../../components/ui/MetricsGrid'
 import { ErrorState, LoadingState } from '../../../components/ui/States'
 import { Badge } from '../../../components/ui/SoftBadge'
 import { ConcentrationCards } from '../../dashboard/components/ConcentrationCards'
@@ -57,32 +58,23 @@ export function ConcentrationsPage() {
 
       {!concentrations.isLoading && !concentrations.isError ? (
         <>
-          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-3">
+          <MetricsGrid>
+            <MetricCard icon={<MapPinned />} label="Zonas activas" value={kpis.zones} tone="warning" />
             <MetricCard
-              icon={<MapPinned className="h-4 w-4" />}
-              label="Zonas activas"
-              value={kpis.zones}
-              tone="warning"
-            />
-            <MetricCard
-              icon={<TriangleAlert className="h-4 w-4" />}
+              icon={<TriangleAlert />}
               label="Colegios caídos"
               value={kpis.down}
               description="Suma en concentraciones"
               tone="danger"
             />
             <MetricCard
-              icon={<TriangleAlert className="h-4 w-4" />}
+              icon={<TriangleAlert />}
               label="Zona más crítica"
-              value={
-                kpis.worst
-                  ? `${kpis.worst.porcentaje_caidos ?? 0}%`
-                  : '—'
-              }
+              value={kpis.worst ? `${kpis.worst.porcentaje_caidos ?? 0}%` : '—'}
               description={kpis.worst?.label ?? 'Sin datos'}
               tone="danger"
             />
-          </div>
+          </MetricsGrid>
 
           <ConcentrationCards
             items={rows}

@@ -52,7 +52,7 @@ export function ResumenPrtgBoard({ data, zonas = [], selectedZona = '', onZonaCh
 
   return (
     <div className="space-y-6">
-      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+      <div className="mb-0 grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
         <Kpi label="Total en tablero" value={data.totals.all} tone="neutral" />
         <Kpi label="✔ PRTG activo" value={data.totals.up} tone="up" />
         <Kpi label="✖ Caídos PRTG" value={data.totals.down} tone="down" />

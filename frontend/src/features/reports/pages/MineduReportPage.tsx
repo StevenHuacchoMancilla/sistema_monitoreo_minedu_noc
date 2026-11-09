@@ -59,10 +59,10 @@ export function MineduReportPage() {
 
       {report.data ? (
         <>
-          <div className="mb-4 grid gap-3 sm:grid-cols-3">
+          <div className="mb-4 grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 sm:grid-cols-3">
             {report.data.groups.map((group) => (
-              <div key={group.key} className={`rounded-xl border border-slate-200 px-4 py-3 ${TONE[group.key] ?? 'bg-white'}`}>
-                <p className="text-xs font-semibold tracking-wide uppercase">{group.label}</p>
+              <div key={group.key} className={`min-w-0 rounded-xl border border-slate-200 px-4 py-3 ${TONE[group.key] ?? 'bg-white'}`}>
+                <p className="truncate text-xs font-semibold tracking-wide uppercase">{group.label}</p>
                 <p className="mt-1 text-2xl font-semibold tabular-nums">{group.total}</p>
               </div>
             ))}

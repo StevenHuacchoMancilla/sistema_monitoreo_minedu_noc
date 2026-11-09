@@ -12,6 +12,7 @@ import {
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
 import { MetricCard } from '../../../components/ui/MetricCard'
+import { MetricsGrid } from '../../../components/ui/MetricsGrid'
 import { Button } from '../../../components/ui/Button'
 import { Badge, FOLLOWUP_LABELS } from '../../../components/ui/Badge'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
@@ -176,17 +177,17 @@ export function MassOutageNodoPage() {
 
       {summary ? (
         <>
-          <div className="mb-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-            <MetricCard icon={<TriangleAlert className="h-4 w-4" />} label="Caídos" value={summary.caidos} tone="danger" />
-            <MetricCard icon={<TriangleAlert className="h-4 w-4" />} label="Operativos" value={summary.operativos} tone="success" />
-            <MetricCard icon={<TriangleAlert className="h-4 w-4" />} label="En el nodo" value={summary.total} />
+          <MetricsGrid>
+            <MetricCard icon={<TriangleAlert />} label="Caídos" value={summary.caidos} tone="danger" />
+            <MetricCard icon={<TriangleAlert />} label="Operativos" value={summary.operativos} tone="success" />
+            <MetricCard icon={<TriangleAlert />} label="En el nodo" value={summary.total} />
             <MetricCard
-              icon={<TriangleAlert className="h-4 w-4" />}
+              icon={<TriangleAlert />}
               label="Sin monitoreo"
               value={summary.sin_monitoreo}
               description={summary.parciales > 0 ? `${summary.parciales} con enlace parcial` : undefined}
             />
-          </div>
+          </MetricsGrid>
 
           <div className="mb-4 rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
             <div className="flex flex-wrap items-end justify-between gap-3">
