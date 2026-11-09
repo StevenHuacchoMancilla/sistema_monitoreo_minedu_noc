@@ -159,6 +159,17 @@ export function SchoolHistoryDetailPage() {
                     {tech}
                   </span>
                 ) : null}
+                {school.ambito ? (
+                  <span
+                    className={`inline-flex rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${
+                      school.ambito.toUpperCase().includes('URBAN')
+                        ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/40 dark:text-sky-300'
+                        : 'bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200'
+                    }`}
+                  >
+                    {school.ambito.toUpperCase().includes('URBAN') ? 'Urbana' : 'Rural'}
+                  </span>
+                ) : null}
                 {hasActive ? <Badge tone="danger">Caída activa</Badge> : null}
                 {statistics.total_caidas > 1 ? (
                   <Badge tone="warning" title={`${statistics.total_caidas} caídas registradas de este colegio`}>

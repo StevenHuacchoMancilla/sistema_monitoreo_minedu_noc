@@ -673,7 +673,7 @@ function OutageTableRow({
           {row.local_educativo ?? '—'}
         </Truncate>
         <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">
-          {[row.ticket_code, row.codigo_local, row.tecnologia].filter(Boolean).join(' · ') || '—'}
+          {[row.ticket_code, row.codigo_local, row.tecnologia, row.ambito].filter(Boolean).join(' · ') || '—'}
         </span>
       </td>
       <td className={outageTd}>

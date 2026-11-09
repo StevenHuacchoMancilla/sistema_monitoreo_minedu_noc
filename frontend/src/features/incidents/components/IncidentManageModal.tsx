@@ -865,10 +865,29 @@ function formatClock(seconds: number): string {
   return `${sign}${hours} h ${String(minutes).padStart(2, '0')} min ${String(secs).padStart(2, '0')} s`
 }
 
+function AmbitoValue({ ambito }: { ambito?: string | null }) {
+  const value = (ambito ?? '').trim().toUpperCase()
+  if (value.includes('URBAN')) {
+    return (
+      <span className="inline-flex rounded-md bg-sky-50 px-2 py-0.5 text-[12px] font-semibold text-sky-800 dark:bg-sky-950/40 dark:text-sky-300">
+        Urbana
+      </span>
+    )
+  }
+  if (value.includes('RURAL')) {
+    return (
+      <span className="inline-flex rounded-md bg-amber-50 px-2 py-0.5 text-[12px] font-semibold text-amber-900 dark:bg-amber-950/40 dark:text-amber-200">
+        Rural
+      </span>
+    )
+  }
+  return <span className="text-slate-400">Sin ámbito</span>
+}
+
 function SummaryBand({ data }: { data: IncidentDetail }) {
   const reincidencia = data.antecedentes.reincidencia
   return (
-    <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 lg:grid-cols-5 dark:border-slate-800 dark:bg-slate-800">
+    <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 lg:grid-cols-6 dark:border-slate-800 dark:bg-slate-800">
       <KeyValue label="Caída">{data.estado.fecha_caida ? formatDateTime(data.estado.fecha_caida) : '—'}</KeyValue>
       <KeyValue label={data.estado.recovered_at ? 'Recuperado' : 'Último check'}>
         {data.estado.recovered_at
@@ -881,6 +900,9 @@ function SummaryBand({ data }: { data: IncidentDetail }) {
         <FollowupBadge status={data.estado.followup_status} />
       </KeyValue>
       <KeyValue label="Tecnología">{data.colegio.tecnologia ?? '—'}</KeyValue>
+      <KeyValue label="Ámbito">
+        <AmbitoValue ambito={data.colegio.ambito} />
+      </KeyValue>
       <KeyValue label="Reincidencia">
         {reincidencia && reincidencia.total > 1 ? (
           <span title={reincidencia.label}>
@@ -935,6 +957,10 @@ function SummaryTab({ data }: { data: IncidentDetail }) {
         <dl className="mt-3 grid grid-cols-2 gap-3 border-t border-slate-100 pt-3 dark:border-slate-800">
           <KeyValue label="Código local">{c.codigo_local}</KeyValue>
           <KeyValue label="Centro poblado">{c.centro_poblado}</KeyValue>
+          <KeyValue label="Ámbito">
+            <AmbitoValue ambito={c.ambito} />
+          </KeyValue>
+          <KeyValue label="Energía">{c.energy_type ?? '—'}</KeyValue>
         </dl>
       </Panel>
 

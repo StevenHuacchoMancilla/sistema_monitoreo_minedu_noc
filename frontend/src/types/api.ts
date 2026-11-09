@@ -98,6 +98,9 @@ export type OutageRow = {
   admin_provincia?: string | null
   admin_distrito?: string | null
   tecnologia: string | null
+  /** URBANA | RURAL desde hoja IMPLEMENTACION. */
+  ambito?: string | null
+  energy_type?: string | null
   nodo_pop: string | null
   estado_prtg: string | null
   estado_prtg_text: string | null
@@ -313,6 +316,9 @@ export type IncidentDetail = {
     location_mismatch?: boolean
     centro_poblado: string | null
     clasificacion: string | null
+    /** URBANA | RURAL (IMPLEMENTACION). */
+    ambito?: string | null
+    energy_type?: string | null
     cid: string | null
     tecnologia: string | null
     nodo_pop: string | null

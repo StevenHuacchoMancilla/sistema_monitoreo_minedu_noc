@@ -237,6 +237,8 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
               <Field label="CID" value={school.cid} />
               <Field label="Código local" value={school.codigo_local} />
               <Field label="Tecnología" value={school.tecnologia} />
+              <Field label="Ámbito" value={school.ambito} />
+              <Field label="Energía" value={school.energy_type} />
               <Field label="Capacidad" value={school.capacidad_mbps ? `${school.capacidad_mbps} Mbps` : null} />
               <Field label="Nodo / POP" value={school.nodo_pop} />
               <Field label="Distrito" value={school.distrito} />

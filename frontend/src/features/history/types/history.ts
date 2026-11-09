@@ -78,6 +78,8 @@ export type SchoolHistoryOverview = {
     location_source?: 'prtg' | 'admin' | 'none'
     location_mismatch?: boolean
     centro_poblado?: string | null
+    ambito?: string | null
+    energy_type?: string | null
   }
   network: {
     cid: string | null
@@ -244,6 +246,8 @@ export type IncidentCaseFile = {
     codigo_local: string | null
     codigo_modular: string | null
     centro_poblado: string | null
+    ambito?: string | null
+    energy_type?: string | null
     cid: string | null
     tecnologia: string | null
     nodo_pop: string | null
