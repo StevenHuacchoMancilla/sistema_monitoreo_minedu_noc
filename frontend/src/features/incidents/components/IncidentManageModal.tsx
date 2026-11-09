@@ -50,7 +50,7 @@ const MINEDU_RESULT_OPTIONS: Array<{
   {
     value: 'REQUERIMIENTO',
     label: 'Requerimiento',
-    hint: 'Pedido o atención solicitada',
+    hint: 'Pedido o atención · apartado Requerimientos',
     selected: 'border-violet-400 bg-violet-50 shadow-sm dark:border-violet-400 dark:bg-violet-950/35',
     radio: 'text-violet-500',
     dot: 'bg-violet-500',
@@ -277,14 +277,17 @@ export function IncidentManageModal({
     },
     onSuccess: async (data) => {
       const becameIncident = Boolean(data?.estado?.is_grave_incident)
+      const becameRequirement = Boolean(data?.estado?.is_requirement_case)
       setSavedMsg(
         becameIncident && (mineduReason === 'CAIDA_ENLACE' || mineduReason === 'QUEJA')
           ? 'Gestión registrada · pasó a Incidencias'
-          : hasPriorManagements
-            ? classificationChanged && !followupNote
-              ? 'Resultado / causa actualizados'
-              : 'Comentario de seguimiento agregado'
-            : 'Gestión registrada',
+          : becameRequirement && mineduReason === 'REQUERIMIENTO'
+            ? 'Gestión registrada · pasó a Requerimientos'
+            : hasPriorManagements
+              ? classificationChanged && !followupNote
+                ? 'Resultado / causa actualizados'
+                : 'Comentario de seguimiento agregado'
+              : 'Gestión registrada',
       )
       setDetailText('')
       setObservation('')
@@ -479,8 +482,9 @@ export function IncidentManageModal({
                 }
               >
                 <p className="mb-3 text-[12px] text-slate-500">
-                  Puedes cambiarlo durante el seguimiento. Caída de enlace y Queja pasan a Incidencias al
-                  guardar.
+                  Puedes cambiarlo durante el seguimiento. Caída de enlace y Queja van a Incidencias;
+                  Requerimiento va a Requerimientos. Si PRTG se restablece y vuelve a caer, se mantiene la
+                  etiqueta salvo que cambies este resultado.
                 </p>
                 <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Razón MINEDU (opcional)">
                   {MINEDU_RESULT_OPTIONS.map((opt) => {
@@ -887,7 +891,7 @@ function AmbitoValue({ ambito }: { ambito?: string | null }) {
 function SummaryBand({ data }: { data: IncidentDetail }) {
   const reincidencia = data.antecedentes.reincidencia
   return (
-    <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 lg:grid-cols-6 dark:border-slate-800 dark:bg-slate-800">
+    <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-6 dark:border-slate-800 dark:bg-slate-800">
       <KeyValue label="Caída">{data.estado.fecha_caida ? formatDateTime(data.estado.fecha_caida) : '—'}</KeyValue>
       <KeyValue label={data.estado.recovered_at ? 'Recuperado' : 'Último check'}>
         {data.estado.recovered_at

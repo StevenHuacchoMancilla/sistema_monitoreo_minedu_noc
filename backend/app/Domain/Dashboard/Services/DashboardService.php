@@ -54,6 +54,7 @@ class DashboardService
                     WHERE recovered_at IS NULL
                       AND followup_status IN (?, ?, ?, ?, ?)
                       AND NOT (is_grave_incident = true AND grave_closed_at IS NULL)
+                      AND NOT (is_requirement_case = true AND requirement_closed_at IS NULL)
                       AND (
                         detection_source = ?
                         OR EXISTS (
@@ -123,6 +124,7 @@ class DashboardService
                 'en_gestion' => (int) $counts->en_gestion,
                 'pendiente_cierre' => $outageNav['pendiente_cierre'],
                 'incidencias_graves' => $outageNav['incidencias_graves'],
+                'requerimientos' => $outageNav['requerimientos'],
                 'mantenimientos' => (int) \App\Models\ServiceTicket::query()
                     ->where('is_maintenance', true)
                     ->where('status', \App\Models\ServiceTicket::STATUS_OPEN)
@@ -146,7 +148,7 @@ class DashboardService
     /**
      * Conteos del menú sin armar cada fila de la tabla.
      *
-     * @return array{totales: int, pendientes: int, pendiente_cierre: int, incidencias_graves: int}
+     * @return array{totales: int, pendientes: int, pendiente_cierre: int, incidencias_graves: int, requerimientos: int}
      */
     public function outageNavCounts(): array
     {
@@ -186,11 +188,17 @@ class DashboardService
             ->whereNull('grave_closed_at')
             ->count();
 
+        $requerimientos = (int) Incident::query()
+            ->where('is_requirement_case', true)
+            ->whereNull('requirement_closed_at')
+            ->count();
+
         return [
             'totales' => (int) ($row->totales ?? 0),
             'pendientes' => (int) ($row->pendientes ?? 0),
             'pendiente_cierre' => $pendienteCierre,
             'incidencias_graves' => $graves,
+            'requerimientos' => $requerimientos,
             // compat legacy
             'activas' => (int) ($row->totales ?? 0),
             'recaidas' => 0,
@@ -546,13 +554,16 @@ class DashboardService
 
         if ($openManagement) {
             // Tickets abiertos en gestión (incluye recuperados pendientes de cierre).
-            // Las incidencias graves abiertas viven solo en Incidencias.
+            // Incidencias / requerimientos sticky viven en sus apartados.
             $query->whereIn('followup_status', [
                 ...FollowupStatus::managingValues(),
                 FollowupStatus::PendienteCierre->value,
             ])->where(function ($q) {
                 $q->where('is_grave_incident', false)
                     ->orWhereNotNull('grave_closed_at');
+            })->where(function ($q) {
+                $q->where('is_requirement_case', false)
+                    ->orWhereNotNull('requirement_closed_at');
             });
         } else {
             $query->where(function ($q) {
@@ -617,6 +628,14 @@ class DashboardService
             ->unique()
             ->flip();
 
+        $requirementSchoolIds = Incident::query()
+            ->whereIn('school_id', $schoolIds)
+            ->where('is_requirement_case', true)
+            ->whereNull('requirement_closed_at')
+            ->pluck('school_id')
+            ->unique()
+            ->flip();
+
         // Hora real en que el Ping pasó de parcial a caído (para etiqueta Reciente).
         $escalatedAtByIncident = \App\Models\IncidentUpdate::query()
             ->whereIn('incident_id', $incidents->pluck('id'))
@@ -626,7 +645,7 @@ class DashboardService
             ->unique('incident_id')
             ->keyBy('incident_id');
 
-        return $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds, $escalatedAtByIncident) {
+        return $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds, $requirementSchoolIds, $escalatedAtByIncident) {
             $school = $incident->school;
             $assignment = $incident->networkAssignment;
             $sensor = $incident->sensor;
@@ -680,6 +699,9 @@ class DashboardService
                 'has_open_grave_incident' => $graveSchoolIds->has($incident->school_id)
                     || $incident->isOpenGrave(),
                 'is_grave_incident' => $incident->isOpenGrave(),
+                'has_open_requirement' => $requirementSchoolIds->has($incident->school_id)
+                    || $incident->isOpenRequirement(),
+                'is_requirement_case' => $incident->isOpenRequirement(),
                 'tracking' => $tracking ? [
                     'id' => $tracking->id,
                     'status' => $tracking->status?->value,

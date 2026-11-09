@@ -98,6 +98,9 @@ class ResetIncidentManagementDataCommand extends Command
                 'is_grave_incident' => false,
                 'grave_opened_at' => null,
                 'grave_closed_at' => null,
+                'is_requirement_case' => false,
+                'requirement_opened_at' => null,
+                'requirement_closed_at' => null,
             ]);
 
             // Caídas abiertas: vuelven a Pendiente de gestión para empezar de cero.

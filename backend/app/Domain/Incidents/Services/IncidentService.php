@@ -148,17 +148,22 @@ class IncidentService
             return $active->fresh() ?? $active;
         }
 
-        // Incidencia grave abierta (recuperó en PRTG pero no se cerró): re-cae sin ticket nuevo.
-        $openGrave = Incident::query()
+        // Incidencia / requerimiento sticky abierto (recuperó en PRTG pero no se cerró): re-cae sin ticket nuevo.
+        $openSticky = Incident::query()
             ->where('network_assignment_id', $assignment->id)
-            ->where('is_grave_incident', true)
-            ->whereNull('grave_closed_at')
             ->whereNotNull('recovered_at')
+            ->where(function ($q) {
+                $q->where(function ($g) {
+                    $g->where('is_grave_incident', true)->whereNull('grave_closed_at');
+                })->orWhere(function ($r) {
+                    $r->where('is_requirement_case', true)->whereNull('requirement_closed_at');
+                });
+            })
             ->orderByDesc('id')
             ->first();
 
-        if ($openGrave !== null) {
-            return $this->reopenOpenGrave($openGrave, $sensor, $downSince, $onAnomaly);
+        if ($openSticky !== null) {
+            return $this->reopenStickyCase($openSticky, $sensor, $downSince, $onAnomaly);
         }
 
         $startedAt = $this->resolveStartedAt($assignment, $downSince, $onAnomaly);
@@ -219,6 +224,20 @@ class IncidentService
         ?CarbonInterface $downSince = null,
         ?Closure $onAnomaly = null,
     ): Incident {
+        return $this->reopenStickyCase($incident, $sensor, $downSince, $onAnomaly);
+    }
+
+    /**
+     * Reabre un caso sticky (Incidencia o Requerimiento): mismo caso y mismo ticket TGS.
+     *
+     * @param  ?Closure(string, string, array<string, mixed>): void  $onAnomaly
+     */
+    public function reopenStickyCase(
+        Incident $incident,
+        PrtgSensor $sensor,
+        ?CarbonInterface $downSince = null,
+        ?Closure $onAnomaly = null,
+    ): Incident {
         $before = $incident->followup_status?->value;
         $incident->loadMissing('networkAssignment');
         $assignment = $incident->networkAssignment;
@@ -244,12 +263,16 @@ class IncidentService
             'recovery_reviewed_at' => null,
         ])->save();
 
+        $label = $incident->isOpenRequirement()
+            ? 'Re-caída con requerimiento abierto: se reutiliza el mismo caso y ticket (etiqueta En requerimiento).'
+            : 'Re-caída con incidencia abierta: se reutiliza el mismo caso y ticket (etiqueta En incidencia).';
+
         IncidentUpdate::query()->create([
             'incident_id' => $incident->id,
             'type' => 'SYSTEM',
             'status_before' => $before,
             'status_after' => $followup->value,
-            'observation' => 'Re-caída con incidencia abierta: se reutiliza el mismo caso y ticket (etiqueta En incidencia).',
+            'observation' => $label,
             'created_at' => now(),
         ]);
 
@@ -343,15 +366,16 @@ class IncidentService
             ? ' Requiere cierre operativo (estaba en gestión).'
             : '';
 
-        // Incidencias graves abiertas: PRTG UP no cierra ni quita el flag; solo marca recuperación técnica.
-        $isOpenGrave = (bool) $incident->is_grave_incident && $incident->grave_closed_at === null;
+        // Colas sticky abiertas: PRTG UP no cierra ni quita el flag; solo marca recuperación técnica.
+        $isStickyOpen = $incident->isStickyOpen();
+        $stickyKind = $incident->isOpenRequirement() ? 'requerimiento' : 'incidencia grave';
 
-        // Grave: sigue en gestión hasta cierre manual.
+        // Sticky: sigue en gestión hasta cierre manual.
         // Lun–vie: toda recuperación desde Caídas totales → Pendiente de cierre (no perder seguimiento).
         // Sáb–dom: no pasa a Pendiente de cierre; cierre automático (sin cola operativa).
-        if ($isOpenGrave) {
+        if ($isStickyOpen) {
             $afterStatus = $incident->followup_status ?? FollowupStatus::EnGestion;
-            $observationSuffix .= ' Incidencia grave permanece abierta (cierre manual).';
+            $observationSuffix .= ' '.ucfirst($stickyKind).' permanece abierto (cierre manual).';
         } elseif ($weekendRecovery) {
             $afterStatus = FollowupStatus::Cerrado;
             $observationSuffix .= ' Fin de semana (sáb/dom): recuperación sin Pendiente de cierre.';
@@ -362,12 +386,12 @@ class IncidentService
                 : ' Recuperado desde Caídas totales: pasa a Pendiente de cierre.';
         }
 
-        $queueClose = ! $isOpenGrave && ! $weekendRecovery;
+        $queueClose = ! $isStickyOpen && ! $weekendRecovery;
         $payload = [
             'recovered_at' => $recoveredAt,
             'current_status' => MonitoringStatus::Operativo->value,
             'followup_status' => $afterStatus,
-            'recovered_while_managing' => $isOpenGrave || $weekendRecovery ? false : $needsReview,
+            'recovered_while_managing' => $isStickyOpen || $weekendRecovery ? false : $needsReview,
             'recovery_review_status' => ($queueClose && $needsReview)
                 ? RecoveryReviewStatus::PendingReview->value
                 : null,
@@ -379,7 +403,7 @@ class IncidentService
         $incident->update($payload);
         $freshForTicket = $incident->fresh() ?? $incident;
         $this->serviceTickets->markRestored($freshForTicket, $recoveredAt);
-        if ($afterStatus === FollowupStatus::Cerrado && ! $isOpenGrave) {
+        if ($afterStatus === FollowupStatus::Cerrado && ! $isStickyOpen) {
             $this->serviceTickets->close($freshForTicket, 'sistema', $recoveredAt);
         }
 

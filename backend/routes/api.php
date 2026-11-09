@@ -76,6 +76,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/incidents', [IncidentController::class, 'index']);
         Route::get('/incidents/queues/pendiente-cierre', [IncidentController::class, 'pendienteCierre']);
         Route::get('/incidents/queues/graves', [IncidentController::class, 'graves']);
+        Route::get('/incidents/queues/requerimientos', [IncidentController::class, 'requerimientos']);
         Route::get('/incidents/lookup', [IncidentController::class, 'lookupSchool']);
         Route::get('/incidents/maintenance', [IncidentController::class, 'maintenanceIndex']);
         Route::get('/incidents/same-hour', [IncidentController::class, 'sameHour']);
@@ -155,6 +156,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);
             Route::post('/incidents/{incident}/mark-grave', [IncidentController::class, 'markGrave']);
             Route::post('/incidents/{incident}/close-grave', [IncidentController::class, 'closeGrave']);
+            Route::post('/incidents/{incident}/close-requirement', [IncidentController::class, 'closeRequirement']);
             Route::post('/incidents/{incident}/close-ticket', [IncidentController::class, 'closeTicket']);
             Route::post('/incidents/{incident}/clock-stop', [IncidentController::class, 'clockStop']);
             Route::put('/incidents/{incident}/visit', [IncidentController::class, 'recordVisit']);

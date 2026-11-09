@@ -62,6 +62,9 @@ class PrtgDashboardService
             ->where(function ($q) {
                 $q->where('is_grave_incident', false)
                     ->orWhereNotNull('grave_closed_at');
+            })->where(function ($q) {
+                $q->where('is_requirement_case', false)
+                    ->orWhereNotNull('requirement_closed_at');
             })
             ->where(function ($q) {
                 $q->where('detection_source', Incident::DETECTION_MANUAL_PARTIAL)

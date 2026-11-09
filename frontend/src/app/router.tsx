@@ -99,6 +99,8 @@ export function AppRouter() {
                   filter={(row) =>
                     !row.is_grave_incident &&
                     !row.has_open_grave_incident &&
+                    !row.is_requirement_case &&
+                    !row.has_open_requirement &&
                     (MANAGING.has(row.followup_status ?? '') || row.followup_status === 'PENDIENTE_CIERRE')
                   }
                   durationSource="current_down"
@@ -112,6 +114,10 @@ export function AppRouter() {
               element={<IncidentQueuePage key="pendiente-cierre" kind="pendiente-cierre" />}
             />
             <Route path="/incidents/graves" element={<IncidentQueuePage key="graves" kind="graves" />} />
+            <Route
+              path="/incidents/requerimientos"
+              element={<IncidentQueuePage key="requerimientos" kind="requerimientos" />}
+            />
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/maintenance/finalizados" element={<Navigate to="/maintenance?tab=finalizados" replace />} />
           </Route>

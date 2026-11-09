@@ -60,4 +60,10 @@ enum MineduReason: string
     {
         return $this === self::CaidaEnlace || $this === self::Queja;
     }
+
+    /** Requerimiento pasa al apartado Requerimientos (misma lógica sticky que Incidencias). */
+    public function marksAsRequirement(): bool
+    {
+        return $this === self::Requerimiento;
+    }
 }

@@ -54,6 +54,7 @@ export type DashboardSummary = {
     en_gestion: number
     pendiente_cierre?: number
     incidencias_graves?: number
+    requerimientos?: number
     recaida_gestion?: number
     mantenimientos?: number
     concentraciones: number
@@ -116,6 +117,8 @@ export type OutageRow = {
   in_management?: boolean
   has_open_grave_incident?: boolean
   is_grave_incident?: boolean
+  has_open_requirement?: boolean
+  is_requirement_case?: boolean
   tracking?: {
     id: number
     status: string | null
@@ -277,6 +280,7 @@ export type IncidentDetail = {
     had_field_tech?: boolean
     active_tracking_id?: number | null
     is_grave_incident?: boolean
+    is_requirement_case?: boolean
   }
   active_tracking?: {
     id: number

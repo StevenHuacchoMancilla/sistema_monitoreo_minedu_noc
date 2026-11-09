@@ -46,6 +46,9 @@ class Incident extends Model
             'is_grave_incident' => 'boolean',
             'grave_opened_at' => 'datetime',
             'grave_closed_at' => 'datetime',
+            'is_requirement_case' => 'boolean',
+            'requirement_opened_at' => 'datetime',
+            'requirement_closed_at' => 'datetime',
             'minedu_reason' => MineduReason::class,
             'lista_llee_estado' => ListaLleeEstado::class,
             'clock_paused_at' => 'datetime',
@@ -60,6 +63,17 @@ class Incident extends Model
     public function isOpenGrave(): bool
     {
         return (bool) $this->is_grave_incident && $this->grave_closed_at === null;
+    }
+
+    public function isOpenRequirement(): bool
+    {
+        return (bool) $this->is_requirement_case && $this->requirement_closed_at === null;
+    }
+
+    /** Incidencia o requerimiento sticky: PRTG UP no cierra; re-caída reutiliza el caso. */
+    public function isStickyOpen(): bool
+    {
+        return $this->isOpenGrave() || $this->isOpenRequirement();
     }
 
     public function isManualPartial(): bool

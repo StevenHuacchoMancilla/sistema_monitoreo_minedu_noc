@@ -10,6 +10,7 @@ import {
   Clock,
   FileSpreadsheet,
   Radio,
+  ClipboardList,
   Files,
   Gauge,
   GraduationCap,
@@ -48,6 +49,7 @@ type NavItem = {
     | 'en_gestion'
     | 'pendiente_cierre'
     | 'incidencias_graves'
+    | 'requerimientos'
     | 'caidas_masivas'
     | 'concentraciones'
     | 'recuperados'
@@ -76,6 +78,7 @@ const NAV: NavItem[] = [
   { section: 'operacion', to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/pendiente-cierre', label: 'Pendiente de cierre', badgeKey: 'pendiente_cierre', tone: 'warn', icon: ShieldAlert, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/graves', label: 'Incidencias', badgeKey: 'incidencias_graves', tone: 'danger', icon: AlertOctagon, permission: P.incidentsView },
+  { section: 'operacion', to: '/incidents/requerimientos', label: 'Requerimientos', badgeKey: 'requerimientos', tone: 'info', icon: ClipboardList, permission: P.incidentsView },
   { section: 'operacion', to: '/maintenance', label: 'Mantenimientos', badgeKey: 'mantenimientos', tone: 'info', icon: Wrench, permission: P.incidentsView },
   { section: 'operacion', to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck, permission: P.recoveriesView },
   { section: 'operacion', to: '/mass-outages', label: 'Caídas masivas', badgeKey: 'caidas_masivas', tone: 'danger', icon: Network, permission: P.adminView },

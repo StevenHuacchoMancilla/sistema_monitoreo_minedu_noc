@@ -164,6 +164,7 @@ class IncidentController extends Controller
                         || strtoupper((string) $u->type) === 'FIELD_DISPATCH'),
                 'active_tracking_id' => $incident->activeTracking->first()?->id,
                 'is_grave_incident' => $incident->isOpenGrave(),
+                'is_requirement_case' => $incident->isOpenRequirement(),
             ],
             'active_tracking' => ($active = $incident->activeTracking->first())
                 ? [
@@ -1018,6 +1019,27 @@ class IncidentController extends Controller
         return response()->json(['data' => $rows]);
     }
 
+    /** Casos con resultado Requerimiento abiertos. */
+    public function requerimientos(Request $request): JsonResponse
+    {
+        $rows = Incident::query()
+            ->with([
+                'school',
+                'networkAssignment',
+                'sensor',
+                'serviceTicket',
+                'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
+            ])
+            ->where('is_requirement_case', true)
+            ->whereNull('requirement_closed_at')
+            ->orderByDesc('requirement_opened_at')
+            ->limit(500)
+            ->get()
+            ->map(fn (Incident $i) => $this->queueRow($i));
+
+        return response()->json(['data' => $rows]);
+    }
+
     public function markGrave(Request $request, Incident $incident): JsonResponse
     {
         $data = $request->validate([
@@ -1080,6 +1102,32 @@ class IncidentController extends Controller
         return response()->json($this->show($closed->fresh() ?? $closed)->getData(true));
     }
 
+    public function closeRequirement(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'observation' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        if (! $incident->is_requirement_case || $incident->requirement_closed_at !== null) {
+            return response()->json($this->show($incident)->getData(true));
+        }
+
+        $userId = (int) ($request->user()?->id ?? 0);
+        $result = $this->operativeClose->close(
+            $incident,
+            $data['observation'] ?? 'Requerimiento cerrado.',
+            $userId,
+        );
+
+        $closed = $result['incident'];
+        $closed->update([
+            'requirement_closed_at' => now(),
+            'last_contact_at' => now(),
+        ]);
+
+        return response()->json($this->show($closed->fresh() ?? $closed)->getData(true));
+    }
+
     /** Cierre operativo unificado: Tracking (si existe) + incidencia CERRADO. */
     public function closeTicket(Request $request, Incident $incident): JsonResponse
     {
@@ -1126,6 +1174,8 @@ class IncidentController extends Controller
             'current_down_started_at' => $downClock?->toIso8601String(),
             'is_grave_incident' => $incident->isOpenGrave(),
             'grave_opened_at' => $incident->grave_opened_at?->toIso8601String(),
+            'is_requirement_case' => $incident->isOpenRequirement(),
+            'requirement_opened_at' => $incident->requirement_opened_at?->toIso8601String(),
             'estado_prtg' => $incident->current_status,
             'responsible_area' => $incident->responsible_area,
             'glpi_ticket' => $incident->glpi_ticket,
@@ -1176,14 +1226,28 @@ class IncidentController extends Controller
             'management_scope' => $scope,
         ])->save();
 
+        $userId = (int) (request()->user()?->id ?? 0);
         if ($minedu instanceof MineduReason && $minedu->marksAsIncident() && ! $incident->isOpenGrave()) {
+            if ($incident->isOpenRequirement()) {
+                $incident->forceFill(['requirement_closed_at' => now()])->save();
+            }
             $incident->forceFill([
                 'is_grave_incident' => true,
                 'grave_opened_at' => now(),
-                'grave_opened_by_user_id' => request()->user()?->id,
+                'grave_opened_by_user_id' => $userId > 0 ? $userId : null,
                 'grave_closed_at' => null,
             ])->save();
             $this->listaDays->markAverias($incident->fresh() ?? $incident);
+        } elseif ($minedu instanceof MineduReason && $minedu->marksAsRequirement() && ! $incident->isOpenRequirement()) {
+            if ($incident->isOpenGrave()) {
+                $incident->forceFill(['grave_closed_at' => now()])->save();
+            }
+            $incident->forceFill([
+                'is_requirement_case' => true,
+                'requirement_opened_at' => now(),
+                'requirement_opened_by_user_id' => $userId > 0 ? $userId : null,
+                'requirement_closed_at' => null,
+            ])->save();
         }
 
         IncidentManagement::query()->create([

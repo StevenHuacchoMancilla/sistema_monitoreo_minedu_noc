@@ -9,6 +9,7 @@ import { SectionCard } from '../../../components/ui/Card'
 import { FilterCard } from '../../../components/ui/FilterCard'
 import { FormField, Input, SearchField, Select } from '../../../components/ui/FormControls'
 import { MetricCard } from '../../../components/ui/MetricCard'
+import { MetricsGrid } from '../../../components/ui/MetricsGrid'
 import { Button } from '../../../components/ui/Button'
 import { IconButton } from '../../../components/ui/IconButton'
 import { Badge } from '../../../components/ui/SoftBadge'
@@ -341,23 +342,23 @@ export function ActiveIncidentsPage({
         }
       />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
+      <MetricsGrid dense>
         <MetricCard
           label={source === 'managing' ? 'Total abiertos' : 'Total activas'}
           value={kpis.total}
-          icon={<TriangleAlert className="h-4 w-4" />}
+          icon={<TriangleAlert />}
           tone={source === 'managing' ? 'info' : 'danger'}
         />
         <MetricCard
           label={source === 'managing' ? `Abiertos < ${NEW_MINUTES} min` : durationSource === 'current_down' ? `Esta caída < ${NEW_MINUTES} min` : `Nuevas < ${NEW_MINUTES} min`}
           value={kpis.new}
-          icon={<Sparkles className="h-4 w-4" />}
+          icon={<Sparkles />}
           tone="info"
         />
-        <MetricCard label={`${NEW_MINUTES}–${HOUR_MINUTES} min`} value={kpis.mid} icon={<Clock3 className="h-4 w-4" />} tone="warning" />
-        <MetricCard label="Más de 1 h" value={kpis.long} icon={<Hourglass className="h-4 w-4" />} tone="danger" />
-        <MetricCard label="En gestión" value={kpis.managing} icon={<Wrench className="h-4 w-4" />} tone="cyan" />
-      </div>
+        <MetricCard label={`${NEW_MINUTES}–${HOUR_MINUTES} min`} value={kpis.mid} icon={<Clock3 />} tone="warning" />
+        <MetricCard label="Más de 1 h" value={kpis.long} icon={<Hourglass />} tone="danger" />
+        <MetricCard label="En gestión" value={kpis.managing} icon={<Wrench />} tone="cyan" />
+      </MetricsGrid>
 
       <div className="mb-4">
         <FilterCard
@@ -709,6 +710,14 @@ function OutageTableRow({
             >
               En incidencia
             </Badge>
+          ) : row.has_open_requirement || row.is_requirement_case ? (
+            <Badge
+              tone="info"
+              title="Este colegio tiene un requerimiento abierto. Si se restablece y vuelve a caer, mantiene la etiqueta."
+              className="!text-[10px] !font-medium"
+            >
+              En requerimiento
+            </Badge>
           ) : (
             <FollowupBadge status={row.followup_status} />
           )}
@@ -747,7 +756,7 @@ function OutageTableRow({
               label={`Descargar imagen ${row.ticket_code}`}
               onClick={() => onDownloadTicketImage(row.incident_id)}
               disabled={pngBusy}
-              className="h-8 w-8 text-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none dark:text-teal-300"
+              className="!size-8 text-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none dark:text-teal-300"
             >
               <ImageDown className="h-4 w-4" aria-hidden />
             </IconButton>
@@ -755,7 +764,7 @@ function OutageTableRow({
           <IconButton
             label={canManage ? 'Gestionar' : 'Ver detalle'}
             onClick={() => onManage(row.incident_id)}
-            className="h-8 w-8 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
+            className="!size-8 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
           >
             {canManage ? <SquarePen className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
           </IconButton>

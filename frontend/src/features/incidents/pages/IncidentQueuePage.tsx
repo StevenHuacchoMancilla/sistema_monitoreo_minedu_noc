@@ -24,7 +24,7 @@ import { IncidentManageModal } from '../components/IncidentManageModal'
 import { GenerateTicketModal } from '../components/GenerateTicketModal'
 import { downloadTicketImageFromIncidentId } from '../lib/ticketImage'
 
-type QueueKind = 'pendiente-cierre' | 'graves'
+type QueueKind = 'pendiente-cierre' | 'graves' | 'requerimientos'
 
 type QueueRow = {
   incident_id: number
@@ -37,6 +37,7 @@ type QueueRow = {
   started_at?: string | null
   recovered_at?: string | null
   grave_opened_at?: string | null
+  requirement_opened_at?: string | null
   responsible_area?: string | null
   ticket_code?: string | null
   has_ticket?: boolean
@@ -58,6 +59,12 @@ const META: Record<
     description:
       'Casos marcados como incidencia. Si el colegio cae otra vez aparece en Caídas totales con la etiqueta «En incidencia».',
     fetcher: () => endpoints.incidentsGraves() as Promise<{ data: QueueRow[] }>,
+  },
+  requerimientos: {
+    title: 'Requerimientos',
+    description:
+      'Casos etiquetados como Requerimiento. Si el colegio se restablece y vuelve a caer, reaparece con la misma etiqueta salvo que cambies el resultado de gestión.',
+    fetcher: () => endpoints.incidentsRequerimientos() as Promise<{ data: QueueRow[] }>,
   },
 }
 
@@ -134,7 +141,9 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                   <th className={thClassName}>Local</th>
                   <th className={thClassName}>Ubicación</th>
                   <th className={thClassName}>Estado</th>
-                  <th className={thClassName}>{kind === 'graves' ? 'Marcada' : 'Recuperada'}</th>
+                  <th className={thClassName}>
+                    {kind === 'graves' || kind === 'requerimientos' ? 'Marcada' : 'Recuperada'}
+                  </th>
                   <th className={thClassName}>Acción</th>
                 </tr>
               </thead>
@@ -155,7 +164,13 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                     </td>
                     <td className={tdClassName}>
                       <IsoDateTimeCell
-                        value={kind === 'graves' ? row.grave_opened_at ?? null : row.recovered_at ?? null}
+                        value={
+                          kind === 'graves'
+                            ? row.grave_opened_at ?? null
+                            : kind === 'requerimientos'
+                              ? row.requirement_opened_at ?? null
+                              : row.recovered_at ?? null
+                        }
                       />
                     </td>
                     <td className={tdClassName}>
@@ -181,12 +196,13 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                             Cerrar ticket
                           </Button>
                         ) : null}
-                        {canManage && kind === 'graves' ? (
+                        {canManage && (kind === 'graves' || kind === 'requerimientos') ? (
                           <Button size="sm" variant="primary" onClick={() => setTicketRow(row)}>
                             {row.has_ticket || row.ticket_code ? 'Ticket / evento' : 'Generar ticket'}
                           </Button>
                         ) : null}
-                        {kind === 'graves' && (row.has_ticket || row.ticket_code) ? (
+                        {(kind === 'graves' || kind === 'requerimientos') &&
+                        (row.has_ticket || row.ticket_code) ? (
                           <Button
                             size="sm"
                             variant="secondary"
@@ -214,6 +230,17 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                             }}
                           >
                             Cerrar incidencia
+                          </Button>
+                        ) : null}
+                        {canManage && kind === 'requerimientos' ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => {
+                              void endpoints.closeIncidentRequirement(row.incident_id).then(refresh)
+                            }}
+                          >
+                            Cerrar requerimiento
                           </Button>
                         ) : null}
                       </div>

@@ -172,18 +172,10 @@ class IncidentManagementService
                 'minedu_reason' => $mineduProvided ? $minedu : $incident->minedu_reason,
             ])->save();
 
-            // Caída de enlace / Queja = incidencia: pasa al apartado Incidencias.
-            $markedGrave = false;
-            if ($minedu instanceof MineduReason && $minedu->marksAsIncident() && ! $incident->isOpenGrave()) {
-                $incident->forceFill([
-                    'is_grave_incident' => true,
-                    'grave_opened_at' => now(),
-                    'grave_opened_by_user_id' => $userId > 0 ? $userId : null,
-                    'grave_closed_at' => null,
-                ])->save();
-                $markedGrave = true;
-                app(\App\Domain\Reports\Services\ListaLleeDayService::class)
-                    ->markAverias($incident->fresh() ?? $incident);
+            // Resultado MINEDU → cola sticky (Incidencias / Requerimientos).
+            $queueNote = '';
+            if ($mineduProvided) {
+                $queueNote = $this->syncStickyQueues($incident, $minedu, $userId);
             }
 
             IncidentUpdate::query()->create([
@@ -196,7 +188,7 @@ class IncidentManagementService
                     $classification->label(),
                     $scope ? ' · '.$scope->value : '',
                     ! empty($payload['detail']) ? ' · '.$payload['detail'] : '',
-                    $markedGrave ? ' · Pasó a incidencia ('.($minedu?->label() ?? '').').' : ''
+                    $queueNote !== '' ? ' · '.$queueNote : ''
                 ),
                 'user_id' => $userId,
                 'created_at' => now(),
@@ -243,5 +235,64 @@ class IncidentManagementService
                 'tracking' => $trackingSync,
             ];
         });
+    }
+
+    /**
+     * Abre/cierra las colas sticky según el resultado MINEDU.
+     * Cambiar de tipo (p. ej. Requerimiento → Caída de enlace) mueve el caso de cola.
+     */
+    private function syncStickyQueues(Incident $incident, ?MineduReason $minedu, int $userId): string
+    {
+        $notes = [];
+
+        if ($minedu instanceof MineduReason && $minedu->marksAsIncident()) {
+            if ($incident->isOpenRequirement()) {
+                $incident->forceFill(['requirement_closed_at' => now()])->save();
+                $notes[] = 'Salió de Requerimientos';
+            }
+            if (! $incident->isOpenGrave()) {
+                $incident->forceFill([
+                    'is_grave_incident' => true,
+                    'grave_opened_at' => $incident->grave_opened_at ?? now(),
+                    'grave_opened_by_user_id' => $incident->grave_opened_by_user_id ?? ($userId > 0 ? $userId : null),
+                    'grave_closed_at' => null,
+                ])->save();
+                $notes[] = 'Pasó a Incidencias ('.$minedu->label().')';
+                app(\App\Domain\Reports\Services\ListaLleeDayService::class)
+                    ->markAverias($incident->fresh() ?? $incident);
+            }
+
+            return implode('. ', $notes);
+        }
+
+        if ($minedu instanceof MineduReason && $minedu->marksAsRequirement()) {
+            if ($incident->isOpenGrave()) {
+                $incident->forceFill(['grave_closed_at' => now()])->save();
+                $notes[] = 'Salió de Incidencias';
+            }
+            if (! $incident->isOpenRequirement()) {
+                $incident->forceFill([
+                    'is_requirement_case' => true,
+                    'requirement_opened_at' => $incident->requirement_opened_at ?? now(),
+                    'requirement_opened_by_user_id' => $incident->requirement_opened_by_user_id ?? ($userId > 0 ? $userId : null),
+                    'requirement_closed_at' => null,
+                ])->save();
+                $notes[] = 'Pasó a Requerimientos';
+            }
+
+            return implode('. ', $notes);
+        }
+
+        // Quitar resultado: cierra membresía sticky sin cerrar el ticket.
+        if ($incident->isOpenGrave()) {
+            $incident->forceFill(['grave_closed_at' => now()])->save();
+            $notes[] = 'Salió de Incidencias';
+        }
+        if ($incident->isOpenRequirement()) {
+            $incident->forceFill(['requirement_closed_at' => now()])->save();
+            $notes[] = 'Salió de Requerimientos';
+        }
+
+        return implode('. ', $notes);
     }
 }

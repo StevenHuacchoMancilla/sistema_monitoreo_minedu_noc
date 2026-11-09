@@ -216,10 +216,14 @@ export const endpoints = {
   incidentsPendienteCierre: () =>
     apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/pendiente-cierre'),
   incidentsGraves: () => apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/graves'),
+  incidentsRequerimientos: () =>
+    apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/requerimientos'),
   markIncidentGrave: (id: number, observation?: string) =>
     apiPost(`/incidents/${id}/mark-grave`, { observation }),
   closeIncidentGrave: (id: number, observation?: string) =>
     apiPost(`/incidents/${id}/close-grave`, { observation }),
+  closeIncidentRequirement: (id: number, observation?: string) =>
+    apiPost(`/incidents/${id}/close-requirement`, { observation }),
   closeIncidentTicket: (id: number, observation?: string) =>
     apiPost(`/incidents/${id}/close-ticket`, { observation }),
   assignmentPrtgSensors: (assignmentId: number) =>
