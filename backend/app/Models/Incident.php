@@ -70,10 +70,37 @@ class Incident extends Model
         return (bool) $this->is_requirement_case && $this->requirement_closed_at === null;
     }
 
-    /** Incidencia o requerimiento sticky: PRTG UP no cierra; re-caída reutiliza el caso. */
+    /**
+     * Mantenimiento abierto (correctivo/preventivo): ticket is_maintenance ABIERTO
+     * o detection_source MAINTENANCE sin cierre.
+     */
+    public function isOpenMaintenance(): bool
+    {
+        if ($this->followup_status === FollowupStatus::Cerrado) {
+            return false;
+        }
+
+        $this->loadMissing('serviceTicket');
+        $ticket = $this->serviceTicket;
+        if ($ticket !== null) {
+            if ($ticket->status === ServiceTicket::STATUS_CLOSED) {
+                return false;
+            }
+            if ($ticket->is_maintenance) {
+                return true;
+            }
+        }
+
+        return $this->detection_source === self::DETECTION_MAINTENANCE;
+    }
+
+    /** Sticky: PRTG UP no cierra; re-caída reutiliza el mismo caso/ticket. */
     public function isStickyOpen(): bool
     {
-        return $this->isOpenGrave() || $this->isOpenRequirement() || $this->isKeptInManagement();
+        return $this->isOpenGrave()
+            || $this->isOpenRequirement()
+            || $this->isKeptInManagement()
+            || $this->isOpenMaintenance();
     }
 
     /** Recuperado en PRTG pero mantenido en gestión (re-cae sin ticket nuevo). */
