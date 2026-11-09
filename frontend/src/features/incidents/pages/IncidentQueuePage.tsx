@@ -1,5 +1,7 @@
 import { useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { ImageDown } from 'lucide-react'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
 import { SectionCard } from '../../../components/ui/Card'
@@ -19,6 +21,8 @@ import { FollowupBadge } from '../../../components/monitoring/StatusBadges'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/AuthContext'
 import { IncidentManageModal } from '../components/IncidentManageModal'
+import { GenerateTicketModal } from '../components/GenerateTicketModal'
+import { downloadTicketImageFromIncidentId } from '../lib/ticketImage'
 
 type QueueKind = 'pendiente-cierre' | 'graves'
 
@@ -34,6 +38,8 @@ type QueueRow = {
   recovered_at?: string | null
   grave_opened_at?: string | null
   responsible_area?: string | null
+  ticket_code?: string | null
+  has_ticket?: boolean
   tracking?: { id: number; ticket: string | null; status_label: string | null } | null
 }
 
@@ -44,7 +50,7 @@ const META: Record<
   'pendiente-cierre': {
     title: 'Pendiente de cierre',
     description:
-      'Colegios que se recuperaron en PRTG estando en gestión. Cierra el ticket o espera; si vuelven a caer se abre un ticket nuevo desde Caídas.',
+      'Colegios que se recuperaron de Caídas totales en día laboral (lun–vie). Abre el seguimiento o cierra el ticket. Sábados y domingos no entran aquí.',
     fetcher: () => endpoints.incidentsPendienteCierre() as Promise<{ data: QueueRow[] }>,
   },
   graves: {
@@ -60,7 +66,11 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
   const { user } = useAuth()
   const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
   const client = useQueryClient()
+  const navigate = useNavigate()
   const [manageId, setManageId] = useState<number | null>(null)
+  const [ticketRow, setTicketRow] = useState<QueueRow | null>(null)
+  const [pngBusyId, setPngBusyId] = useState<number | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
 
   const query = useQuery({
     queryKey: ['incidents', 'queue', kind],
@@ -84,9 +94,16 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
         title={meta.title}
         description={meta.description}
         actions={
-          <Button variant="secondary" onClick={() => void query.refetch()}>
-            Refrescar
-          </Button>
+          <div className="flex flex-wrap items-center gap-2">
+            {kind === 'pendiente-cierre' ? (
+              <Button variant="secondary" onClick={() => navigate('/incidents/managing')}>
+                Ir a En gestión
+              </Button>
+            ) : null}
+            <Button variant="secondary" onClick={() => void query.refetch()}>
+              Refrescar
+            </Button>
+          </div>
         }
       />
 
@@ -96,8 +113,17 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
           <ErrorState message={query.error instanceof Error ? query.error.message : 'Error'} />
         ) : null}
         {!query.isLoading && !query.isError && rows.length === 0 ? (
-          <EmptyState title="Sin registros" description="No hay elementos en esta cola." />
+          <EmptyState
+            title="Sin registros"
+            description={
+              kind === 'pendiente-cierre'
+                ? 'No hay tickets pendientes de cierre. El seguimiento activo está en En gestión.'
+                : 'No hay elementos en esta cola.'
+            }
+          />
         ) : null}
+
+        {actionError ? <p className="mb-3 text-sm text-red-600">{actionError}</p> : null}
 
         {rows.length > 0 ? (
           <DataTableContainer>
@@ -134,18 +160,49 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                     </td>
                     <td className={tdClassName}>
                       <div className="flex flex-wrap gap-1">
-                        <Button size="sm" variant="secondary" onClick={() => setManageId(row.incident_id)}>
-                          Ver
-                        </Button>
+                        {kind === 'pendiente-cierre' ? (
+                          <Button size="sm" variant="primary" onClick={() => setManageId(row.incident_id)}>
+                            Seguir caso
+                          </Button>
+                        ) : (
+                          <Button size="sm" variant="secondary" onClick={() => setManageId(row.incident_id)}>
+                            Ver
+                          </Button>
+                        )}
                         {canManage && kind === 'pendiente-cierre' ? (
                           <Button
                             size="sm"
-                            variant="primary"
+                            variant="secondary"
                             onClick={() => {
+                              if (!window.confirm('¿Cerrar este ticket operativamente?')) return
                               void endpoints.closeIncidentTicket(row.incident_id).then(refresh)
                             }}
                           >
                             Cerrar ticket
+                          </Button>
+                        ) : null}
+                        {canManage && kind === 'graves' ? (
+                          <Button size="sm" variant="primary" onClick={() => setTicketRow(row)}>
+                            {row.has_ticket || row.ticket_code ? 'Ticket / evento' : 'Generar ticket'}
+                          </Button>
+                        ) : null}
+                        {kind === 'graves' && (row.has_ticket || row.ticket_code) ? (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            loading={pngBusyId === row.incident_id}
+                            onClick={() => {
+                              setActionError(null)
+                              setPngBusyId(row.incident_id)
+                              void downloadTicketImageFromIncidentId(row.incident_id)
+                                .catch((err: unknown) =>
+                                  setActionError(err instanceof Error ? err.message : 'No se pudo generar la imagen.'),
+                                )
+                                .finally(() => setPngBusyId(null))
+                            }}
+                          >
+                            <ImageDown className="h-3.5 w-3.5" />
+                            Imagen
                           </Button>
                         ) : null}
                         {canManage && kind === 'graves' ? (
@@ -177,6 +234,23 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
           onClose={() => {
             setManageId(null)
             refresh()
+          }}
+        />
+      ) : null}
+
+      {ticketRow ? (
+        <GenerateTicketModal
+          open
+          incidentId={ticketRow.incident_id}
+          cid={ticketRow.cid}
+          schoolLabel={ticketRow.local_educativo}
+          defaultKind="CORRECTIVO"
+          hasTicket={Boolean(ticketRow.has_ticket || ticketRow.ticket_code)}
+          onClose={() => setTicketRow(null)}
+          onDone={() => {
+            setTicketRow(null)
+            refresh()
+            setManageId(ticketRow.incident_id)
           }}
         />
       ) : null}

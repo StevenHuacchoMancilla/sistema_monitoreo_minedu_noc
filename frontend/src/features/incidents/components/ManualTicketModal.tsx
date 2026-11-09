@@ -1,12 +1,14 @@
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import { useMutation } from '@tanstack/react-query'
+import { Ticket, Wrench } from 'lucide-react'
 import { endpoints } from '../../../api/endpoints'
 import { Button } from '../../../components/ui/Button'
 import { FormField, Input, Select } from '../../../components/ui/FormControls'
+import { inputClassName } from '../../../lib/uiTokens'
 import type { MineduReason } from '../../reports/types/operationalReport'
-import rootCauseLegend from '../data/rootCauseLegend.json' with { type: 'json' }
+import { RootCausePicker } from './RootCausePicker'
 
-type TicketKind = 'CORRECTIVO' | 'PREVENTIVO'
+export type TicketKind = 'CORRECTIVO' | 'PREVENTIVO' | 'ASIGNACION_LIBRE'
 
 type Found = {
   cid: string | null
@@ -15,6 +17,18 @@ type Found = {
   codigo_local: string | null
   provincia: string | null
   distrito: string | null
+}
+
+const textareaClass = `${inputClassName} !h-auto min-h-20 resize-y py-2`
+
+function kindHelp(kind: TicketKind): string {
+  if (kind === 'PREVENTIVO') {
+    return 'Preventivo → Mantenimientos. Colegio operativo. Puedes completar el detalle de evento ahora o después.'
+  }
+  if (kind === 'ASIGNACION_LIBRE') {
+    return 'Asignación libre: ticket sin denominación correctivo/preventivo. Seguimiento normal en Detalle; Detalle de evento solo si va técnico.'
+  }
+  return 'Correctivo → Incidencias. Si el colegio ya está caído en PRTG, se continúa ese ticket. Queja/Caída de enlace MINEDU también van a Incidencias.'
 }
 
 export function ManualTicketModal({
@@ -34,6 +48,29 @@ export function ManualTicketModal({
   const [causeCode, setCauseCode] = useState('')
   const [found, setFound] = useState<Found | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [arrivedAt, setArrivedAt] = useState('')
+  const [technician, setTechnician] = useState('')
+  const [phone, setPhone] = useState('')
+  const [activities, setActivities] = useState('')
+  const [materials, setMaterials] = useState('')
+  const [restoredAt, setRestoredAt] = useState('')
+  const [departedAt, setDepartedAt] = useState('')
+
+  const showEventFields = true
+  const showRestored = kind !== 'PREVENTIVO'
+
+  const visitPayload = useMemo(
+    () => ({
+      arrived_at: arrivedAt || null,
+      technician_name: technician || null,
+      technician_phone: phone || null,
+      activities: activities || null,
+      materials: materials || null,
+      restored_at: showRestored ? restoredAt || null : null,
+      departed_at: departedAt || null,
+    }),
+    [arrivedAt, technician, phone, activities, materials, showRestored, restoredAt, departedAt],
+  )
 
   const lookup = useMutation({
     mutationFn: () => endpoints.lookupSchool(q.trim()),
@@ -53,13 +90,16 @@ export function ManualTicketModal({
             minedu_reason: reason || null,
             root_cause_group_code: causeGroup,
             root_cause_code: causeCode,
+            ...visitPayload,
           })
         : endpoints.createManualTicket({
             q: q.trim(),
+            kind,
             detail: detail || null,
             minedu_reason: reason || null,
             root_cause_group_code: causeGroup,
             root_cause_code: causeCode,
+            ...visitPayload,
           }),
     onSuccess: (detailResponse) => {
       onCreated(detailResponse.incident.id)
@@ -81,58 +121,35 @@ export function ManualTicketModal({
             return
           }
           if (!causeGroup || !causeCode) {
-            setError('Elige el grupo y el código de causa raíz.')
+            setError('Elige el grupo y la causa raíz.')
             return
           }
           create.mutate()
         }}
       >
         <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Registrar ticket</h2>
-        <p className="mt-1 text-sm text-slate-500">
-          {kind === 'PREVENTIVO'
-            ? 'Mantenimiento preventivo con el colegio operativo. Al generar, la hora del ticket es este momento y se crea el código TGS.'
-            : 'Mantenimiento correctivo cargado a mano. Al generar, la hora del ticket es este momento. Si el colegio ya está caído en PRTG, se continúa ese ticket.'}
-        </p>
+        <p className="mt-1 text-sm text-slate-500">{kindHelp(kind)}</p>
         <div className="mt-4 grid gap-3">
           <FormField label="Tipo de ticket">
             <Select value={kind} onChange={(event) => setKind(event.target.value as TicketKind)}>
               <option value="CORRECTIVO">Correctivo</option>
               <option value="PREVENTIVO">Preventivo</option>
+              <option value="ASIGNACION_LIBRE">Asignación libre</option>
             </Select>
           </FormField>
           <FormField label="CID o TSS">
             <Input value={q} onChange={(event) => { setQ(event.target.value); setFound(null) }} placeholder="258394 o 90" required />
           </FormField>
-          <FormField label="Grupo de causa raíz">
-            <Select
-              value={causeGroup}
-              onChange={(event) => {
-                setCauseGroup(event.target.value)
-                setCauseCode('')
-              }}
-            >
-              <option value="">— Elige el grupo —</option>
-              {Array.from(new Map(rootCauseLegend.map((row) => [row.group_code, row.group_name])).entries()).map(
-                ([code, name]) => (
-                  <option key={code} value={code}>
-                    {code} · {name}
-                  </option>
-                ),
-              )}
-            </Select>
-          </FormField>
-          <FormField label="Código y causa raíz">
-            <Select value={causeCode} disabled={!causeGroup} onChange={(event) => setCauseCode(event.target.value)}>
-              <option value="">— Elige el código —</option>
-              {rootCauseLegend
-                .filter((row) => row.group_code === causeGroup)
-                .map((row) => (
-                  <option key={row.code} value={row.code}>
-                    {row.code} · {row.cause}
-                  </option>
-                ))}
-            </Select>
-          </FormField>
+          <RootCausePicker
+            groupCode={causeGroup}
+            causeCode={causeCode}
+            required
+            onGroupChange={(next) => {
+              setCauseGroup(next)
+              setCauseCode('')
+            }}
+            onCauseChange={(next) => setCauseCode(next)}
+          />
           <FormField label="Razón MINEDU">
             <Select value={reason} onChange={(event) => setReason(event.target.value as '' | MineduReason)}>
               <option value="">— No aplica / sin razón —</option>
@@ -142,8 +159,65 @@ export function ManualTicketModal({
             </Select>
           </FormField>
           <FormField label="Detalle">
-            <Input value={detail} onChange={(event) => setDetail(event.target.value)} placeholder={kind === 'PREVENTIVO' ? 'Motivo del mantenimiento' : 'Cómo se enteraron de la caída'} />
+            <Input
+              value={detail}
+              onChange={(event) => setDetail(event.target.value)}
+              placeholder={
+                kind === 'PREVENTIVO'
+                  ? 'Motivo del mantenimiento'
+                  : kind === 'ASIGNACION_LIBRE'
+                    ? 'Seguimiento / contexto del ticket'
+                    : 'Cómo se enteraron de la caída'
+              }
+            />
           </FormField>
+
+          {showEventFields ? (
+            <section className="rounded-xl border border-slate-200 bg-slate-50/80 p-4 dark:border-slate-700 dark:bg-slate-950/40">
+              <h3 className="mb-1 inline-flex items-center gap-1.5 text-[13px] font-semibold text-slate-900 dark:text-slate-100">
+                {kind === 'PREVENTIVO' ? <Wrench className="h-4 w-4" aria-hidden /> : <Ticket className="h-4 w-4" aria-hidden />}
+                Detalle de evento (opcional ahora)
+              </h3>
+              <p className="mb-3 text-[12px] text-slate-500">
+                Si va técnico, completa aquí. Si se resuelve solo con seguimiento, deja vacío y usa solo Detalle.
+              </p>
+              <div className="grid gap-3 md:grid-cols-2">
+                <FormField label="Hora de inicio">
+                  <Input type="datetime-local" value={arrivedAt} onChange={(e) => setArrivedAt(e.target.value)} />
+                </FormField>
+                <FormField label="Datos del técnico">
+                  <Input value={technician} onChange={(e) => setTechnician(e.target.value)} placeholder="Nombres y apellidos" />
+                </FormField>
+                <FormField label="Celular">
+                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} placeholder="9XXXXXXXX" />
+                </FormField>
+                {showRestored ? (
+                  <FormField label="Hora de restablecimiento">
+                    <Input type="datetime-local" value={restoredAt} onChange={(e) => setRestoredAt(e.target.value)} />
+                  </FormField>
+                ) : null}
+                <FormField label="Hora de salida">
+                  <Input type="datetime-local" value={departedAt} onChange={(e) => setDepartedAt(e.target.value)} />
+                </FormField>
+                <FormField label="Actividades ejecutadas" className="md:col-span-2">
+                  <textarea
+                    className={textareaClass}
+                    value={activities}
+                    onChange={(e) => setActivities(e.target.value)}
+                    placeholder="Una actividad por línea"
+                  />
+                </FormField>
+                <FormField label="Materiales utilizados" className="md:col-span-2">
+                  <textarea
+                    className={textareaClass}
+                    value={materials}
+                    onChange={(e) => setMaterials(e.target.value)}
+                    placeholder="Un material por línea"
+                  />
+                </FormField>
+              </div>
+            </section>
+          ) : null}
         </div>
         {found ? (
           <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:bg-slate-950 dark:text-slate-200">

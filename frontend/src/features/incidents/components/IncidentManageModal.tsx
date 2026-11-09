@@ -18,8 +18,8 @@ import type { MineduReason } from '../../reports/types/operationalReport'
 import { incidentCaseFilePath } from '../../history/api/historyApi'
 import { VoiceDictationButton } from '../../voice/components/VoiceDictationButton'
 import { VisitReportPanel } from './VisitReportPanel'
+import { RootCausePicker } from './RootCausePicker'
 import type { IncidentDetail } from '../../../types/api'
-import rootCauseLegend from '../data/rootCauseLegend.json' with { type: 'json' }
 
 type TabKey = 'summary' | 'management' | 'history'
 
@@ -140,14 +140,21 @@ export function IncidentManageModal({
   const [causeText, setCauseText] = useState('')
   const [mineduReason, setMineduReason] = useState<'' | MineduReason>('')
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+  const initialClassRef = useRef<{
+    minedu: '' | MineduReason
+    causeGroup: string
+    causeCode: string
+  } | null>(null)
 
   // Hidratar una sola vez: los refetch traen duraciones nuevas y no deben pisar lo que se escribe.
+  // Si ya hay gestiones, el detalle queda vacío para escribir comentarios nuevos (hilo de seguimiento).
   const hydrated = useRef(false)
   useEffect(() => {
     if (!detail.data || hydrated.current) return
     hydrated.current = true
     const g = detail.data.gestion
     const lastMgmt = detail.data.managements?.[0]
+    const hasPrior = (detail.data.managements?.length ?? 0) > 0
     setScope((g.management_scope as '' | 'PEXT' | 'PINT') || '')
     if (
       lastMgmt &&
@@ -159,18 +166,25 @@ export function IncidentManageModal({
     } else {
       setContactId(g.last_managed_contact_id ?? '')
     }
-    setDetailText(g.detail_text ?? '')
+    setDetailText(hasPrior ? '' : (g.detail_text ?? ''))
     setObservation('')
-    setCauseGroup(g.root_cause_group_code ?? '')
-    setCauseCode(g.root_cause_code ?? '')
-    setCauseText(g.cause ?? '')
-    setMineduReason(
+    const nextGroup = g.root_cause_group_code ?? ''
+    const nextCode = g.root_cause_code ?? ''
+    const nextMinedu: '' | MineduReason =
       g.minedu_reason === 'CAIDA_ENLACE' ||
-        g.minedu_reason === 'REQUERIMIENTO' ||
-        g.minedu_reason === 'QUEJA'
+      g.minedu_reason === 'REQUERIMIENTO' ||
+      g.minedu_reason === 'QUEJA'
         ? g.minedu_reason
-        : '',
-    )
+        : ''
+    setCauseGroup(nextGroup)
+    setCauseCode(nextCode)
+    setCauseText(g.cause ?? '')
+    setMineduReason(nextMinedu)
+    initialClassRef.current = {
+      minedu: nextMinedu,
+      causeGroup: nextGroup,
+      causeCode: nextCode,
+    }
   }, [detail.data])
 
   const onCloseRef = useRef(onClose)
@@ -207,27 +221,78 @@ export function IncidentManageModal({
     },
   })
 
+  const hasPriorManagements = (detail.data?.managements?.length ?? 0) > 0
+  const followupNote = detailText.trim()
+  const classificationChanged = Boolean(
+    initialClassRef.current &&
+      (mineduReason !== initialClassRef.current.minedu ||
+        causeGroup !== initialClassRef.current.causeGroup ||
+        causeCode !== initialClassRef.current.causeCode),
+  )
+  const canSaveGestion = hasPriorManagements
+    ? Boolean(followupNote || classificationChanged)
+    : Boolean(
+        mineduReason ||
+          detailText.trim() ||
+          observation.trim() ||
+          contactId !== '' ||
+          causeCode ||
+          causeGroup,
+      )
+
   const save = useMutation({
     mutationFn: () => {
-      if (!mineduReason) throw new Error('Selecciona la razón MINEDU')
+      if (!canSaveGestion) {
+        throw new Error(
+          hasPriorManagements
+            ? 'Escribe un comentario o actualiza resultado / causa raíz'
+            : 'Agrega detalle, observación, contacto, causa o razón MINEDU',
+        )
+      }
       const viaDescartes = contactId === CONTACT_VIA_DESCARTES
+      const detailPayload = hasPriorManagements
+        ? followupNote ||
+          (classificationChanged
+            ? `Actualización: ${[
+                mineduReason ? MINEDU_RESULT_OPTIONS.find((o) => o.value === mineduReason)?.label : null,
+                causeText || causeCode || null,
+              ]
+                .filter(Boolean)
+                .join(' · ')}`
+            : '')
+        : detailText
       return endpoints.applyIncidentManagement(incidentId, {
         classification: null,
         scope: scope || null,
         outage_text: null,
-        detail: detailText || null,
-        observation: observation || null,
+        detail: detailPayload || null,
+        observation: hasPriorManagements ? null : observation || null,
         contact_id: viaDescartes || contactId === '' ? null : Number(contactId),
         contact_via_descartes: viaDescartes,
         root_cause_group_code: causeGroup || null,
         root_cause_code: causeCode || null,
         cause: causeText || null,
-        minedu_reason: mineduReason,
+        minedu_reason: mineduReason || null,
       })
     },
     onSuccess: async (data) => {
-      setSavedMsg('Gestión registrada')
-      hydrated.current = false
+      const becameIncident = Boolean(data?.estado?.is_grave_incident)
+      setSavedMsg(
+        becameIncident && (mineduReason === 'CAIDA_ENLACE' || mineduReason === 'QUEJA')
+          ? 'Gestión registrada · pasó a Incidencias'
+          : hasPriorManagements
+            ? classificationChanged && !followupNote
+              ? 'Resultado / causa actualizados'
+              : 'Comentario de seguimiento agregado'
+            : 'Gestión registrada',
+      )
+      setDetailText('')
+      setObservation('')
+      initialClassRef.current = {
+        minedu: mineduReason,
+        causeGroup,
+        causeCode,
+      }
       client.setQueryData(['incidents', incidentId], data)
       await invalidateOps()
       window.setTimeout(() => setSavedMsg(null), 3500)
@@ -278,9 +343,16 @@ export function IncidentManageModal({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 id={titleId} className="truncate text-base font-bold text-slate-950 dark:text-slate-50">
-                {data?.colegio.cid ? `CID ${data.colegio.cid}` : `Incidencia #${incidentId}`}
+                {data?.ticket?.ticket_code
+                  ? data.ticket.ticket_code
+                  : data?.colegio.cid
+                    ? `CID ${data.colegio.cid}`
+                    : `Caso #${incidentId}`}
                 {data?.colegio.local_educativo ? (
                   <span className="font-medium text-slate-500 dark:text-slate-400"> · {data.colegio.local_educativo}</span>
+                ) : null}
+                {!data?.ticket?.ticket_code ? (
+                  <span className="ml-2 text-xs font-medium text-amber-700 dark:text-amber-300">· Sin ticket (se crea al gestionar)</span>
                 ) : null}
               </h2>
               {data ? (
@@ -364,15 +436,22 @@ export function IncidentManageModal({
                 selectedId={contactId}
                 onSelect={(id) => setContactId(id)}
               />
-              {data.incident.detection_source === 'PREVENTIVE' || data.incident.detection_source === 'MANUAL' ? (
+              {data.ticket ? (
                 <VisitReportPanel
                   incidentId={incidentId}
                   ticket={data.ticket}
                   schoolName={data.colegio.local_educativo}
                   tss={data.colegio.current_sequence}
                   readOnly={readOnly}
-                  onSaved={() => setSavedMsg('Visita técnica guardada')}
+                  onSaved={() => setSavedMsg('Detalle de evento guardado')}
                 />
+              ) : !readOnly ? (
+                <Panel title="Ticket / detalle de evento">
+                  <p className="text-[13px] text-slate-600 dark:text-slate-300">
+                    Este caso aún no tiene código TGS. Genera el ticket para poder registrar visita técnica (Detalle de evento).
+                    El seguimiento normal sigue en gestiones / Detalle.
+                  </p>
+                </Panel>
               ) : null}
               {readOnly ? (
                 <Panel title="Gestión">
@@ -385,12 +464,25 @@ export function IncidentManageModal({
                 </Panel>
               ) : (
                 <>
-              <Panel title="Resultado de gestión">
+              <Panel
+                title="Resultado de gestión"
+                action={
+                  mineduReason ? (
+                    <button
+                      type="button"
+                      className="text-[12px] font-medium text-slate-500 underline-offset-2 hover:text-slate-800 hover:underline dark:hover:text-slate-200"
+                      onClick={() => setMineduReason('')}
+                    >
+                      Quitar
+                    </button>
+                  ) : null
+                }
+              >
                 <p className="mb-3 text-[12px] text-slate-500">
-                  Razón MINEDU del Anexo 30. La causa raíz define el diagnóstico técnico.
-                  Caída de enlace = incidencia para reporte (rojo).
+                  Puedes cambiarlo durante el seguimiento. Caída de enlace y Queja pasan a Incidencias al
+                  guardar.
                 </p>
-                <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Razón MINEDU">
+                <div className="grid gap-2 sm:grid-cols-3" role="radiogroup" aria-label="Razón MINEDU (opcional)">
                   {MINEDU_RESULT_OPTIONS.map((opt) => {
                     const on = mineduReason === opt.value
                     return (
@@ -408,6 +500,9 @@ export function IncidentManageModal({
                           name={`${titleId}-minedu`}
                           checked={on}
                           onChange={() => setMineduReason(opt.value)}
+                          onClick={() => {
+                            if (on) setMineduReason('')
+                          }}
                         />
                         <span className="min-w-0">
                           <span className="flex items-center gap-2 text-[13px] font-bold tracking-wide text-slate-900 dark:text-slate-100">
@@ -423,102 +518,34 @@ export function IncidentManageModal({
               </Panel>
 
               <Panel title="Causa raíz">
-                <div className="grid gap-3 md:grid-cols-3">
-                  <FormField label="Código de grupo">
-                    <Select
-                      value={causeGroup}
-                      onChange={(e) => {
-                        const next = e.target.value
-                        setCauseGroup(next)
-                        const still = rootCauseLegend.find((row) => row.group_code === next && row.code === causeCode)
-                        if (!still) {
-                          setCauseCode('')
-                          setCauseText('')
-                          setScope('')
-                        }
-                      }}
-                    >
-                      <option value="">— Sin definir —</option>
-                      {Array.from(new Map(rootCauseLegend.map((row) => [row.group_code, row.group_name])).entries()).map(
-                        ([code, name]) => (
-                          <option key={code} value={code}>
-                            {code} · {name}
-                          </option>
-                        ),
-                      )}
-                    </Select>
-                  </FormField>
-                  <FormField label="Código y causa raíz" className="md:col-span-2">
-                    <Select
-                      value={causeCode}
-                      disabled={!causeGroup}
-                      onChange={(e) => {
-                        const next = e.target.value
-                        setCauseCode(next)
-                        const row = rootCauseLegend.find((item) => item.group_code === causeGroup && item.code === next)
-                        setCauseText(row?.cause ?? '')
-                        setScope(row?.attention === 'PEXT' || row?.attention === 'PINT' ? row.attention : '')
-                      }}
-                    >
-                      <option value="">— Elige el código —</option>
-                      {rootCauseLegend
-                        .filter((row) => row.group_code === causeGroup)
-                        .map((row) => (
-                          <option key={row.code} value={row.code}>
-                            {row.code} · {row.cause}
-                          </option>
-                        ))}
-                    </Select>
-                  </FormField>
-                </div>
-                {(() => {
-                  const selected = rootCauseLegend.find((row) => row.group_code === causeGroup && row.code === causeCode)
-                  const label = selected ? `${selected.code} · ${selected.cause}` : ''
-                  return (
-                    <div
-                      className={`mt-3 rounded-xl border px-3 py-2.5 ${
-                        label
-                          ? 'border-emerald-500/30 bg-emerald-500/10'
-                          : 'border-dashed border-slate-300 bg-slate-50 dark:border-slate-700 dark:bg-slate-950'
-                      }`}
-                    >
-                      <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Código + causa raíz</p>
-                      <p className={`mt-1 text-sm ${label ? 'font-medium text-slate-900 dark:text-slate-100' : 'text-slate-400'}`}>
-                        {label || 'Se completa al elegir el grupo y el código'}
-                      </p>
-                      {selected?.when ? <p className="mt-1 text-[12px] text-slate-500">{selected.when}</p> : null}
-                      <p className="mt-2 text-[12px] text-slate-600 dark:text-slate-300">
-                        Atención: {selected?.attention || 'se define con el código'}
-                        {selected?.segment ? ` · ${selected.segment}` : ''}
-                      </p>
-                    </div>
-                  )
-                })()}
+                <p className="mb-3 text-[12px] text-slate-500">
+                  Actualízala si cambia el diagnóstico (ej. de equipos apagados a corte de energía).
+                </p>
+                <RootCausePicker
+                  groupCode={causeGroup}
+                  causeCode={causeCode}
+                  onGroupChange={(next) => {
+                    setCauseGroup(next)
+                    setCauseCode('')
+                    setCauseText('')
+                    setScope('')
+                  }}
+                  onCauseChange={(next, row) => {
+                    setCauseCode(next)
+                    setCauseText(row?.cause ?? '')
+                    setScope(row?.attention === 'PEXT' || row?.attention === 'PINT' ? row.attention : '')
+                  }}
+                />
               </Panel>
 
-              <Panel title="Detalle de la atención">
-                <div className="grid gap-3">
-                  <FormField label="Contacto utilizado">
-                    <Select
-                      value={contactId === '' ? '' : String(contactId)}
-                      onChange={(e) => {
-                        const v = e.target.value
-                        if (v === '') setContactId('')
-                        else if (v === CONTACT_VIA_DESCARTES) setContactId(CONTACT_VIA_DESCARTES)
-                        else setContactId(Number(v))
-                      }}
-                    >
-                      <option value="">— Sin seleccionar —</option>
-                      <option value={CONTACT_VIA_DESCARTES}>{CONTACT_DESCARTES_LABEL}</option>
-                      {data.contactos.map((c, idx) => (
-                        <option key={c.id} value={c.id}>
-                          {idx + 1}. {c.nombre ?? 'Sin nombre'} · {c.telefono ?? 's/n'}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
+              {hasPriorManagements ? (
+                <Panel title="Agregar comentario de seguimiento">
+                  <p className="mb-3 text-[12px] text-slate-500">
+                    Como el tracking anterior: cada día puedes dejar un comentario actualizado. Queda en el
+                    historial del caso sin crear ticket nuevo.
+                  </p>
                   <FormField
-                    label="Detalle (reporte)"
+                    label="Comentario"
                     action={
                       <VoiceDictationButton
                         lang="es-PE"
@@ -532,29 +559,72 @@ export function IncidentManageModal({
                       className={textareaClass}
                       value={detailText}
                       onChange={(e) => setDetailText(e.target.value)}
-                      placeholder="Ej. Equipos encendidos / sin internet / queja de usuario"
+                      placeholder="Ej. Día 2: sin respuesta del colegio / técnico en camino / equipos apagados por horario"
+                      rows={4}
                     />
                   </FormField>
-                  <FormField
-                    label="Observación adicional"
-                    action={
-                      <VoiceDictationButton
-                        lang="es-PE"
-                        onFinalTranscript={(text) =>
-                          setObservation((prev) => (prev ? `${prev.trim()} ${text}` : text))
-                        }
+                </Panel>
+              ) : (
+                <Panel title="Detalle de la atención">
+                  <div className="grid gap-3">
+                    <FormField label="Contacto utilizado">
+                      <Select
+                        value={contactId === '' ? '' : String(contactId)}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          if (v === '') setContactId('')
+                          else if (v === CONTACT_VIA_DESCARTES) setContactId(CONTACT_VIA_DESCARTES)
+                          else setContactId(Number(v))
+                        }}
+                      >
+                        <option value="">— Sin seleccionar —</option>
+                        <option value={CONTACT_VIA_DESCARTES}>{CONTACT_DESCARTES_LABEL}</option>
+                        {data.contactos.map((c, idx) => (
+                          <option key={c.id} value={c.id}>
+                            {idx + 1}. {c.nombre ?? 'Sin nombre'} · {c.telefono ?? 's/n'}
+                          </option>
+                        ))}
+                      </Select>
+                    </FormField>
+                    <FormField
+                      label="Detalle (reporte)"
+                      action={
+                        <VoiceDictationButton
+                          lang="es-PE"
+                          onFinalTranscript={(text) =>
+                            setDetailText((prev) => (prev ? `${prev.trim()} ${text}` : text))
+                          }
+                        />
+                      }
+                    >
+                      <textarea
+                        className={textareaClass}
+                        value={detailText}
+                        onChange={(e) => setDetailText(e.target.value)}
+                        placeholder="Ej. Equipos encendidos / sin internet / queja de usuario"
                       />
-                    }
-                  >
-                    <textarea
-                      className={textareaClass}
-                      value={observation}
-                      onChange={(e) => setObservation(e.target.value)}
-                      placeholder="Opcional · queda en historial"
-                    />
-                  </FormField>
-                </div>
-              </Panel>
+                    </FormField>
+                    <FormField
+                      label="Observación adicional"
+                      action={
+                        <VoiceDictationButton
+                          lang="es-PE"
+                          onFinalTranscript={(text) =>
+                            setObservation((prev) => (prev ? `${prev.trim()} ${text}` : text))
+                          }
+                        />
+                      }
+                    >
+                      <textarea
+                        className={textareaClass}
+                        value={observation}
+                        onChange={(e) => setObservation(e.target.value)}
+                        placeholder="Opcional · queda en historial"
+                      />
+                    </FormField>
+                  </div>
+                </Panel>
+              )}
               <RecentManagements managements={data.managements ?? []} />
                 </>
               )}
@@ -572,9 +642,11 @@ export function IncidentManageModal({
                 {save.error instanceof Error ? save.error.message : 'Error al guardar'}
               </span>
             ) : null}
-            {!savedMsg && !save.isError && !mineduReason ? (
+            {!savedMsg && !save.isError && !canSaveGestion ? (
               <span className="text-slate-500 dark:text-slate-400">
-                Elige la <strong>razón MINEDU</strong> en Contacto y gestión para guardar.
+                {hasPriorManagements
+                  ? 'Escribe un comentario o cambia resultado / causa raíz para guardar.'
+                  : 'Agrega un mensaje, contacto o causa para guardar. La razón MINEDU es opcional.'}
               </span>
             ) : null}
           </div>
@@ -583,15 +655,17 @@ export function IncidentManageModal({
           </Button>
           {!readOnly ? (
             <>
-              <Button
-                variant="secondary"
-                disabled={!data || markGrave.isPending}
-                loading={markGrave.isPending}
-                onClick={() => markGrave.mutate()}
-                title="Pasa el caso al apartado Incidencias graves"
-              >
-                Pasar a incidencia
-              </Button>
+              {!data?.estado?.is_grave_incident ? (
+                <Button
+                  variant="secondary"
+                  disabled={!data || markGrave.isPending}
+                  loading={markGrave.isPending}
+                  onClick={() => markGrave.mutate()}
+                  title="Pasa el caso al apartado Incidencias"
+                >
+                  Pasar a incidencia
+                </Button>
+              ) : null}
               <Button
                 variant="secondary"
                 disabled={!data || closeTicket.isPending}
@@ -602,8 +676,17 @@ export function IncidentManageModal({
               >
                 Cerrar ticket
               </Button>
-              <Button variant="primary" disabled={!data || !mineduReason} loading={save.isPending} onClick={() => save.mutate()}>
-                Guardar gestión
+              <Button
+                variant="primary"
+                disabled={!data || !canSaveGestion}
+                loading={save.isPending}
+                onClick={() => save.mutate()}
+              >
+                {hasPriorManagements
+                  ? classificationChanged && !followupNote
+                    ? 'Actualizar gestión'
+                    : 'Agregar comentario'
+                  : 'Guardar gestión'}
               </Button>
             </>
           ) : null}
@@ -935,13 +1018,15 @@ function ContactsPanel({
 function RecentManagements({ managements }: { managements: NonNullable<IncidentDetail['managements']> }) {
   if (managements.length === 0) {
     return (
-      <p className="px-1 text-[12px] text-slate-500 dark:text-slate-400">Aún no hay gestiones registradas en esta caída.</p>
+      <p className="px-1 text-[12px] text-slate-500 dark:text-slate-400">
+        Aún no hay gestiones. Agrega detalle u observación para el seguimiento (la razón MINEDU es opcional).
+      </p>
     )
   }
   return (
-    <Panel title={`Gestiones anteriores (${managements.length})`}>
-      <ul className="space-y-2">
-        {managements.slice(0, 3).map((m) => (
+    <Panel title={`Historial de seguimiento (${managements.length})`}>
+      <ul className="max-h-72 space-y-2 overflow-y-auto pr-1">
+        {managements.map((m) => (
           <li key={m.id} className="rounded-lg border border-slate-200 px-3 py-2 text-[12px] dark:border-slate-700">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="font-semibold text-slate-500 tabular-nums">{formatDateTime(m.created_at)}</span>
@@ -957,9 +1042,6 @@ function RecentManagements({ managements }: { managements: NonNullable<IncidentD
           </li>
         ))}
       </ul>
-      {managements.length > 3 ? (
-        <p className="mt-2 text-[11px] text-slate-500">Las demás gestiones están en la pestaña Historial.</p>
-      ) : null}
     </Panel>
   )
 }

@@ -35,7 +35,8 @@ import { LocationMismatchBadge } from '../../locations/components/LocationMismat
 import { IncidentManageModal } from '../components/IncidentManageModal'
 import { RegisterLinkOutageModal } from '../components/RegisterLinkOutageModal'
 import { ManualTicketModal } from '../components/ManualTicketModal'
-import { downloadMassOutagePng } from '../lib/downloadMassOutagePng'
+import { GenerateTicketModal } from '../components/GenerateTicketModal'
+import { downloadTicketImageFromIncidentId } from '../lib/ticketImage'
 import type { OutageRow } from '../../../types/api'
 
 const outageTd = `${tdClassName} !align-top`
@@ -162,10 +163,11 @@ export function ActiveIncidentsPage({
   const [toDate, setToDate] = useState('')
   const [duration, setDuration] = useState<DurationBucket>('')
   const [manageId, setManageId] = useState<number | null>(null)
+  const [ticketRow, setTicketRow] = useState<OutageRow | null>(null)
+  const [pngBusyId, setPngBusyId] = useState<number | null>(null)
+  const [actionError, setActionError] = useState<string | null>(null)
   const [linkOutageOpen, setLinkOutageOpen] = useState(false)
   const [manualOpen, setManualOpen] = useState(false)
-  const [exportingPartials, setExportingPartials] = useState(false)
-  const [exportPartialError, setExportPartialError] = useState<string | null>(null)
   const client = useQueryClient()
   const { user } = useAuth()
   const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
@@ -294,43 +296,6 @@ export function ActiveIncidentsPage({
     void summary.refetch()
   }
 
-  const partialRows = useMemo(() => {
-    if (title !== 'Caídas totales') return []
-    return scoped.filter((row) => row.estado_prtg === 'PARCIAL')
-  }, [scoped, title])
-
-  const exportPartials = async () => {
-    if (partialRows.length === 0) {
-      setExportPartialError('No hay parciales (amarillos) para exportar.')
-      return
-    }
-    setExportingPartials(true)
-    setExportPartialError(null)
-    try {
-      await downloadMassOutagePng({
-        nodo: 'Parciales actuales',
-        variant: 'partial',
-        rows: partialRows.map((row) => ({
-          tss: row.tss,
-          cid: row.cid,
-          local_educativo: row.local_educativo,
-          provincia: row.provincia,
-          distrito: row.distrito,
-          tecnologia: row.tecnologia,
-          down_started_at: downClock(row, durationSource),
-          duration_label:
-            row.prtg_down_since_raw ??
-            row.duration_label ??
-            formatDuration(elapsedSeconds(downClock(row, durationSource), now)),
-        })),
-      })
-    } catch (err) {
-      setExportPartialError(err instanceof Error ? err.message : 'No se pudo exportar.')
-    } finally {
-      setExportingPartials(false)
-    }
-  }
-
   return (
     <AppLayout
       bare
@@ -356,19 +321,6 @@ export function ActiveIncidentsPage({
               Sync PRTG {lastPrtgSync ? formatTime(lastPrtgSync) : '—'}
             </span>
             <div className="flex flex-wrap items-center justify-end gap-1.5">
-              {title === 'Caídas totales' ? (
-                <Button
-                  size="sm"
-                  variant="secondary"
-                  loading={exportingPartials}
-                  disabled={partialRows.length === 0}
-                  title="Exporta todos los parciales (amarillos) de PRTG"
-                  onClick={() => void exportPartials()}
-                >
-                  <ImageDown className="h-3.5 w-3.5" aria-hidden />
-                  Parciales{partialRows.length > 0 ? ` (${partialRows.length})` : ''}
-                </Button>
-              ) : null}
               {canManage && title === 'Caídas totales' ? (
                 <>
                   <Button size="sm" variant="secondary" onClick={() => setManualOpen(true)}>
@@ -385,9 +337,6 @@ export function ActiveIncidentsPage({
                 Refrescar
               </Button>
             </div>
-            {exportPartialError ? (
-              <span className="text-[12px] text-red-600 dark:text-red-300">{exportPartialError}</span>
-            ) : null}
           </div>
         }
       />
@@ -521,6 +470,8 @@ export function ActiveIncidentsPage({
           )
         ) : null}
 
+        {actionError ? <p className="mb-3 text-sm text-red-600">{actionError}</p> : null}
+
         {rows.length > 0 ? (
           <>
             <DataTableContainer className={outages.isPlaceholderData ? 'opacity-70 transition-opacity' : ''}>
@@ -576,7 +527,19 @@ export function ActiveIncidentsPage({
                       durationSource={durationSource}
                       durationCaption={durationCaption}
                       showManagementTag={showManagementTag}
+                      showGenerateTicket={source === 'managing'}
+                      pngBusy={pngBusyId === row.incident_id}
                       onManage={setManageId}
+                      onGenerateTicket={setTicketRow}
+                      onDownloadTicketImage={(id) => {
+                        setActionError(null)
+                        setPngBusyId(id)
+                        void downloadTicketImageFromIncidentId(id)
+                          .catch((err: unknown) =>
+                            setActionError(err instanceof Error ? err.message : 'No se pudo generar la imagen del ticket.'),
+                          )
+                          .finally(() => setPngBusyId(null))
+                      }}
                     />
                   ))}
                 </tbody>
@@ -626,6 +589,23 @@ export function ActiveIncidentsPage({
           setManageId(incidentId)
         }}
       />
+
+      {ticketRow ? (
+        <GenerateTicketModal
+          open
+          incidentId={ticketRow.incident_id}
+          cid={ticketRow.cid}
+          schoolLabel={ticketRow.local_educativo}
+          defaultKind="ASIGNACION_LIBRE"
+          hasTicket={Boolean(ticketRow.ticket_code)}
+          onClose={() => setTicketRow(null)}
+          onDone={(id) => {
+            setTicketRow(null)
+            refresh()
+            setManageId(id)
+          }}
+        />
+      ) : null}
     </AppLayout>
   )
 }
@@ -636,7 +616,11 @@ function OutageTableRow({
   canManage,
   durationSource,
   durationCaption,
+  showGenerateTicket = false,
+  pngBusy = false,
   onManage,
+  onGenerateTicket,
+  onDownloadTicketImage,
 }: {
   row: OutageRow
   now: number
@@ -644,7 +628,11 @@ function OutageTableRow({
   durationSource: 'incident' | 'current_down'
   durationCaption: string
   showManagementTag?: boolean
+  showGenerateTicket?: boolean
+  pngBusy?: boolean
   onManage: (id: number) => void
+  onGenerateTicket?: (row: OutageRow) => void
+  onDownloadTicketImage?: (incidentId: number) => void
 }) {
   const clock = downClock(row, durationSource)
   const seconds = elapsedSeconds(clock, now)
@@ -732,7 +720,7 @@ function OutageTableRow({
         </Truncate>
       </td>
       <td className="sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 !align-top text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
-        <div className="inline-flex items-center justify-end gap-0.5">
+        <div className="inline-flex flex-wrap items-center justify-end gap-0.5">
           {row.school_id ? (
             <Link
               to={`/history/schools/${row.school_id}`}
@@ -742,6 +730,27 @@ function OutageTableRow({
             >
               <History className="h-4 w-4" aria-hidden />
             </Link>
+          ) : null}
+          {canManage && showGenerateTicket && onGenerateTicket ? (
+            <Button
+              type="button"
+              size="sm"
+              variant="secondary"
+              className="!h-8 !px-2 !text-[11px]"
+              onClick={() => onGenerateTicket(row)}
+            >
+              {row.ticket_code ? 'Ticket / evento' : 'Generar ticket'}
+            </Button>
+          ) : null}
+          {showGenerateTicket && row.ticket_code && onDownloadTicketImage ? (
+            <IconButton
+              label={`Descargar imagen ${row.ticket_code}`}
+              onClick={() => onDownloadTicketImage(row.incident_id)}
+              disabled={pngBusy}
+              className="h-8 w-8 text-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none dark:text-teal-300"
+            >
+              <ImageDown className="h-4 w-4" aria-hidden />
+            </IconButton>
           ) : null}
           <IconButton
             label={canManage ? 'Gestionar' : 'Ver detalle'}
