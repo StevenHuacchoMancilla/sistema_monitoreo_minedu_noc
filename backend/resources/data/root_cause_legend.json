@@ -1,682 +1,682 @@
 [
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "MN01",
-    "segment": "MN · Mininodo de Distribución",
-    "cause": "Falla del equipo activo del mininodo",
-    "when": "Switch u OLT remota del mininodo caída o con puertos dañados.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "MN02",
-    "segment": "MN · Mininodo de Distribución",
-    "cause": "Falla de SFP / transceiver del mininodo",
-    "when": "Módulo óptico del mininodo sin luz o con errores.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "MN03",
-    "segment": "MN · Mininodo de Distribución",
-    "cause": "Falla de alimentación del mininodo (fuente o POE)",
-    "when": "La fuente o el inyector POE no entrega energía.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "MN04",
-    "segment": "MN · Mininodo de Distribución",
-    "cause": "Interrupción del suministro eléctrico en el mininodo",
-    "when": "Corte de la red eléctrica que alimenta el mininodo.",
-    "attention": "PINT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "MN05",
-    "segment": "MN · Mininodo de Distribución",
-    "cause": "Falla del sistema solar o de baterías del mininodo",
-    "when": "Panel, controlador de carga, inversor o baterías sin capacidad.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "MN06",
-    "segment": "MN · Mininodo de Distribución",
-    "cause": "Robo de equipos o componentes del mininodo",
-    "when": "Sustracción de baterías, paneles, equipos o cables.",
-    "attention": "PINT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "MN07",
-    "segment": "MN · Mininodo de Distribución",
-    "cause": "Gabinete del mininodo deteriorado (humedad, corrosión, calor)",
-    "when": "Condiciones ambientales que dañan los equipos del gabinete.",
-    "attention": "PINT",
-    "agent": "Naturaleza"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "ND01",
-    "segment": "ND · Nodo de Agregación",
-    "cause": "Falla de OLT o tarjeta PON",
-    "when": "La OLT o una tarjeta PON deja de operar o reinicia; afecta a todos los LLEE colgados de ese puerto.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "ND02",
-    "segment": "ND · Nodo de Agregación",
-    "cause": "Falla de módulo óptico SFP / transceiver en el nodo",
-    "when": "SFP sin luz, con potencia fuera de rango o con errores.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "ND03",
-    "segment": "ND · Nodo de Agregación",
-    "cause": "Falla de switch o equipo de agregación del nodo",
-    "when": "Equipo activo de agregación caído o con puertos dañados.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "ND04",
-    "segment": "ND · Nodo de Agregación",
-    "cause": "Falla de ODF o patch cord en el nodo",
-    "when": "Conector sucio, roto o mal conectado en el ODF del nodo.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "ND05",
-    "segment": "ND · Nodo de Agregación",
-    "cause": "Interrupción del suministro eléctrico en el nodo",
-    "when": "Corte de la concesionaria que agota el respaldo del nodo.",
-    "attention": "PINT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "ND06",
-    "segment": "ND · Nodo de Agregación",
-    "cause": "Falla del respaldo energético del nodo (baterías, UPS o rectificador)",
-    "when": "El respaldo no sostiene la carga durante un corte de energía.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "ND07",
-    "segment": "ND · Nodo de Agregación",
-    "cause": "Falla del grupo electrógeno del nodo",
-    "when": "El GE no arranca, no transfiere o se queda sin combustible.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G1",
-    "group_name": "01 · Infraestructura de Red",
-    "code": "ND08",
-    "segment": "ND · Nodo de Agregación",
-    "cause": "Falla de climatización del nodo (sobretemperatura)",
-    "when": "Aire acondicionado detenido; los equipos se apagan por temperatura.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G2",
-    "group_name": "02 · Planta Externa - Transporte",
-    "code": "TR01",
-    "segment": "TR · Red Troncal",
-    "cause": "Corte de FO troncal por obras o trabajos de terceros",
-    "when": "Maquinaria, obras viales u otras empresas cortan o dañan el cable.",
-    "attention": "PEXT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G2",
-    "group_name": "02 · Planta Externa - Transporte",
-    "code": "TR02",
-    "segment": "TR · Red Troncal",
-    "cause": "Corte de FO troncal por vandalismo o robo de cable",
-    "when": "Corte intencional o sustracción del cable.",
-    "attention": "PEXT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G2",
-    "group_name": "02 · Planta Externa - Transporte",
-    "code": "TR03",
-    "segment": "TR · Red Troncal",
-    "cause": "Daño por roedores o fauna en la red troncal",
-    "when": "Mordeduras de roedores, aves u otra fauna.",
-    "attention": "PEXT",
-    "agent": "Naturaleza"
-  },
-  {
-    "group_code": "G2",
-    "group_name": "02 · Planta Externa - Transporte",
-    "code": "TR04",
-    "segment": "TR · Red Troncal",
-    "cause": "Caída o reubicación de postes de la concesionaria",
-    "when": "La concesionaria mueve o pierde postes y el cable queda cortado o tensado.",
-    "attention": "PEXT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G2",
-    "group_name": "02 · Planta Externa - Transporte",
-    "code": "TR05",
-    "segment": "TR · Red Troncal",
-    "cause": "Caída de árboles o ramas sobre el tendido troncal",
-    "when": "Vegetación que rompe o tensiona el cable.",
-    "attention": "PEXT",
-    "agent": "Naturaleza"
-  },
-  {
-    "group_code": "G2",
-    "group_name": "02 · Planta Externa - Transporte",
-    "code": "TR06",
-    "segment": "TR · Red Troncal",
-    "cause": "Atenuación elevada en mufa troncal",
-    "when": "Empalme degradado, ingreso de humedad o mufa abierta.",
-    "attention": "PEXT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G2",
-    "group_name": "02 · Planta Externa - Transporte",
-    "code": "TR07",
-    "segment": "TR · Red Troncal",
-    "cause": "Atenuación elevada en tramo de cable troncal",
-    "when": "Macrocurvatura, cable aplastado o fibra degradada.",
-    "attention": "PEXT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G2",
-    "group_name": "02 · Planta Externa - Transporte",
-    "code": "TR08",
-    "segment": "TR · Red Troncal",
-    "cause": "Instalación deficiente en la troncal (vano bajo, herrajes)",
-    "when": "Cable a baja altura, herrajes flojos o tendido fuera de norma.",
-    "attention": "PEXT",
-    "agent": "Instalación deficiente"
-  },
-  {
-    "group_code": "G2",
-    "group_name": "02 · Planta Externa - Transporte",
-    "code": "TR09",
-    "segment": "TR · Red Troncal",
-    "cause": "Falla de equipo DWDM / transporte",
-    "when": "Equipo de transmisión del backbone sin servicio.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G2",
-    "group_name": "02 · Planta Externa - Transporte",
-    "code": "TR10",
-    "segment": "TR · Red Troncal",
-    "cause": "Degradación en la red del proveedor de transporte",
-    "when": "Latencia, pérdida de paquetes o intermitencia atribuible al transportista.",
-    "attention": "RED",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G3",
-    "group_name": "02 · Planta Externa - Distribución",
-    "code": "RD01",
-    "segment": "RD · Red de Distribución",
-    "cause": "Corte de FO de distribución por obras o terceros",
-    "when": "Daño del cable entre el nodo o mininodo y la NAP por trabajos de terceros.",
-    "attention": "PEXT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G3",
-    "group_name": "02 · Planta Externa - Distribución",
-    "code": "RD02",
-    "segment": "RD · Red de Distribución",
-    "cause": "Corte de FO de distribución por vandalismo",
-    "when": "Corte intencional del cable de distribución.",
-    "attention": "PEXT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G3",
-    "group_name": "02 · Planta Externa - Distribución",
-    "code": "RD03",
-    "segment": "RD · Red de Distribución",
-    "cause": "Daño por roedores o fauna en la red de distribución",
-    "when": "Mordeduras de roedores u otra fauna.",
-    "attention": "PEXT",
-    "agent": "Naturaleza"
-  },
-  {
-    "group_code": "G3",
-    "group_name": "02 · Planta Externa - Distribución",
-    "code": "RD04",
-    "segment": "RD · Red de Distribución",
-    "cause": "Caída de árboles o reubicación de postes en la distribución",
-    "when": "Vegetación o cambio de postería que corta o tensa el cable.",
-    "attention": "PEXT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G3",
-    "group_name": "02 · Planta Externa - Distribución",
-    "code": "RD05",
-    "segment": "RD · Red de Distribución",
-    "cause": "Atenuación elevada en mufa o empalme de distribución",
-    "when": "Empalme degradado o mufa con humedad.",
-    "attention": "PEXT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G3",
-    "group_name": "02 · Planta Externa - Distribución",
-    "code": "RD06",
-    "segment": "RD · Red de Distribución",
-    "cause": "Atenuación elevada en tramo de cable de distribución",
-    "when": "Curvaturas, aplastamiento o fibra degradada.",
-    "attention": "PEXT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G3",
-    "group_name": "02 · Planta Externa - Distribución",
-    "code": "RD07",
-    "segment": "RD · Red de Distribución",
-    "cause": "Falla de caja NAP o splitter",
-    "when": "Splitter dañado, caja abierta o con humedad; afecta a varios LLEE de la misma NAP.",
-    "attention": "PEXT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G3",
-    "group_name": "02 · Planta Externa - Distribución",
-    "code": "RD08",
-    "segment": "RD · Red de Distribución",
-    "cause": "Instalación deficiente de la distribución (vano bajo)",
-    "when": "Cable de distribución a baja altura o fuera de norma.",
-    "attention": "PEXT",
-    "agent": "Instalación deficiente"
-  },
-  {
-    "group_code": "G4",
-    "group_name": "03 · Planta Externa - Acometida",
-    "code": "UM01",
-    "segment": "UM · Última Milla",
-    "cause": "Corte de FO de acometida por obras o terceros",
-    "when": "Vehículos, obras u otras empresas cortan o dañan el drop entre la NAP y el local.",
-    "attention": "PEXT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G4",
-    "group_name": "03 · Planta Externa - Acometida",
-    "code": "UM02",
-    "segment": "UM · Última Milla",
-    "cause": "Corte de FO de acometida por vandalismo o robo de cable",
-    "when": "Corte intencional o sustracción del drop.",
-    "attention": "PEXT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G4",
-    "group_name": "03 · Planta Externa - Acometida",
-    "code": "UM03",
-    "segment": "UM · Última Milla",
-    "cause": "Daño por roedores o fauna en la acometida",
-    "when": "Mordeduras de roedores, aves u otra fauna.",
-    "attention": "PEXT",
-    "agent": "Naturaleza"
-  },
-  {
-    "group_code": "G4",
-    "group_name": "03 · Planta Externa - Acometida",
-    "code": "UM04",
-    "segment": "UM · Última Milla",
-    "cause": "Caída de árboles o reubicación de postes en la acometida",
-    "when": "Vegetación o cambio de postería que corta o tensa el drop.",
-    "attention": "PEXT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G4",
-    "group_name": "03 · Planta Externa - Acometida",
-    "code": "UM05",
-    "segment": "UM · Última Milla",
-    "cause": "Atenuación elevada en empalme o conector de la acometida",
-    "when": "Empalme o conector mecánico degradado, con humedad o mal ejecutado.",
-    "attention": "PEXT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G4",
-    "group_name": "03 · Planta Externa - Acometida",
-    "code": "UM06",
-    "segment": "UM · Última Milla",
-    "cause": "Atenuación elevada en tramo de cable de acometida",
-    "when": "Curvaturas, aplastamiento o fibra degradada en el drop.",
-    "attention": "PEXT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G4",
-    "group_name": "03 · Planta Externa - Acometida",
-    "code": "UM07",
-    "segment": "UM · Última Milla",
-    "cause": "Instalación deficiente de la acometida (vano bajo, sin tensores)",
-    "when": "Drop a baja altura, sin tensores o fuera de norma.",
-    "attention": "PEXT",
-    "agent": "Instalación deficiente"
-  },
-  {
-    "group_code": "G4",
-    "group_name": "03 · Planta Externa - Acometida",
-    "code": "UM08",
-    "segment": "UM · Última Milla",
-    "cause": "Falla del conector del drop en el puerto de la NAP",
-    "when": "Conector sucio, roto o desconectado en la NAP; afecta a un solo LLEE.",
-    "attention": "PEXT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G4",
-    "group_name": "03 · Planta Externa - Acometida",
-    "code": "UM09",
-    "segment": "UM · Última Milla",
-    "cause": "Falla de la roseta óptica",
-    "when": "Roseta rota, conector dañado o fibra quebrada en la terminación del local.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE01",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Falla de ONU / ONT",
-    "when": "ONT apagada, en LOS o con fallas de hardware.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE02",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Falla de router",
-    "when": "Router sin servicio, reiniciándose o con hardware dañado.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE03",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Falla de punto de acceso (AP)",
-    "when": "AP apagado o sin emitir Wi-Fi.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE04",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Falla de patch cord óptico o UTP interno",
-    "when": "Cable interno dañado entre roseta, ONT, router o AP.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE05",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Corte de energía en el local educativo",
-    "when": "Sin luz en el local (concesionaria o corte del propio local).",
-    "attention": "PINT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE06",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Falla de la instalación eléctrica interna del local",
-    "when": "Tomacorriente, breaker, tablero o estabilizador del local defectuoso.",
-    "attention": "PINT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE07",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Manipulación indebida - desconexión",
-    "when": "Equipos desconectados o apagados por personal del local o terceros.",
-    "attention": "PINT",
-    "agent": "Usuario"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE08",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Manipulación indebida - daño del equipo",
-    "when": "Equipos golpeados, mojados o dañados en el local.",
-    "attention": "PINT",
-    "agent": "Usuario"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE09",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Falla de equipos propios del local (switch, AP, PC)",
-    "when": "La falla está en la red LAN o equipos del colegio, no en el servicio.",
-    "attention": "PINT",
-    "agent": "Usuario"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE10",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Robo de equipos en el local educativo",
-    "when": "Sustracción de ONT, router, AP u otros equipos del servicio.",
-    "attention": "PINT",
-    "agent": "Terceros"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE11",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Local cerrado o acceso restringido",
-    "when": "La cuadrilla no puede ingresar (vacaciones, sin responsable, sin llave).",
-    "attention": "PINT",
-    "agent": "Usuario"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE12",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Falla del inversor / cargador solar",
-    "when": "Inversor apagado, bloqueado por código de error en pantalla o con daño en tarjeta de circuitería interna.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE13",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Falla del Sistema de Gestión de Baterías (Felicity)",
-    "when": "Error de comunicación BMS-inversor, bloqueo por protección térmica o fallo interno de gestión de celdas.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE14",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Falla de cableado y conexiones",
-    "when": "Cables solares cortados, terminales flojos, bornes sulfatados, falsos contactos.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G5",
-    "group_name": "04 · Cliente",
-    "code": "LE15",
-    "segment": "LE · Red Interna del Local Educativo",
-    "cause": "Falla de UPS",
-    "when": "Avería técnica, daño físico o necesidad de cambio en la UPS o en sus baterías internas de respaldo.",
-    "attention": "PINT",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G6",
-    "group_name": "05 · Servicio y Red Lógica",
-    "code": "SV01",
-    "segment": "SV · Servicio / Red lógica",
-    "cause": "Falla de configuración de OLT / ONU",
-    "when": "Perfil, VLAN o servicio mal configurado o desprovisionado.",
-    "attention": "RED",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G6",
-    "group_name": "05 · Servicio y Red Lógica",
-    "code": "SV02",
-    "segment": "SV · Servicio / Red lógica",
-    "cause": "Configuración NAT / firewall",
-    "when": "Bloqueo de páginas, IP o aplicaciones por configuración.",
-    "attention": "RED",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G6",
-    "group_name": "05 · Servicio y Red Lógica",
-    "code": "SV03",
-    "segment": "SV · Servicio / Red lógica",
-    "cause": "Saturación de red Wi-Fi (2.4 / 5 GHz)",
-    "when": "Demasiados usuarios o equipos de alto consumo en la red inalámbrica.",
-    "attention": "RED",
-    "agent": "Usuario"
-  },
-  {
-    "group_code": "G6",
-    "group_name": "05 · Servicio y Red Lógica",
-    "code": "SV04",
-    "segment": "SV · Servicio / Red lógica",
-    "cause": "Interferencia de canal Wi-Fi",
-    "when": "Canales superpuestos con otras redes cercanas.",
-    "attention": "RED",
-    "agent": "Naturaleza"
-  },
-  {
-    "group_code": "G6",
-    "group_name": "05 · Servicio y Red Lógica",
-    "code": "SV05",
-    "segment": "SV · Servicio / Red lógica",
-    "cause": "Baja cobertura Wi-Fi",
-    "when": "Señal insuficiente en aulas por ubicación u obstáculos.",
-    "attention": "RED",
-    "agent": "Instalación deficiente"
-  },
-  {
-    "group_code": "G6",
-    "group_name": "05 · Servicio y Red Lógica",
-    "code": "SV06",
-    "segment": "SV · Servicio / Red lógica",
-    "cause": "Saturación del enlace (capacidad)",
-    "when": "El ancho de banda contratado no alcanza para la demanda.",
-    "attention": "RED",
-    "agent": "Usuario"
-  },
-  {
-    "group_code": "G6",
-    "group_name": "05 · Servicio y Red Lógica",
-    "code": "SV07",
-    "segment": "SV · Servicio / Red lógica",
-    "cause": "Degradación en última milla (latencia / pérdida de paquetes)",
-    "when": "Intermitencia sin falla física identificada en el acceso.",
-    "attention": "RED",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G6",
-    "group_name": "05 · Servicio y Red Lógica",
-    "code": "SV08",
-    "segment": "SV · Servicio / Red lógica",
-    "cause": "Falla de firmware o software de equipos",
-    "when": "Error de software, actualización fallida o equipo colgado.",
-    "attention": "RED",
-    "agent": "Falla técnica"
-  },
-  {
-    "group_code": "G7",
-    "group_name": "07 · Gestión y Casos Especiales",
-    "code": "GS01",
-    "segment": "GS · Gestión",
-    "cause": "Mantenimiento programado o migración de tecnología",
-    "when": "Corte planificado y comunicado.",
-    "attention": "RED",
-    "agent": "Gestión"
-  },
-  {
-    "group_code": "G7",
-    "group_name": "07 · Gestión y Casos Especiales",
-    "code": "GS02",
-    "segment": "GS · Gestión",
-    "cause": "Sin falla detectada / falsa avería",
-    "when": "Al llegar o verificar, el servicio opera con normalidad.",
-    "attention": "RED",
-    "agent": "Gestión"
-  },
-  {
-    "group_code": "G7",
-    "group_name": "07 · Gestión y Casos Especiales",
-    "code": "GS03",
-    "segment": "GS · Gestión",
-    "cause": "Causa no determinada (comentario obligatorio)",
-    "when": "Solo cuando no aplica ningún otro código. Se revisa cada mes.",
-    "attention": "Según diagnóstico",
-    "agent": "Gestión"
-  }
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "MN01",
+        "segment": "MN · Mininodo de Distribución",
+        "cause": "Falla del equipo activo del mininodo",
+        "when": "Switch u OLT remota del mininodo caída o con puertos dañados.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "MN02",
+        "segment": "MN · Mininodo de Distribución",
+        "cause": "Falla de SFP \/ transceiver del mininodo",
+        "when": "Módulo óptico del mininodo sin luz o con errores.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "MN03",
+        "segment": "MN · Mininodo de Distribución",
+        "cause": "Falla de alimentación del mininodo (fuente o POE)",
+        "when": "La fuente o el inyector POE no entrega energía.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "MN04",
+        "segment": "MN · Mininodo de Distribución",
+        "cause": "Interrupción del suministro eléctrico en el mininodo",
+        "when": "Corte de la red eléctrica que alimenta el mininodo.",
+        "attention": "PINT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "MN05",
+        "segment": "MN · Mininodo de Distribución",
+        "cause": "Falla del sistema solar o de baterías del mininodo",
+        "when": "Panel, controlador de carga, inversor o baterías sin capacidad.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "MN06",
+        "segment": "MN · Mininodo de Distribución",
+        "cause": "Robo de equipos o componentes del mininodo",
+        "when": "Sustracción de baterías, paneles, equipos o cables.",
+        "attention": "PINT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "MN07",
+        "segment": "MN · Mininodo de Distribución",
+        "cause": "Gabinete del mininodo deteriorado (humedad, corrosión, calor)",
+        "when": "Condiciones ambientales que dañan los equipos del gabinete.",
+        "attention": "PINT",
+        "agent": "Naturaleza"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "ND01",
+        "segment": "ND · Nodo de Agregación",
+        "cause": "Falla de OLT o tarjeta PON",
+        "when": "La OLT o una tarjeta PON deja de operar o reinicia; afecta a todos los LLEE colgados de ese puerto.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "ND02",
+        "segment": "ND · Nodo de Agregación",
+        "cause": "Falla de módulo óptico SFP \/ transceiver en el nodo",
+        "when": "SFP sin luz, con potencia fuera de rango o con errores.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "ND03",
+        "segment": "ND · Nodo de Agregación",
+        "cause": "Falla de switch o equipo de agregación del nodo",
+        "when": "Equipo activo de agregación caído o con puertos dañados.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "ND04",
+        "segment": "ND · Nodo de Agregación",
+        "cause": "Falla de ODF o patch cord en el nodo",
+        "when": "Conector sucio, roto o mal conectado en el ODF del nodo.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "ND05",
+        "segment": "ND · Nodo de Agregación",
+        "cause": "Interrupción del suministro eléctrico en el nodo",
+        "when": "Corte de la concesionaria que agota el respaldo del nodo.",
+        "attention": "PINT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "ND06",
+        "segment": "ND · Nodo de Agregación",
+        "cause": "Falla del respaldo energético del nodo (baterías, UPS o rectificador)",
+        "when": "El respaldo no sostiene la carga durante un corte de energía.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "ND07",
+        "segment": "ND · Nodo de Agregación",
+        "cause": "Falla del grupo electrógeno del nodo",
+        "when": "El GE no arranca, no transfiere o se queda sin combustible.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G1",
+        "group_name": "01 · Infraestructura de Red",
+        "code": "ND08",
+        "segment": "ND · Nodo de Agregación",
+        "cause": "Falla de climatización del nodo (sobretemperatura)",
+        "when": "Aire acondicionado detenido; los equipos se apagan por temperatura.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G2",
+        "group_name": "02 · Planta Externa - Transporte",
+        "code": "TR01",
+        "segment": "TR · Red Troncal",
+        "cause": "Corte de FO troncal por obras o trabajos de terceros",
+        "when": "Maquinaria, obras viales u otras empresas cortan o dañan el cable.",
+        "attention": "PEXT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G2",
+        "group_name": "02 · Planta Externa - Transporte",
+        "code": "TR02",
+        "segment": "TR · Red Troncal",
+        "cause": "Corte de FO troncal por vandalismo o robo de cable",
+        "when": "Corte intencional o sustracción del cable.",
+        "attention": "PEXT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G2",
+        "group_name": "02 · Planta Externa - Transporte",
+        "code": "TR03",
+        "segment": "TR · Red Troncal",
+        "cause": "Daño por roedores o fauna en la red troncal",
+        "when": "Mordeduras de roedores, aves u otra fauna.",
+        "attention": "PEXT",
+        "agent": "Naturaleza"
+    },
+    {
+        "group_code": "G2",
+        "group_name": "02 · Planta Externa - Transporte",
+        "code": "TR04",
+        "segment": "TR · Red Troncal",
+        "cause": "Caída o reubicación de postes de la concesionaria",
+        "when": "La concesionaria mueve o pierde postes y el cable queda cortado o tensado.",
+        "attention": "PEXT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G2",
+        "group_name": "02 · Planta Externa - Transporte",
+        "code": "TR05",
+        "segment": "TR · Red Troncal",
+        "cause": "Caída de árboles o ramas sobre el tendido troncal",
+        "when": "Vegetación que rompe o tensiona el cable.",
+        "attention": "PEXT",
+        "agent": "Naturaleza"
+    },
+    {
+        "group_code": "G2",
+        "group_name": "02 · Planta Externa - Transporte",
+        "code": "TR06",
+        "segment": "TR · Red Troncal",
+        "cause": "Atenuación elevada en mufa troncal",
+        "when": "Empalme degradado, ingreso de humedad o mufa abierta.",
+        "attention": "PEXT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G2",
+        "group_name": "02 · Planta Externa - Transporte",
+        "code": "TR07",
+        "segment": "TR · Red Troncal",
+        "cause": "Atenuación elevada en tramo de cable troncal",
+        "when": "Macrocurvatura, cable aplastado o fibra degradada.",
+        "attention": "PEXT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G2",
+        "group_name": "02 · Planta Externa - Transporte",
+        "code": "TR08",
+        "segment": "TR · Red Troncal",
+        "cause": "Instalación deficiente en la troncal (vano bajo, herrajes)",
+        "when": "Cable a baja altura, herrajes flojos o tendido fuera de norma.",
+        "attention": "PEXT",
+        "agent": "Instalación deficiente"
+    },
+    {
+        "group_code": "G2",
+        "group_name": "02 · Planta Externa - Transporte",
+        "code": "TR09",
+        "segment": "TR · Red Troncal",
+        "cause": "Falla de equipo DWDM \/ transporte",
+        "when": "Equipo de transmisión del backbone sin servicio.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G2",
+        "group_name": "02 · Planta Externa - Transporte",
+        "code": "TR10",
+        "segment": "TR · Red Troncal",
+        "cause": "Degradación en la red del proveedor de transporte",
+        "when": "Latencia, pérdida de paquetes o intermitencia atribuible al transportista.",
+        "attention": "RED",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G3",
+        "group_name": "02 · Planta Externa - Distribución",
+        "code": "RD01",
+        "segment": "RD · Red de Distribución",
+        "cause": "Corte de FO de distribución por obras o terceros",
+        "when": "Daño del cable entre el nodo o mininodo y la NAP por trabajos de terceros.",
+        "attention": "PEXT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G3",
+        "group_name": "02 · Planta Externa - Distribución",
+        "code": "RD02",
+        "segment": "RD · Red de Distribución",
+        "cause": "Corte de FO de distribución por vandalismo",
+        "when": "Corte intencional del cable de distribución.",
+        "attention": "PEXT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G3",
+        "group_name": "02 · Planta Externa - Distribución",
+        "code": "RD03",
+        "segment": "RD · Red de Distribución",
+        "cause": "Daño por roedores o fauna en la red de distribución",
+        "when": "Mordeduras de roedores u otra fauna.",
+        "attention": "PEXT",
+        "agent": "Naturaleza"
+    },
+    {
+        "group_code": "G3",
+        "group_name": "02 · Planta Externa - Distribución",
+        "code": "RD04",
+        "segment": "RD · Red de Distribución",
+        "cause": "Caída de árboles o reubicación de postes en la distribución",
+        "when": "Vegetación o cambio de postería que corta o tensa el cable.",
+        "attention": "PEXT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G3",
+        "group_name": "02 · Planta Externa - Distribución",
+        "code": "RD05",
+        "segment": "RD · Red de Distribución",
+        "cause": "Atenuación elevada en mufa o empalme de distribución",
+        "when": "Empalme degradado o mufa con humedad.",
+        "attention": "PEXT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G3",
+        "group_name": "02 · Planta Externa - Distribución",
+        "code": "RD06",
+        "segment": "RD · Red de Distribución",
+        "cause": "Atenuación elevada en tramo de cable de distribución",
+        "when": "Curvaturas, aplastamiento o fibra degradada.",
+        "attention": "PEXT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G3",
+        "group_name": "02 · Planta Externa - Distribución",
+        "code": "RD07",
+        "segment": "RD · Red de Distribución",
+        "cause": "Falla de caja NAP o splitter",
+        "when": "Splitter dañado, caja abierta o con humedad; afecta a varios LLEE de la misma NAP.",
+        "attention": "PEXT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G3",
+        "group_name": "02 · Planta Externa - Distribución",
+        "code": "RD08",
+        "segment": "RD · Red de Distribución",
+        "cause": "Instalación deficiente de la distribución (vano bajo)",
+        "when": "Cable de distribución a baja altura o fuera de norma.",
+        "attention": "PEXT",
+        "agent": "Instalación deficiente"
+    },
+    {
+        "group_code": "G4",
+        "group_name": "03 · Planta Externa - Acometida",
+        "code": "UM01",
+        "segment": "UM · Última Milla",
+        "cause": "Corte de FO de acometida por obras o terceros",
+        "when": "Vehículos, obras u otras empresas cortan o dañan el drop entre la NAP y el local.",
+        "attention": "PEXT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G4",
+        "group_name": "03 · Planta Externa - Acometida",
+        "code": "UM02",
+        "segment": "UM · Última Milla",
+        "cause": "Corte de FO de acometida por vandalismo o robo de cable",
+        "when": "Corte intencional o sustracción del drop.",
+        "attention": "PEXT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G4",
+        "group_name": "03 · Planta Externa - Acometida",
+        "code": "UM03",
+        "segment": "UM · Última Milla",
+        "cause": "Daño por roedores o fauna en la acometida",
+        "when": "Mordeduras de roedores, aves u otra fauna.",
+        "attention": "PEXT",
+        "agent": "Naturaleza"
+    },
+    {
+        "group_code": "G4",
+        "group_name": "03 · Planta Externa - Acometida",
+        "code": "UM04",
+        "segment": "UM · Última Milla",
+        "cause": "Caída de árboles o reubicación de postes en la acometida",
+        "when": "Vegetación o cambio de postería que corta o tensa el drop.",
+        "attention": "PEXT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G4",
+        "group_name": "03 · Planta Externa - Acometida",
+        "code": "UM05",
+        "segment": "UM · Última Milla",
+        "cause": "Atenuación elevada en empalme o conector de la acometida",
+        "when": "Empalme o conector mecánico degradado, con humedad o mal ejecutado.",
+        "attention": "PEXT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G4",
+        "group_name": "03 · Planta Externa - Acometida",
+        "code": "UM06",
+        "segment": "UM · Última Milla",
+        "cause": "Atenuación elevada en tramo de cable de acometida",
+        "when": "Curvaturas, aplastamiento o fibra degradada en el drop.",
+        "attention": "PEXT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G4",
+        "group_name": "03 · Planta Externa - Acometida",
+        "code": "UM07",
+        "segment": "UM · Última Milla",
+        "cause": "Instalación deficiente de la acometida (vano bajo, sin tensores)",
+        "when": "Drop a baja altura, sin tensores o fuera de norma.",
+        "attention": "PEXT",
+        "agent": "Instalación deficiente"
+    },
+    {
+        "group_code": "G4",
+        "group_name": "03 · Planta Externa - Acometida",
+        "code": "UM08",
+        "segment": "UM · Última Milla",
+        "cause": "Falla del conector del drop en el puerto de la NAP",
+        "when": "Conector sucio, roto o desconectado en la NAP; afecta a un solo LLEE.",
+        "attention": "PEXT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G4",
+        "group_name": "03 · Planta Externa - Acometida",
+        "code": "UM09",
+        "segment": "UM · Última Milla",
+        "cause": "Falla de la roseta óptica",
+        "when": "Roseta rota, conector dañado o fibra quebrada en la terminación del local.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE01",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Falla de ONU \/ ONT",
+        "when": "ONT apagada, en LOS o con fallas de hardware.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE02",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Falla de router",
+        "when": "Router sin servicio, reiniciándose o con hardware dañado.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE03",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Falla de punto de acceso (AP)",
+        "when": "AP apagado o sin emitir Wi-Fi.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE04",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Falla de patch cord óptico o UTP interno",
+        "when": "Cable interno dañado entre roseta, ONT, router o AP.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE05",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Corte de energía en el local educativo",
+        "when": "Sin luz en el local (concesionaria o corte del propio local).",
+        "attention": "PINT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE06",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Falla de la instalación eléctrica interna del local",
+        "when": "Tomacorriente, breaker, tablero o estabilizador del local defectuoso.",
+        "attention": "PINT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE07",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Manipulación indebida - desconexión",
+        "when": "Equipos desconectados o apagados por personal del local o terceros.",
+        "attention": "PINT",
+        "agent": "Usuario"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE08",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Manipulación indebida - daño del equipo",
+        "when": "Equipos golpeados, mojados o dañados en el local.",
+        "attention": "PINT",
+        "agent": "Usuario"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE09",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Falla de equipos propios del local (switch, AP, PC)",
+        "when": "La falla está en la red LAN o equipos del colegio, no en el servicio.",
+        "attention": "PINT",
+        "agent": "Usuario"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE10",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Robo de equipos en el local educativo",
+        "when": "Sustracción de ONT, router, AP u otros equipos del servicio.",
+        "attention": "PINT",
+        "agent": "Terceros"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE11",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Local cerrado o acceso restringido",
+        "when": "La cuadrilla no puede ingresar (vacaciones, sin responsable, sin llave).",
+        "attention": "PINT",
+        "agent": "Usuario"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE12",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Falla del inversor \/ cargador solar",
+        "when": "Inversor apagado, bloqueado por código de error en pantalla o con daño en tarjeta de circuitería interna.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE13",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Falla del Sistema de Gestión de Baterías (Felicity)",
+        "when": "Error de comunicación BMS-inversor, bloqueo por protección térmica o fallo interno de gestión de celdas.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE14",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Falla de cableado y conexiones",
+        "when": "Cables solares cortados, terminales flojos, bornes sulfatados, falsos contactos.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G5",
+        "group_name": "04 · Cliente",
+        "code": "LE15",
+        "segment": "LE · Red Interna del Local Educativo",
+        "cause": "Falla de UPS",
+        "when": "Avería técnica, daño físico o necesidad de cambio en la UPS o en sus baterías internas de respaldo.",
+        "attention": "PINT",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G6",
+        "group_name": "05 · Servicio y Red Lógica",
+        "code": "SV01",
+        "segment": "SV · Servicio \/ Red lógica",
+        "cause": "Falla de configuración de OLT \/ ONU",
+        "when": "Perfil, VLAN o servicio mal configurado o desprovisionado.",
+        "attention": "RED",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G6",
+        "group_name": "05 · Servicio y Red Lógica",
+        "code": "SV02",
+        "segment": "SV · Servicio \/ Red lógica",
+        "cause": "Configuración NAT \/ firewall",
+        "when": "Bloqueo de páginas, IP o aplicaciones por configuración.",
+        "attention": "RED",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G6",
+        "group_name": "05 · Servicio y Red Lógica",
+        "code": "SV03",
+        "segment": "SV · Servicio \/ Red lógica",
+        "cause": "Saturación de red Wi-Fi (2.4 \/ 5 GHz)",
+        "when": "Demasiados usuarios o equipos de alto consumo en la red inalámbrica.",
+        "attention": "RED",
+        "agent": "Usuario"
+    },
+    {
+        "group_code": "G6",
+        "group_name": "05 · Servicio y Red Lógica",
+        "code": "SV04",
+        "segment": "SV · Servicio \/ Red lógica",
+        "cause": "Interferencia de canal Wi-Fi",
+        "when": "Canales superpuestos con otras redes cercanas.",
+        "attention": "RED",
+        "agent": "Naturaleza"
+    },
+    {
+        "group_code": "G6",
+        "group_name": "05 · Servicio y Red Lógica",
+        "code": "SV05",
+        "segment": "SV · Servicio \/ Red lógica",
+        "cause": "Baja cobertura Wi-Fi",
+        "when": "Señal insuficiente en aulas por ubicación u obstáculos.",
+        "attention": "RED",
+        "agent": "Instalación deficiente"
+    },
+    {
+        "group_code": "G6",
+        "group_name": "05 · Servicio y Red Lógica",
+        "code": "SV06",
+        "segment": "SV · Servicio \/ Red lógica",
+        "cause": "Saturación del enlace (capacidad)",
+        "when": "El ancho de banda contratado no alcanza para la demanda.",
+        "attention": "RED",
+        "agent": "Usuario"
+    },
+    {
+        "group_code": "G6",
+        "group_name": "05 · Servicio y Red Lógica",
+        "code": "SV07",
+        "segment": "SV · Servicio \/ Red lógica",
+        "cause": "Degradación en última milla (latencia \/ pérdida de paquetes)",
+        "when": "Intermitencia sin falla física identificada en el acceso.",
+        "attention": "RED",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G6",
+        "group_name": "05 · Servicio y Red Lógica",
+        "code": "SV08",
+        "segment": "SV · Servicio \/ Red lógica",
+        "cause": "Falla de firmware o software de equipos",
+        "when": "Error de software, actualización fallida o equipo colgado.",
+        "attention": "RED",
+        "agent": "Falla técnica"
+    },
+    {
+        "group_code": "G7",
+        "group_name": "07 · Gestión y Casos Especiales",
+        "code": "GS01",
+        "segment": "GS · Gestión",
+        "cause": "Mantenimiento programado o migración de tecnología",
+        "when": "Corte planificado y comunicado.",
+        "attention": "RED",
+        "agent": "Gestión"
+    },
+    {
+        "group_code": "G7",
+        "group_name": "07 · Gestión y Casos Especiales",
+        "code": "GS02",
+        "segment": "GS · Gestión",
+        "cause": "Sin falla detectada \/ falsa avería",
+        "when": "Al llegar o verificar, el servicio opera con normalidad.",
+        "attention": "RED",
+        "agent": "Gestión"
+    },
+    {
+        "group_code": "G7",
+        "group_name": "07 · Gestión y Casos Especiales",
+        "code": "GS03",
+        "segment": "GS · Gestión",
+        "cause": "Causa no determinada (comentario obligatorio)",
+        "when": "Solo cuando no aplica ningún otro código. Se revisa cada mes.",
+        "attention": "Según diagnóstico",
+        "agent": "Gestión"
+    }
 ]
