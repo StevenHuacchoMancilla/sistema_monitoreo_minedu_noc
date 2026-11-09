@@ -6,6 +6,7 @@ import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
 import { SectionCard } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
 import {
   DataTableContainer,
@@ -81,6 +82,8 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
   const [ticketRow, setTicketRow] = useState<QueueRow | null>(null)
   const [pngBusyId, setPngBusyId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
+  const [closeRow, setCloseRow] = useState<QueueRow | null>(null)
+  const [closing, setClosing] = useState(false)
 
   const query = useQuery({
     queryKey: ['incidents', 'queue', kind],
@@ -200,14 +203,7 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                           </Button>
                         )}
                         {canManage && kind === 'pendiente-cierre' ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              if (!window.confirm('¿Cerrar este ticket operativamente?')) return
-                              void endpoints.closeIncidentTicket(row.incident_id).then(refresh)
-                            }}
-                          >
+                          <Button size="sm" variant="secondary" onClick={() => setCloseRow(row)}>
                             Cerrar ticket
                           </Button>
                         ) : null}
@@ -296,6 +292,40 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
           }}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={closeRow !== null}
+        title="Cerrar ticket"
+        description={
+          closeRow
+            ? `Se cerrará el caso${closeRow.cid ? ` CID ${closeRow.cid}` : ''}${
+                closeRow.local_educativo ? ` · ${closeRow.local_educativo}` : ''
+              }. El ticket sale de Pendiente de cierre.`
+            : undefined
+        }
+        confirmLabel="Cerrar ticket"
+        cancelLabel="Cancelar"
+        tone="danger"
+        loading={closing}
+        onClose={() => {
+          if (!closing) setCloseRow(null)
+        }}
+        onConfirm={() => {
+          if (!closeRow) return
+          setClosing(true)
+          setActionError(null)
+          void endpoints
+            .closeIncidentTicket(closeRow.incident_id)
+            .then(() => {
+              setCloseRow(null)
+              refresh()
+            })
+            .catch((err: unknown) => {
+              setActionError(err instanceof Error ? err.message : 'No se pudo cerrar el ticket.')
+            })
+            .finally(() => setClosing(false))
+        }}
+      />
     </AppLayout>
   )
 }

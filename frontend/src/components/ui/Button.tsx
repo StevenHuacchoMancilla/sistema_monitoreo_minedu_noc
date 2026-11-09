@@ -1,4 +1,4 @@
-import type { ButtonHTMLAttributes, ReactNode } from 'react'
+import type { ButtonHTMLAttributes, ReactNode, Ref } from 'react'
 import { Loader2 } from 'lucide-react'
 
 const variants = {
@@ -23,15 +23,18 @@ export function Button({
   loading = false,
   className = '',
   disabled,
+  ref,
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & {
   children: ReactNode
   variant?: keyof typeof variants
   size?: keyof typeof sizes
   loading?: boolean
+  ref?: Ref<HTMLButtonElement>
 }) {
   return (
     <button
+      ref={ref}
       className={`inline-flex items-center justify-center font-semibold transition-colors duration-150 disabled:pointer-events-none disabled:opacity-50 ${variants[variant]} ${sizes[size]} ${className}`}
       disabled={disabled || loading}
       {...props}

@@ -7,6 +7,7 @@ import { endpoints } from '../../../api/endpoints'
 import { ClassificationBadge, FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/StatusBadges'
 import { Badge } from '../../../components/ui/SoftBadge'
 import { Button } from '../../../components/ui/Button'
+import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
 import { IconButton } from '../../../components/ui/IconButton'
 import { FormField, Select } from '../../../components/ui/FormControls'
 import { ErrorState, LoadingState } from '../../../components/ui/States'
@@ -140,6 +141,7 @@ export function IncidentManageModal({
   const [causeText, setCauseText] = useState('')
   const [mineduReason, setMineduReason] = useState<'' | MineduReason>('')
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
+  const [confirmClose, setConfirmClose] = useState(false)
   const initialClassRef = useRef<{
     minedu: '' | MineduReason
     causeGroup: string
@@ -674,9 +676,7 @@ export function IncidentManageModal({
                 variant="secondary"
                 disabled={!data || closeTicket.isPending}
                 loading={closeTicket.isPending}
-                onClick={() => {
-                  if (window.confirm('¿Cerrar este ticket operativamente?')) closeTicket.mutate()
-                }}
+                onClick={() => setConfirmClose(true)}
               >
                 Cerrar ticket
               </Button>
@@ -699,7 +699,34 @@ export function IncidentManageModal({
     </div>
   )
 
-  return createPortal(modal, document.body)
+  return (
+    <>
+      {createPortal(modal, document.body)}
+      <ConfirmDialog
+        open={confirmClose}
+        title="Cerrar ticket"
+        description={
+          data
+            ? `Se cerrará el caso${data.colegio?.cid ? ` CID ${data.colegio.cid}` : ''}${
+                data.colegio?.local_educativo ? ` · ${data.colegio.local_educativo}` : ''
+              }. Esta acción cierra el seguimiento operativo.`
+            : 'Se cerrará el seguimiento operativo de este caso.'
+        }
+        confirmLabel="Cerrar ticket"
+        cancelLabel="Cancelar"
+        tone="danger"
+        loading={closeTicket.isPending}
+        onClose={() => {
+          if (!closeTicket.isPending) setConfirmClose(false)
+        }}
+        onConfirm={() => {
+          closeTicket.mutate(undefined, {
+            onSettled: () => setConfirmClose(false),
+          })
+        }}
+      />
+    </>
+  )
 }
 
 function limaYmd(ms: number): { y: number; m: number; d: number } {
