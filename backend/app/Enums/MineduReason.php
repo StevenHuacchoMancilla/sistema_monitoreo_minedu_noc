@@ -54,4 +54,10 @@ enum MineduReason: string
             self::Queja => ManagementClassification::Complaint,
         };
     }
+
+    /** Caída de enlace y Queja se tratan como incidencia operativa. */
+    public function marksAsIncident(): bool
+    {
+        return $this === self::CaidaEnlace || $this === self::Queja;
+    }
 }

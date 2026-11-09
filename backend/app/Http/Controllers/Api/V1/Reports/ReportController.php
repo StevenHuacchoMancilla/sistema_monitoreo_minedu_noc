@@ -5,12 +5,16 @@ namespace App\Http\Controllers\Api\V1\Reports;
 use App\Domain\Reports\Services\ClosingReportService;
 use App\Domain\Reports\Services\GeneralReportService;
 use App\Domain\Reports\Services\InternetUsageReportService;
+use App\Domain\Reports\Services\ListaLleeDayService;
 use App\Domain\Reports\Services\MineduAttendanceReportService;
 use App\Domain\Reports\Services\OperationalReportService;
+use App\Enums\FollowupStatus;
 use App\Enums\ListaLleeEstado;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
+use App\Enums\MineduReason;
 use App\Http\Controllers\Controller;
+use App\Models\Incident;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -20,6 +24,7 @@ class ReportController extends Controller
 {
     public function __construct(
         private readonly OperationalReportService $operational,
+        private readonly ListaLleeDayService $listaDays,
         private readonly ClosingReportService $closing,
         private readonly GeneralReportService $general,
         private readonly MineduAttendanceReportService $minedu,
@@ -38,9 +43,12 @@ class ReportController extends Controller
             'active_only' => ['nullable', 'boolean'],
             'lista_estado' => ['nullable', Rule::in(ListaLleeEstado::values())],
             'zona' => ['nullable', 'string', 'max:40'],
+            'day' => ['nullable', 'date_format:Y-m-d'],
         ]);
 
-        return response()->json($this->operational->list($data));
+        $day = $data['day'] ?? $this->listaDays->todayDate();
+
+        return response()->json($this->listaDays->reportForDate($day, $data));
     }
 
     public function general(Request $request): JsonResponse
@@ -58,7 +66,9 @@ class ReportController extends Controller
      */
     private function generalFilters(Request $request): array
     {
-        return $request->validate([
+        $mineduAllowed = array_merge(MineduReason::operableValues(), ['SIN_RAZON']);
+
+        $data = $request->validate([
             'period' => ['nullable', 'string', Rule::in(['today', 'yesterday', 'day', 'range', 'all'])],
             'day' => ['nullable', 'date_format:Y-m-d'],
             'from' => ['nullable', 'date_format:Y-m-d'],
@@ -66,13 +76,78 @@ class ReportController extends Controller
             'provincia' => ['nullable', 'string', 'max:120'],
             'distrito' => ['nullable', 'string', 'max:120'],
             'search' => ['nullable', 'string', 'max:120'],
+            // Uno o varios: "CAIDA_ENLACE,QUEJA" o minedu[]=...
+            'minedu' => ['nullable'],
+            'estado' => ['nullable', 'string', Rule::in(['ACTIVO', 'RECUPERADO', 'ABIERTOS', 'CERRADOS'])],
+            'seguimiento' => ['nullable', 'string', Rule::in(FollowupStatus::values())],
+            'tecnologia' => ['nullable', 'string', 'max:32'],
+            'page' => ['nullable', 'integer', 'min:1'],
+            'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:10000'],
         ]);
+
+        $rawMinedu = $data['minedu'] ?? null;
+        $mineduList = [];
+        if (is_array($rawMinedu)) {
+            $mineduList = $rawMinedu;
+        } elseif (is_string($rawMinedu) && trim($rawMinedu) !== '') {
+            $mineduList = preg_split('/\s*,\s*/', trim($rawMinedu)) ?: [];
+        }
+        $mineduList = array_values(array_filter(
+            array_map(fn ($v) => strtoupper(trim((string) $v)), $mineduList),
+            fn ($v) => $v !== '' && in_array($v, $mineduAllowed, true)
+        ));
+        $data['minedu'] = $mineduList;
+
+        return $data;
     }
 
     public function closingPreview(): JsonResponse
     {
         return response()->json($this->closing->preview());
+    }
+
+    /** ESTADO de LISTA DE LLEE: lo elige el operador (día de hoy). */
+    public function updateListaEstado(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'lista_estado' => ['nullable', 'string', Rule::in(ListaLleeEstado::values())],
+        ]);
+
+        $value = $data['lista_estado'] ?? null;
+        if ($value !== null && $value !== '') {
+            $this->listaDays->setEstado($incident, ListaLleeEstado::from((string) $value));
+        } else {
+            $incident->lista_llee_estado = null;
+            $incident->save();
+            $this->listaDays->ensureToday();
+        }
+
+        $estado = $incident->fresh()?->lista_llee_estado instanceof ListaLleeEstado
+            ? $incident->lista_llee_estado
+            : null;
+
+        return response()->json([
+            'incident_id' => $incident->id,
+            'lista_estado' => $estado?->value,
+            'lista_estado_tone' => $estado?->tone(),
+            'lista_estado_group' => $estado?->group(),
+        ]);
+    }
+
+    /** DETALLE de LISTA DE LLEE: solo texto del operador (día de hoy). */
+    public function updateListaDetalle(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'detalle' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $this->listaDays->setDetalle($incident, $data['detalle'] ?? null);
+
+        return response()->json([
+            'incident_id' => $incident->id,
+            'detalle' => $incident->fresh()?->lista_detalle,
+        ]);
     }
 
     public function closingXlsx(): StreamedResponse
