@@ -50,6 +50,11 @@ export type SchoolGeneralPayload = {
   distrito?: string | null
   centro_poblado?: string | null
   clasificacion?: string | null
+  ambito?: string | null
+  energy_type?: string | null
+  implementation_zone?: string | null
+  implementation_span?: string | null
+  installation_type?: string | null
   nivel_iiee?: string | null
   latitud?: string | null
   longitud?: string | null

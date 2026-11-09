@@ -226,6 +226,11 @@ export function SchoolDetailPage() {
                   distrito: school.distrito ?? '',
                   centro_poblado: school.centro_poblado ?? '',
                   clasificacion: school.clasificacion ?? '',
+                  ambito: school.ambito ?? '',
+                  energy_type: school.energy_type ?? '',
+                  implementation_zone: school.implementation_zone ?? '',
+                  implementation_span: school.implementation_span ?? '',
+                  installation_type: school.installation_type ?? '',
                   nivel_iiee: school.nivel_iiee ?? '',
                 }}
                 saving={saveGeneral.isPending}
@@ -501,6 +506,11 @@ type SchoolRecord = {
   distrito?: string | null
   centro_poblado?: string | null
   clasificacion?: string | null
+  ambito?: string | null
+  energy_type?: string | null
+  implementation_zone?: string | null
+  implementation_span?: string | null
+  installation_type?: string | null
   nivel_iiee?: string | null
   contacts?: SchoolContact[]
   active_assignment?: NetworkAssignment | null

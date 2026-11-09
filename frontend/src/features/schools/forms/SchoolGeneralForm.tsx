@@ -14,7 +14,12 @@ const FIELDS: Array<{ key: keyof SchoolGeneralPayload; label: string }> = [
   { key: 'provincia', label: 'Provincia' },
   { key: 'distrito', label: 'Distrito' },
   { key: 'centro_poblado', label: 'Centro poblado' },
-  { key: 'clasificacion', label: 'Clasificación' },
+  { key: 'clasificacion', label: 'Clasificación (TIPO)' },
+  { key: 'ambito', label: 'Ámbito (URBANA/RURAL)' },
+  { key: 'energy_type', label: 'Tipo de energía' },
+  { key: 'implementation_zone', label: 'Zona implementación' },
+  { key: 'implementation_span', label: 'Tramo implementación' },
+  { key: 'installation_type', label: 'Tipo de instalación' },
   { key: 'nivel_iiee', label: 'Nivel IIEE' },
 ]
 
