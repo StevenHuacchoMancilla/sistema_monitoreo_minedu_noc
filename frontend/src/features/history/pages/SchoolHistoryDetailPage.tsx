@@ -8,6 +8,7 @@ import {
   Eye,
   GraduationCap,
   History,
+  ImageDown,
   RefreshCw,
   TriangleAlert,
 } from 'lucide-react'
@@ -36,6 +37,7 @@ import { useManualSync } from '../../dashboard/hooks/useDashboard'
 import { LocationMismatchBadge } from '../../locations/components/LocationMismatchBadge'
 import { techBadgeClass } from '../../../lib/uiTokens'
 import { formatRelativeDateTime } from '../../../lib/datetime'
+import { downloadTicketImageFromIncidentId } from '../../incidents/lib/ticketImage'
 import {
   fetchSchoolHistoryIncidents,
   fetchSchoolHistoryOverview,
@@ -53,6 +55,7 @@ export function SchoolHistoryDetailPage() {
   const [dateTo, setDateTo] = useState('')
   const [status, setStatus] = useState('ALL')
   const [scope, setScope] = useState('')
+  const [ticketSearch, setTicketSearch] = useState('')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
 
@@ -72,6 +75,7 @@ export function SchoolHistoryDetailPage() {
       dateTo,
       status,
       scope,
+      ticketSearch,
       page,
       perPage,
     ],
@@ -81,6 +85,7 @@ export function SchoolHistoryDetailPage() {
         date_to: dateTo || undefined,
         status: status === 'ALL' ? undefined : status,
         scope: scope || undefined,
+        q: ticketSearch.trim() || undefined,
         page,
         per_page: perPage,
       }),
@@ -100,6 +105,8 @@ export function SchoolHistoryDetailPage() {
   const titleCid = cid ? `CID${cid}` : `Colegio #${id}`
   const place = [school?.provincia, school?.distrito].filter(Boolean).join(' · ')
   const hasActive = (statistics?.caidas_activas ?? 0) > 0
+  const [pngBusyId, setPngBusyId] = useState<number | null>(null)
+  const [pngError, setPngError] = useState<string | null>(null)
 
   const refreshAll = async () => {
     await Promise.all([overview.refetch(), incidents.refetch()])
@@ -110,6 +117,7 @@ export function SchoolHistoryDetailPage() {
     setDateTo('')
     setStatus('ALL')
     setScope('')
+    setTicketSearch('')
     setPage(1)
   }
 
@@ -199,6 +207,18 @@ export function SchoolHistoryDetailPage() {
 
           <div className="mb-5 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <MetricCard label="Total caídas" value={statistics.total_caidas} icon={<TriangleAlert className="h-4 w-4" />} />
+            <MetricCard
+              label="Tickets"
+              value={statistics.tickets_total ?? 0}
+              icon={<History className="h-4 w-4" />}
+              tone="info"
+            />
+            <MetricCard
+              label="Tickets abiertos"
+              value={statistics.tickets_abiertos ?? 0}
+              icon={<TriangleAlert className="h-4 w-4" />}
+              tone={(statistics.tickets_abiertos ?? 0) > 0 ? 'warning' : 'neutral'}
+            />
             <MetricCard
               label="Recuperaciones"
               value={statistics.recuperaciones}
@@ -304,14 +324,24 @@ export function SchoolHistoryDetailPage() {
                   <option value="PINT">PINT</option>
                 </Select>
               </FormField>
+              <FormField label="Buscar ticket">
+                <Input
+                  value={ticketSearch}
+                  onChange={(e) => {
+                    setTicketSearch(e.target.value)
+                    setPage(1)
+                  }}
+                  placeholder="TGS_258839_1…"
+                />
+              </FormField>
             </FilterCard>
           </div>
 
-          <SectionCard title="Incidencias históricas">
+          <SectionCard title="Tickets / caídas">
             <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              Cada incidencia abre su expediente completo: gestiones, motivos,
-              responsables y cierre.
+              El ticket TGS nace al gestionar. Cada ticket tiene su historial de gestiones y cierre. Puedes volver a descargar la imagen del ticket con el ícono verde.
             </p>
+            {pngError ? <p className="mb-3 text-sm text-red-600">{pngError}</p> : null}
             {incidents.isLoading ? <LoadingState /> : null}
             {incidents.isError ? (
               <ErrorState
@@ -338,7 +368,7 @@ export function SchoolHistoryDetailPage() {
                     </colgroup>
                     <thead className={theadClassName}>
                       <tr>
-                        <th className={thClassName}>N°</th>
+                        <th className={thClassName}>Ticket</th>
                         <th className={thClassName}>
                           <span className="block">Caída</span>
                           <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
@@ -361,10 +391,20 @@ export function SchoolHistoryDetailPage() {
                       {rows.map((row) => (
                         <tr key={row.id} className={`${trClassName} group`}>
                           <td className={tdClassName} title={row.reincidencia.label ?? undefined}>
-                            <span className="font-semibold tabular-nums text-slate-900 dark:text-slate-100">
-                              {row.reincidencia.numero ?? '—'}
-                            </span>
-                            <span className="text-[11px] tabular-nums text-slate-400">/{row.reincidencia.total}</span>
+                            {row.ticket_code ? (
+                              <div>
+                                <span className="font-mono text-[12px] font-semibold text-slate-900 dark:text-slate-100">
+                                  {row.ticket_code}
+                                </span>
+                                {row.is_maintenance ? (
+                                  <span className="mt-0.5 block w-fit rounded-full bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold text-teal-800 dark:bg-teal-950 dark:text-teal-200">
+                                    Mantenimiento{row.ticket_kind_label ? ` · ${row.ticket_kind_label}` : ''}
+                                  </span>
+                                ) : null}
+                              </div>
+                            ) : (
+                              <span className="text-[12px] text-amber-700 dark:text-amber-300">Sin ticket</span>
+                            )}
                           </td>
                           <td className={tdClassName}>
                             <IsoDateTimeCell value={row.started_at} />
@@ -413,14 +453,36 @@ export function SchoolHistoryDetailPage() {
                             )}
                           </td>
                           <td className="sticky right-0 z-10 bg-white px-2.5 py-2 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
-                            <Link
-                              to={incidentCaseFilePath(row.id)}
-                              title="Ver historial completo de la incidencia"
-                              aria-label={`Ver incidencia ${row.id}`}
-                              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-blue-700 transition hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/40"
-                            >
-                              <Eye className="h-4 w-4" aria-hidden />
-                            </Link>
+                            <div className="inline-flex items-center justify-end gap-0.5">
+                              {row.ticket_code ? (
+                                <button
+                                  type="button"
+                                  title={`Descargar imagen ${row.ticket_code}`}
+                                  aria-label={`Descargar imagen ${row.ticket_code}`}
+                                  disabled={pngBusyId === row.id}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-teal-700 transition hover:bg-teal-50 disabled:opacity-50 dark:text-teal-300 dark:hover:bg-teal-950/40"
+                                  onClick={() => {
+                                    setPngError(null)
+                                    setPngBusyId(row.id)
+                                    void downloadTicketImageFromIncidentId(row.id)
+                                      .catch((err: unknown) =>
+                                        setPngError(err instanceof Error ? err.message : 'No se pudo generar la imagen.'),
+                                      )
+                                      .finally(() => setPngBusyId(null))
+                                  }}
+                                >
+                                  <ImageDown className="h-4 w-4" aria-hidden />
+                                </button>
+                              ) : null}
+                              <Link
+                                to={incidentCaseFilePath(row.id)}
+                                title="Ver historial del ticket / caída"
+                                aria-label={`Ver ${row.ticket_code ?? `caída ${row.id}`}`}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-blue-700 transition hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950/40"
+                              >
+                                <Eye className="h-4 w-4" aria-hidden />
+                              </Link>
+                            </div>
                           </td>
                         </tr>
                       ))}
@@ -452,19 +514,7 @@ export function SchoolHistoryDetailPage() {
 }
 
 function LastFollowup({ row }: { row: SchoolHistoryIncidentRow }) {
-  const last = row.tracking?.last_update
-  if (last) {
-    return (
-      <span className="block min-w-0">
-        <Truncate lines={2} title={last.body} className="text-slate-700 dark:text-slate-300">
-          {last.body || '—'}
-        </Truncate>
-        <span className="block truncate text-[11px] text-slate-500">
-          {last.actor} · {formatRelativeDateTime(last.at)}
-        </span>
-      </span>
-    )
-  }
+  // Preferimos estado operativo / causa; no mostramos notas internas de Tracking.
   if (row.cause) {
     return (
       <Truncate lines={2} title={row.cause} className="text-slate-600 dark:text-slate-400">
@@ -472,7 +522,13 @@ function LastFollowup({ row }: { row: SchoolHistoryIncidentRow }) {
       </Truncate>
     )
   }
-  return <span className="text-slate-400">{row.followup_label ?? '—'}</span>
+  if (row.followup_label) {
+    return <span className="text-slate-500 dark:text-slate-400">{row.followup_label}</span>
+  }
+  if (row.ticket_code) {
+    return <span className="font-mono text-[12px] text-slate-600 dark:text-slate-300">{row.ticket_code}</span>
+  }
+  return <span className="text-slate-400">—</span>
 }
 
 function StatLine({ label, value }: { label: string; value: string }) {

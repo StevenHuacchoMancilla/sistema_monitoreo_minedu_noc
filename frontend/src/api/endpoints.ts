@@ -88,9 +88,17 @@ export const endpoints = {
   createManualTicket: (body: {
     q: string
     detail?: string | null
+    kind?: 'CORRECTIVO' | 'PREVENTIVO' | 'ASIGNACION_LIBRE'
     minedu_reason?: string | null
     root_cause_group_code: string
     root_cause_code: string
+    arrived_at?: string | null
+    departed_at?: string | null
+    restored_at?: string | null
+    technician_name?: string | null
+    technician_phone?: string | null
+    activities?: string | null
+    materials?: string | null
   }) => apiPost<IncidentDetail>('/incidents/manual', body),
   createPreventiveTicket: (body: {
     q: string
@@ -99,7 +107,44 @@ export const endpoints = {
     minedu_reason?: string | null
     root_cause_group_code: string
     root_cause_code: string
+    arrived_at?: string | null
+    departed_at?: string | null
+    restored_at?: string | null
+    technician_name?: string | null
+    technician_phone?: string | null
+    activities?: string | null
+    materials?: string | null
   }) => apiPost<IncidentDetail>('/incidents/preventive', body),
+  ensureIncidentTicket: (id: number, body: {
+    kind: 'CORRECTIVO' | 'PREVENTIVO' | 'ASIGNACION_LIBRE'
+    detail?: string | null
+    arrived_at?: string | null
+    departed_at?: string | null
+    restored_at?: string | null
+    technician_name?: string | null
+    technician_phone?: string | null
+    activities?: string | null
+    materials?: string | null
+  }) => apiPost<IncidentDetail>(`/incidents/${id}/ensure-ticket`, body),
+  listMaintenance: (params: Record<string, string | number | undefined | null> = {}) => {
+    const q = new URLSearchParams()
+    for (const [k, v] of Object.entries(params)) {
+      if (v != null && v !== '') q.set(k, String(v))
+    }
+    const s = q.toString()
+    return apiGet<{
+      data: Array<Record<string, unknown>>
+      meta: {
+        total: number
+        page: number
+        per_page: number
+        last_page: number
+        status: string
+        open_count: number
+        closed_count: number
+      }
+    }>(`/incidents/maintenance${s ? `?${s}` : ''}`)
+  },
   saveVisit: (id: number, body: {
     opened_at?: string | null
     restored_at?: string | null
@@ -107,6 +152,7 @@ export const endpoints = {
     arrived_at?: string | null
     departed_at?: string | null
     technician_name?: string | null
+    technician_phone?: string | null
     polygon?: string | null
     visit_reason?: string | null
     activities?: string | null
@@ -133,6 +179,17 @@ export const endpoints = {
   ) => apiPost<IncidentDetail>(`/incidents/${id}/recovery-review`, body),
   operationalReport: (params: Record<string, string | undefined | null> = {}) =>
     apiGet<OperationalReportResponse>(`/reports/operational${toQuery(params)}`),
+  updateListaEstado: (incidentId: number, lista_estado: string | null) =>
+    apiPut<{
+      incident_id: number
+      lista_estado: string | null
+      lista_estado_tone: string | null
+      lista_estado_group: string | null
+    }>(`/incidents/${incidentId}/lista-estado`, { lista_estado }),
+  updateListaDetalle: (incidentId: number, detalle: string | null) =>
+    apiPut<{ incident_id: number; detalle: string | null }>(`/incidents/${incidentId}/lista-detalle`, {
+      detalle,
+    }),
   generalReport: (params: Record<string, string | undefined | null> = {}) =>
     apiGet<GeneralReportResponse>(`/reports/general${toQuery(params)}`),
   closingPreview: () => apiGet<ClosingPreviewResponse>('/reports/closing-preview'),

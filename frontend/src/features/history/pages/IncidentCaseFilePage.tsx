@@ -40,9 +40,8 @@ import type { CaseTimelineEvent, CaseTimelineGroup, IncidentCaseFile } from '../
 
 const GROUPS: Array<{ value: CaseTimelineGroup | 'ALL'; label: string }> = [
   { value: 'ALL', label: 'Todo' },
-  { value: 'GESTION', label: 'Gestión' },
-  { value: 'REVISION', label: 'Revisión' },
-  { value: 'SISTEMA', label: 'Sistema' },
+  { value: 'GESTION', label: 'Comentarios' },
+  { value: 'SISTEMA', label: 'Hitos' },
 ]
 
 const GROUP_TONE: Record<CaseTimelineGroup, StatusTone> = {
@@ -126,13 +125,20 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
               </Link>
             ) : null}
             <ChevronRight className="h-3 w-3" aria-hidden />
-            <span className="text-slate-700 dark:text-slate-200">Incidencia #{incident.id}</span>
+            <span className="font-mono text-slate-700 dark:text-slate-200">
+              {incident.display_code ?? incident.ticket_code ?? 'Sin ticket'}
+            </span>
           </nav>
         }
-        title={`Incidencia #${incident.id}`}
+        title={incident.ticket_code ? incident.ticket_code : 'Sin ticket'}
         badges={
           <>
             <CaseStatusBadge status={incident.case_status} />
+            {incident.ticket_code ? (
+              <Badge tone="info">{incident.ticket_status ?? 'ABIERTO'}</Badge>
+            ) : (
+              <Badge tone="warning">Pendiente de ticket</Badge>
+            )}
             {incident.reincidencia.label ? <Badge tone="neutral">{incident.reincidencia.label}</Badge> : null}
           </>
         }

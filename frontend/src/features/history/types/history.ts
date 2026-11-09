@@ -96,6 +96,8 @@ export type SchoolHistoryOverview = {
   }
   statistics: {
     total_caidas: number
+    tickets_total?: number
+    tickets_abiertos?: number
     recuperaciones: number
     caidas_activas: number
     ultima_caida: string | null
@@ -124,6 +126,14 @@ export type Reincidencia = {
 
 export type SchoolHistoryIncidentRow = {
   id: number
+  ticket_code?: string | null
+  ticket_status?: string | null
+  ticket_kind?: string | null
+  ticket_kind_label?: string | null
+  is_maintenance?: boolean
+  root_cause_code?: string | null
+  detection_source?: string | null
+  display_code?: string | null
   started_at: string | null
   recovered_at: string | null
   duration_seconds: number | null
@@ -175,6 +185,9 @@ export type CaseTimelineEvent = {
 export type IncidentCaseFile = {
   incident: {
     id: number
+    ticket_code?: string | null
+    ticket_status?: string | null
+    display_code?: string | null
     started_at: string | null
     recovered_at: string | null
     is_active: boolean
@@ -186,6 +199,20 @@ export type IncidentCaseFile = {
     case_status: CaseStatus
     reincidencia: Reincidencia
   }
+  ticket?: {
+    id: number
+    ticket_code: string
+    status: string | null
+    kind: string | null
+    opened_at: string | null
+    closed_at: string | null
+    opened_by_name: string | null
+    closed_by_name: string | null
+    minedu: string | null
+    cause_code: string | null
+    cause: string | null
+    detail: string | null
+  } | null
   gestion: {
     classification: string | null
     classification_label: string | null

@@ -55,6 +55,7 @@ export type DashboardSummary = {
     pendiente_cierre?: number
     incidencias_graves?: number
     recaida_gestion?: number
+    mantenimientos?: number
     concentraciones: number
     caidas_masivas?: number
     recuperados: number
@@ -272,6 +273,7 @@ export type IncidentDetail = {
     active_field_dispatch?: boolean
     had_field_tech?: boolean
     active_tracking_id?: number | null
+    is_grave_incident?: boolean
   }
   active_tracking?: {
     id: number
@@ -352,15 +354,25 @@ export type IncidentDetail = {
     id: number
     incident_id: number | null
     ticket_code: string
-    kind: 'CORRECTIVO' | 'PREVENTIVO'
+    kind: 'CORRECTIVO' | 'PREVENTIVO' | 'ASIGNACION_LIBRE'
     kind_label: string
+    is_maintenance?: boolean
     status: 'ABIERTO' | 'CERRADO'
+    cid?: string | null
+    tss?: string | null
+    school_name?: string | null
+    province?: string | null
+    district?: string | null
+    cause_code?: string | null
+    cause?: string | null
+    detail?: string | null
     opened_at: string | null
     restored_at: string | null
     closed_at: string | null
     opened_by_name: string | null
     closed_by_name: string | null
     technician_name: string | null
+    technician_phone?: string | null
     polygon: string | null
     visit_reason: string | null
     arrived_at: string | null
