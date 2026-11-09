@@ -3,6 +3,7 @@ import { PrtgDashboardPage } from '../features/dashboard-prtg/pages/PrtgDashboar
 import { ActiveIncidentsPage } from '../features/incidents/pages/ActiveIncidentsPage'
 import { SameHourOutagesPage } from '../features/incidents/pages/SameHourOutagesPage'
 import { IncidentQueuePage } from '../features/incidents/pages/IncidentQueuePage'
+import { MaintenancePage } from '../features/incidents/pages/MaintenancePage'
 import { ConcentrationsPage } from '../features/incidents/pages/ConcentrationsPage'
 import { ConcentrationZonePage } from '../features/incidents/pages/ConcentrationZonePage'
 import { MassOutagesPage } from '../features/incidents/pages/MassOutagesPage'
@@ -13,6 +14,7 @@ import { SchoolHistoryDetailPage } from '../features/history/pages/SchoolHistory
 import { IncidentCaseFilePage } from '../features/history/pages/IncidentCaseFilePage'
 import { RecoveriesPage } from '../features/recoveries/pages/RecoveriesPage'
 import { RestorationsPage } from '../features/restorations/pages/RestorationsPage'
+import { OutagesFeedPage } from '../features/outages-feed/pages/OutagesFeedPage'
 import { NotificationsPage } from '../features/notifications/pages/NotificationsPage'
 import { AdminPage } from '../features/administration/pages/AdminPage'
 import { SchoolDetailPage } from '../features/schools/pages/SchoolDetailPage'
@@ -63,7 +65,7 @@ export function AppRouter() {
                 <ActiveIncidentsPage
                   key="incidents-total"
                   title="Caídas totales"
-                  description="Parciales (amarillos) arriba. Reciente = caído hace menos de 30 min (o acaba de pasar de parcial a caído). Duración = Fallo por de PRTG."
+                  description="Solo caídas reales (rojo PRTG). Los intermitentes/parciales no abren ticket ni entran aquí. Duración = Fallo por de PRTG."
                   tableTitle="Caídas actuales en PRTG"
                   emptyTitle="No hay caídas en PRTG."
                   emptyDescription="Ningún local monitoreado está caído en este momento."
@@ -74,7 +76,6 @@ export function AppRouter() {
               }
             />
             <Route path="/incidents/active" element={<Navigate to="/incidents/total" replace />} />
-            <Route path="/incidents/same-hour" element={<SameHourOutagesPage />} />
             <Route path="/incidents/pending" element={<Navigate to="/incidents/pendiente-gestion" replace />} />
             <Route
               path="/incidents/pendiente-gestion"
@@ -94,9 +95,14 @@ export function AppRouter() {
                 <ActiveIncidentsPage
                   key="incidents-managing"
                   title="En gestión"
-                  description="Seguimiento operativo del ticket mientras el colegio sigue caído. Si PRTG recupera, pasan a Pendiente de cierre."
-                  filter={(row) => MANAGING.has(row.followup_status ?? '')}
+                  description="Seguimiento operativo del ticket: agrega mensajes y gestiones. Si PRTG recupera en día laboral, pasan a Pendiente de cierre (sáb/dom no)."
+                  filter={(row) =>
+                    !row.is_grave_incident &&
+                    !row.has_open_grave_incident &&
+                    (MANAGING.has(row.followup_status ?? '') || row.followup_status === 'PENDIENTE_CIERRE')
+                  }
                   durationSource="current_down"
+                  source="managing"
                 />
               }
             />
@@ -106,6 +112,12 @@ export function AppRouter() {
               element={<IncidentQueuePage key="pendiente-cierre" kind="pendiente-cierre" />}
             />
             <Route path="/incidents/graves" element={<IncidentQueuePage key="graves" kind="graves" />} />
+            <Route path="/maintenance" element={<MaintenancePage />} />
+            <Route path="/maintenance/finalizados" element={<Navigate to="/maintenance?tab=finalizados" replace />} />
+          </Route>
+
+          <Route element={<RequirePermission permission={P.adminView} />}>
+            <Route path="/incidents/same-hour" element={<SameHourOutagesPage />} />
             <Route path="/concentrations" element={<ConcentrationsPage />} />
             <Route path="/concentrations/zone" element={<ConcentrationZonePage />} />
             <Route path="/mass-outages" element={<MassOutagesPage />} />
@@ -121,6 +133,7 @@ export function AppRouter() {
 
           <Route element={<RequirePermission permission={P.incidentsView} />}>
             <Route path="/notifications" element={<NotificationsPage />} />
+            <Route path="/outages" element={<OutagesFeedPage />} />
           </Route>
 
           <Route element={<RequirePermission permission={P.historyView} />}>

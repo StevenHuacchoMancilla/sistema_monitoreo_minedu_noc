@@ -24,9 +24,12 @@ import {
   Settings,
   ShieldAlert,
   Ticket,
+  TriangleAlert,
+  Wrench,
 } from 'lucide-react'
 import { useDashboardSummary } from '../features/dashboard/hooks/useDashboard'
 import { useOperationalAlerts } from '../features/notifications/hooks/useOperationalAlerts'
+import { useRecentOutages } from '../features/outages-feed/hooks/useRecentOutages'
 import { useRecentRestorations } from '../features/restorations/hooks/useRecentRestorations'
 import { usePermissions } from '../features/auth/hooks/usePermissions'
 import { P, type Permission } from '../features/auth/permissions'
@@ -50,7 +53,9 @@ type NavItem = {
     | 'recuperados'
     | 'tracking_abiertos'
     | 'notificaciones'
+    | 'caidas_recientes'
     | 'restablecimientos'
+    | 'mantenimientos'
   tone?: 'danger' | 'warn' | 'info' | 'muted' | 'success'
   icon: LucideIcon
   accent?: 'prtg'
@@ -66,22 +71,24 @@ const SECTION_LABEL: Record<NavSection, string> = {
 const NAV: NavItem[] = [
   { section: 'operacion', to: '/dashboard/prtg', label: 'Resumen PRTG', end: true, icon: LayoutDashboard, accent: 'prtg', permission: P.dashboardPrtg },
   { section: 'operacion', to: '/incidents/total', label: 'Caídas totales', badgeKey: 'caidas_totales', tone: 'danger', icon: Layers, permission: P.incidentsView },
-  { section: 'operacion', to: '/incidents/same-hour', label: 'Misma hora', icon: Clock, permission: P.incidentsView },
+  { section: 'operacion', to: '/incidents/same-hour', label: 'Misma hora', icon: Clock, permission: P.adminView },
   { section: 'operacion', to: '/incidents/pendiente-gestion', label: 'Pendientes de gestión', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/pendiente-cierre', label: 'Pendiente de cierre', badgeKey: 'pendiente_cierre', tone: 'warn', icon: ShieldAlert, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/graves', label: 'Incidencias', badgeKey: 'incidencias_graves', tone: 'danger', icon: AlertOctagon, permission: P.incidentsView },
+  { section: 'operacion', to: '/maintenance', label: 'Mantenimientos', badgeKey: 'mantenimientos', tone: 'info', icon: Wrench, permission: P.incidentsView },
   { section: 'operacion', to: '/recoveries', label: 'Recuperados', badgeKey: 'recuperados', tone: 'success', icon: CircleCheck, permission: P.recoveriesView },
-  { section: 'operacion', to: '/mass-outages', label: 'Caídas masivas', badgeKey: 'caidas_masivas', tone: 'danger', icon: Network, permission: P.incidentsView },
-  { section: 'operacion', to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map, permission: P.incidentsView },
+  { section: 'operacion', to: '/mass-outages', label: 'Caídas masivas', badgeKey: 'caidas_masivas', tone: 'danger', icon: Network, permission: P.adminView },
+  { section: 'operacion', to: '/concentrations', label: 'Concentraciones', badgeKey: 'concentraciones', tone: 'muted', icon: Map, permission: P.adminView },
+  { section: 'reportes', to: '/reports/operational', label: 'Lista para reporte', icon: FileSpreadsheet, permission: P.reportsView },
+  { section: 'reportes', to: '/reports/general', label: 'Seguimiento de caídas', icon: Files, permission: P.reportsView },
   { section: 'reportes', to: '/reports/ticketera', label: 'Histórico de tickets', icon: Ticket, permission: P.reportsView },
-  { section: 'reportes', to: '/reports/operational', label: 'Vista de reporte', icon: FileSpreadsheet, permission: P.reportsView },
   { section: 'reportes', to: '/reports/minedu', label: 'Anexo 30 MINEDU', icon: Files, permission: P.reportsView },
   { section: 'reportes', to: '/reports/usage', label: 'Uso de internet', icon: Gauge, permission: P.reportsView },
-  { section: 'reportes', to: '/reports/general', label: 'Reporte general', icon: Files, permission: P.reportsView },
   { section: 'consulta', to: '/history/schools', label: 'Historial por colegio', icon: History, permission: P.historyView },
   { section: 'consulta', to: '/schools', label: 'Locales educativos', icon: GraduationCap, permission: P.schoolsView },
   { section: 'consulta', to: '/notifications', label: 'Notificaciones', badgeKey: 'notificaciones', tone: 'warn', icon: Bell, permission: P.incidentsView },
+  { section: 'consulta', to: '/outages', label: 'Caídas', badgeKey: 'caidas_recientes', tone: 'danger', icon: TriangleAlert, permission: P.incidentsView },
   { section: 'consulta', to: '/restorations', label: 'Restablecimientos', badgeKey: 'restablecimientos', tone: 'success', icon: Radio, permission: P.recoveriesView },
   { section: 'consulta', to: '/admin', label: 'Administración', icon: Settings, permission: P.adminView },
 ]
@@ -104,9 +111,11 @@ export function Sidebar({
   const summary = useDashboardSummary(120_000)
   const { can } = usePermissions()
   const alerts = useOperationalAlerts(120_000, can(P.incidentsView))
+  const outages = useRecentOutages(60, 60_000, can(P.incidentsView))
   const restorations = useRecentRestorations(60, 60_000, can(P.recoveriesView))
   const nav = summary.data?.nav as Record<string, number> | undefined
   const notifCount = alerts.data?.meta.pending_review ?? alerts.data?.data?.length ?? 0
+  const outageCount = outages.data?.meta.recent ?? 0
   const restorationCount = restorations.data?.meta.recent ?? 0
   const { collapsed, toggle } = useSidebar()
   const isCollapsed = forceExpanded ? false : collapsed
@@ -172,11 +181,13 @@ export function Sidebar({
                     const badge =
                       item.badgeKey === 'notificaciones'
                         ? notifCount
-                        : item.badgeKey === 'restablecimientos'
-                          ? restorationCount
-                          : item.badgeKey
-                            ? (nav?.[item.badgeKey] ?? 0)
-                            : null
+                        : item.badgeKey === 'caidas_recientes'
+                          ? outageCount
+                          : item.badgeKey === 'restablecimientos'
+                            ? restorationCount
+                            : item.badgeKey
+                              ? (nav?.[item.badgeKey] ?? 0)
+                              : null
                     return (
                       <li key={item.to}>
                         <NavLink
