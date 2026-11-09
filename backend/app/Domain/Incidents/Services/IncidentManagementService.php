@@ -135,7 +135,9 @@ class IncidentManagementService
                 ManagementClassification::NoResponse => FollowupStatus::EnEspera,
                 ManagementClassification::LinkOutage => FollowupStatus::EnEspera,
                 ManagementClassification::ContactConfirmed,
-                ManagementClassification::Complaint => FollowupStatus::EnGestion,
+                ManagementClassification::Complaint,
+                ManagementClassification::FollowUp => FollowupStatus::EnGestion,
+                ManagementClassification::Unclassified => FollowupStatus::EnGestion,
             };
 
             // No degradar técnico en campo / escalado / pendiente de cierre al registrar seguimiento.

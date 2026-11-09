@@ -240,8 +240,18 @@ class IncidentController extends Controller
             ])->values()->all(),
             'gestion' => [
                 'followup_status' => $incident->followup_status?->value,
-                'management_classification' => $incident->management_classification?->value,
-                'management_classification_label' => $incident->management_classification?->label(),
+                'management_classification' => $this->managementDisplayClassification(
+                    $incident->management_classification instanceof ManagementClassification
+                        ? $incident->management_classification
+                        : null,
+                    $incident,
+                )?->value ?? $incident->management_classification?->value,
+                'management_classification_label' => $this->managementDisplayLabel(
+                    $incident->management_classification instanceof ManagementClassification
+                        ? $incident->management_classification
+                        : null,
+                    $incident,
+                ),
                 'management_scope' => $incident->management_scope?->value,
                 'outage_text' => $incident->outage_text,
                 'detail_text' => $incident->detail_text,
@@ -273,9 +283,11 @@ class IncidentController extends Controller
             'sla' => $this->slaClock->snapshot($incident),
             'managements' => $incident->managements->map(fn ($m) => [
                 'id' => $m->id,
-                'classification' => $m->classification?->value,
-                'classification_label' => $m->classification?->label(),
-                'color_key' => $m->classification?->colorKey(),
+                'classification' => $this->managementDisplayClassification($m->classification, $incident)?->value
+                    ?? $m->classification?->value,
+                'classification_label' => $this->managementDisplayLabel($m->classification, $incident),
+                'color_key' => $this->managementDisplayClassification($m->classification, $incident)?->colorKey()
+                    ?? $m->classification?->colorKey(),
                 'scope' => $m->scope?->value,
                 'outage_text' => $m->outage_text,
                 'detail' => $m->detail,
@@ -438,8 +450,8 @@ class IncidentController extends Controller
         if (! empty($data['contact_via_descartes'])) {
             $data['contact_id'] = null;
         }
-        // Razón MINEDU opcional: si viene, define la clasificación.
-        // Si no viene, respeta classification explícita; si tampoco, mantiene la actual o ContactConfirmed.
+        // Razón MINEDU opcional: si viene, define la clasificación (Caída de enlace / Requerimiento / Queja).
+        // Sin razón MINEDU: comentario de seguimiento — nunca etiquetar como «Caída de enlace».
         if (! empty($data['minedu_reason'])) {
             $data['classification'] = MineduReason::from((string) $data['minedu_reason'])
                 ->toManagementClassification()
@@ -447,14 +459,7 @@ class IncidentController extends Controller
         } else {
             $data['minedu_reason'] = null;
             if (empty($data['classification'])) {
-                $current = $incident->management_classification;
-                $data['classification'] = (
-                    $current instanceof ManagementClassification
-                    && $current !== ManagementClassification::Unclassified
-                    && $current !== ManagementClassification::NewOutage
-                )
-                    ? $current->value
-                    : ManagementClassification::ContactConfirmed->value;
+                $data['classification'] = ManagementClassification::FollowUp->value;
             }
         }
 
@@ -1282,6 +1287,38 @@ class IncidentController extends Controller
         ])->save();
 
         $this->listaDays->markAverias($incident->fresh() ?? $incident);
+    }
+
+    /**
+     * Etiqueta visible del historial: «Caída de enlace» / Requerimiento / Queja solo si hay razón MINEDU.
+     * Comentarios viejos guardados por error como CONTACT_CONFIRMED se muestran como Seguimiento.
+     */
+    private function managementDisplayClassification(
+        ?ManagementClassification $classification,
+        Incident $incident,
+    ): ?ManagementClassification {
+        if ($classification === null) {
+            return null;
+        }
+
+        $minedu = $incident->minedu_reason instanceof MineduReason ? $incident->minedu_reason : null;
+
+        $isMineduBadge = match ($classification) {
+            ManagementClassification::ContactConfirmed => $minedu === MineduReason::CaidaEnlace,
+            ManagementClassification::LinkOutage => $minedu === MineduReason::Requerimiento,
+            ManagementClassification::Complaint => $minedu === MineduReason::Queja,
+            default => true,
+        };
+
+        return $isMineduBadge ? $classification : ManagementClassification::FollowUp;
+    }
+
+    private function managementDisplayLabel(
+        ?ManagementClassification $classification,
+        Incident $incident,
+    ): string {
+        return $this->managementDisplayClassification($classification, $incident)?->label()
+            ?? ManagementClassification::FollowUp->label();
     }
 
     private static function loopbackFromRow(int $excelRow): ?string

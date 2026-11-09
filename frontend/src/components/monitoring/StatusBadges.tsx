@@ -17,6 +17,7 @@ const CLASSIFICATION_LABELS: Record<string, string> = {
   LINK_OUTAGE: 'Requerimiento',
   NO_RESPONSE: 'Sin respuesta',
   COMPLAINT: 'Queja',
+  FOLLOW_UP: 'Seguimiento',
   UNCLASSIFIED: 'Sin clasificar',
 }
 
@@ -26,6 +27,7 @@ function colorKeyFor(classification: string, colorKey?: string | null): string {
   if (classification === 'LINK_OUTAGE') return 'orange'
   if (classification === 'NO_RESPONSE') return 'yellow'
   if (classification === 'COMPLAINT') return 'blue'
+  if (classification === 'FOLLOW_UP') return 'slate'
   if (classification === 'NEW_OUTAGE') return 'slate'
   return 'slate'
 }
@@ -48,10 +50,10 @@ export function ClassificationBadge({
   )
 }
 
-/** Clasificaciones que solo describen el origen automático (no el resultado de una gestión humana). */
-const AUTOMATIC_CLASSIFICATIONS = new Set(['NEW_OUTAGE', 'UNCLASSIFIED'])
+/** Origen automático o comentario sin razón MINEDU — no son resultado de incidencia. */
+const NON_OUTCOME_CLASSIFICATIONS = new Set(['NEW_OUTAGE', 'UNCLASSIFIED', 'FOLLOW_UP'])
 
-/** Resultado de contacto; oculta "Nueva caída"/"Sin clasificar" porque no aportan tras la gestión. */
+/** Resultado MINEDU / gestión; oculta nueva caída, sin clasificar y seguimiento. */
 export function ContactOutcomeBadge({
   classification,
   label,
@@ -59,7 +61,7 @@ export function ContactOutcomeBadge({
   classification?: string | null
   label?: string | null
 }) {
-  if (!classification || AUTOMATIC_CLASSIFICATIONS.has(classification)) return null
+  if (!classification || NON_OUTCOME_CLASSIFICATIONS.has(classification)) return null
   return <ClassificationBadge classification={classification} label={label} />
 }
 

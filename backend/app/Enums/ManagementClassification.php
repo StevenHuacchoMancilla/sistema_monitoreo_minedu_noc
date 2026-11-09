@@ -11,6 +11,8 @@ enum ManagementClassification: string
     case NoResponse = 'NO_RESPONSE';
     /** Histórico: ya no se ofrece en la UI de gestión. */
     case Complaint = 'COMPLAINT';
+    /** Comentario / seguimiento sin razón MINEDU (no es incidencia). */
+    case FollowUp = 'FOLLOW_UP';
     case Unclassified = 'UNCLASSIFIED';
 
     /**
@@ -22,7 +24,7 @@ enum ManagementClassification: string
     }
 
     /**
-     * Clasificaciones que aún pueden llegar desde gestión (derivadas de razón MINEDU).
+     * Clasificaciones que aún pueden llegar desde gestión (derivadas de razón MINEDU o seguimiento).
      *
      * @return list<string>
      */
@@ -33,6 +35,7 @@ enum ManagementClassification: string
             self::LinkOutage->value,
             self::NoResponse->value,
             self::Complaint->value,
+            self::FollowUp->value,
         ];
     }
 
@@ -44,6 +47,7 @@ enum ManagementClassification: string
             self::LinkOutage => 'Requerimiento',
             self::NoResponse => 'Sin respuesta',
             self::Complaint => 'Queja',
+            self::FollowUp => 'Seguimiento',
             self::Unclassified => 'Sin clasificar',
         };
     }
@@ -56,6 +60,7 @@ enum ManagementClassification: string
             self::NoResponse => 'Corte de energía u origen similar',
             self::NewOutage => 'Detectada automáticamente por PRTG',
             self::Complaint => 'Queja o reclamo',
+            self::FollowUp => 'Comentario de seguimiento sin razón MINEDU',
             self::Unclassified => 'Sin clasificar',
         };
     }
@@ -68,6 +73,7 @@ enum ManagementClassification: string
             self::NoResponse => 'yellow',
             self::NewOutage => 'yellow',
             self::Complaint => 'blue',
+            self::FollowUp => 'slate',
             self::Unclassified => 'slate',
         };
     }

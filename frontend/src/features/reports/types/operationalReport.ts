@@ -115,7 +115,7 @@ export type ClosingPreviewResponse = {
 
 export type ManagementPayload = {
   /** Derivada en backend desde minedu_reason. */
-  classification?: 'CONTACT_CONFIRMED' | 'LINK_OUTAGE' | 'NO_RESPONSE' | 'COMPLAINT' | null
+  classification?: 'CONTACT_CONFIRMED' | 'LINK_OUTAGE' | 'NO_RESPONSE' | 'COMPLAINT' | 'FOLLOW_UP' | null
   scope?: ManagementScope | '' | null
   outage_text?: string | null
   detail?: string | null
