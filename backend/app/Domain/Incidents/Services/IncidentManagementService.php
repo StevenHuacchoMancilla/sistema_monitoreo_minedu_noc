@@ -141,10 +141,13 @@ class IncidentManagementService
             };
 
             // No degradar técnico en campo / escalado / pendiente de cierre al registrar seguimiento.
+            // Pendiente de cierre: la gestión se guarda ahí (etiqueta «Gestión lista»);
+            // solo «Cerrar ticket» saca el caso de esa cola.
             $current = $incident->followup_status;
             if (
                 $current === FollowupStatus::TecnicoEnCampo
                 || $current === FollowupStatus::Escalado
+                || $current === FollowupStatus::PendienteCierre
             ) {
                 if (in_array($followup, [
                     FollowupStatus::PendienteContacto,
@@ -153,11 +156,6 @@ class IncidentManagementService
                 ], true)) {
                     $followup = $current;
                 }
-            }
-            // Caso recuperado en gestión: al guardar mensajes pasa a En gestión (seguimiento)
-            // y sale de la cola Pendiente de cierre.
-            if ($current === FollowupStatus::PendienteCierre) {
-                $followup = FollowupStatus::EnGestion;
             }
 
             $incident->fill([

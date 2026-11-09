@@ -993,6 +993,7 @@ class IncidentController extends Controller
                 'serviceTicket',
                 'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
             ])
+            ->withCount('managements')
             ->where('followup_status', FollowupStatus::PendienteCierre)
             ->whereNotNull('recovered_at')
             ->orderByDesc('recovered_at')
@@ -1163,6 +1164,16 @@ class IncidentController extends Controller
         $location = PrtgOperationalLocation::apiFields($assignment, $school);
         $downClock = $incident->prtg_down_started_at ?? $incident->started_at;
 
+        $managementsCount = (int) ($incident->managements_count
+            ?? $incident->managements()->count());
+        $gestionLista = $incident->followup_status === FollowupStatus::PendienteCierre
+            && (
+                $managementsCount > 0
+                || filled($incident->detail_text)
+                || filled($incident->root_cause_code)
+                || filled($incident->cause)
+            );
+
         return [
             'incident_id' => $incident->id,
             'school_id' => $incident->school_id,
@@ -1174,6 +1185,8 @@ class IncidentController extends Controller
             ...$location,
             'tecnologia' => $assignment?->tecnologia_acceso,
             'followup_status' => $incident->followup_status?->value,
+            'gestion_lista' => $gestionLista,
+            'managements_count' => $managementsCount,
             'started_at' => $incident->started_at?->toIso8601String(),
             'recovered_at' => $incident->recovered_at?->toIso8601String(),
             'current_down_started_at' => $downClock?->toIso8601String(),

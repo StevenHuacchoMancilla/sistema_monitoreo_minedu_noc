@@ -18,6 +18,7 @@ import {
   trClassName,
 } from '../../../components/ui/DataTableFrame'
 import { FollowupBadge } from '../../../components/monitoring/StatusBadges'
+import { Badge } from '../../../components/ui/SoftBadge'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/AuthContext'
 import { IncidentManageModal } from '../components/IncidentManageModal'
@@ -29,11 +30,13 @@ type QueueKind = 'pendiente-cierre' | 'graves' | 'requerimientos'
 type QueueRow = {
   incident_id: number
   cid?: string | null
+  tss?: number | string | null
   local_educativo?: string | null
   codigo_local?: string | null
   provincia?: string | null
   distrito?: string | null
   followup_status?: string | null
+  gestion_lista?: boolean
   started_at?: string | null
   recovered_at?: string | null
   grave_opened_at?: string | null
@@ -51,7 +54,7 @@ const META: Record<
   'pendiente-cierre': {
     title: 'Pendiente de cierre',
     description:
-      'Colegios que se recuperaron de Caídas totales en día laboral (lun–vie). Abre el seguimiento o cierra el ticket. Sábados y domingos no entran aquí.',
+      'Recuperados en día laboral (lun–vie). Guarda la gestión (queda «Gestión lista») y cierra el ticket cuando termines; solo entonces sale de esta cola. Sáb/dom no entran aquí.',
     fetcher: () => endpoints.incidentsPendienteCierre() as Promise<{ data: QueueRow[] }>,
   },
   graves: {
@@ -138,6 +141,7 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
               <thead className={theadClassName}>
                 <tr>
                   <th className={thClassName}>CID</th>
+                  {kind === 'pendiente-cierre' ? <th className={thClassName}>TSS</th> : null}
                   <th className={thClassName}>Local</th>
                   <th className={thClassName}>Ubicación</th>
                   <th className={thClassName}>Estado</th>
@@ -151,6 +155,9 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                 {rows.map((row) => (
                   <tr key={row.incident_id} className={trClassName}>
                     <td className={tdClassName}>{row.cid ?? '—'}</td>
+                    {kind === 'pendiente-cierre' ? (
+                      <td className={`${tdClassName} font-semibold tabular-nums`}>{row.tss ?? '—'}</td>
+                    ) : null}
                     <td className={tdClassName}>
                       <Truncate title={row.local_educativo}>{row.local_educativo ?? '—'}</Truncate>
                       <span className="block text-[11px] text-slate-500">{row.codigo_local ?? '—'}</span>
@@ -160,7 +167,15 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                       <span className="block text-[11px] text-slate-500">{row.distrito ?? '—'}</span>
                     </td>
                     <td className={tdClassName}>
-                      <FollowupBadge status={row.followup_status} />
+                      <div className="flex min-w-0 flex-col items-start gap-1">
+                        {kind === 'pendiente-cierre' && row.gestion_lista ? (
+                          <Badge tone="success" title="Gestión guardada. Cierra el ticket cuando termines.">
+                            Gestión lista
+                          </Badge>
+                        ) : (
+                          <FollowupBadge status={row.followup_status} />
+                        )}
+                      </div>
                     </td>
                     <td className={tdClassName}>
                       <IsoDateTimeCell

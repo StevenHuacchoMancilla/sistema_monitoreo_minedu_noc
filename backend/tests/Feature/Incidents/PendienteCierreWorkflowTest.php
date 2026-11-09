@@ -221,4 +221,27 @@ class PendienteCierreWorkflowTest extends TestCase
     {
         $this->assertSame('Pendiente de gestión', FollowupStatus::PendienteContacto->label());
     }
+
+    public function test_management_while_pendiente_cierre_stays_in_queue(): void
+    {
+        $incident = $this->seedManagingIncident();
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'Recovery');
+        $incident->refresh();
+        $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+
+        $this->postJson("/api/incidents/{$incident->id}/managements", [
+            'detail' => 'Detalle de cierre operativo',
+        ])->assertOk();
+
+        $incident->refresh();
+        $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+        $this->assertNotNull($incident->recovered_at);
+
+        $queue = $this->getJson('/api/incidents/queues/pendiente-cierre')->assertOk();
+        $ids = collect($queue->json('data'))->pluck('incident_id');
+        $this->assertTrue($ids->contains($incident->id));
+        $row = collect($queue->json('data'))->firstWhere('incident_id', $incident->id);
+        $this->assertTrue((bool) ($row['gestion_lista'] ?? false));
+        $this->assertSame(99, $row['tss'] ?? null);
+    }
 }
