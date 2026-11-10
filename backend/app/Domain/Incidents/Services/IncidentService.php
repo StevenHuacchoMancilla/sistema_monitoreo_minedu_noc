@@ -394,8 +394,9 @@ class IncidentService
         $wasManaging = $before !== null && in_array($before, FollowupStatus::managingValues(), true);
         $hadFieldTech = $before === FollowupStatus::TecnicoEnCampo->value;
         $needsReview = $wasManaging || $hadFieldTech;
-        // Sábado/domingo (hora Lima): no encolar Pendiente de cierre.
-        $weekendRecovery = OperationalTime::isWeekend($recoveredAt);
+        // Lun–vie 08:00–16:00 Lima: caídas totales recuperadas → Pendiente de cierre.
+        // Fuera de ventana (noches / sáb–dom): solo En gestión → Pendiente de cierre; el resto cierra solo.
+        $inPendienteWindow = OperationalTime::isPendienteCierreWindow($recoveredAt);
 
         $observationSuffix = $wasManaging
             ? ' Requiere cierre operativo (estaba en gestión).'
@@ -407,29 +408,29 @@ class IncidentService
             ? 'mantenimiento'
             : ($incident->isOpenRequirement() ? 'requerimiento' : 'incidencia grave');
 
-        // Sticky: sigue en gestión hasta cierre manual.
-        // Lun–vie: toda recuperación desde Caídas totales → Pendiente de cierre (no perder seguimiento).
-        // Sáb–dom: no pasa a Pendiente de cierre; cierre automático (sin cola operativa).
         if ($isStickyOpen) {
             $afterStatus = $incident->followup_status ?? FollowupStatus::EnGestion;
             $observationSuffix .= ' '.ucfirst($stickyKind).' permanece abierto (cierre manual).';
-        } elseif ($weekendRecovery) {
-            $afterStatus = FollowupStatus::Cerrado;
-            $observationSuffix .= ' Fin de semana (sáb/dom): recuperación sin Pendiente de cierre.';
-        } else {
+        } elseif ($inPendienteWindow) {
             $afterStatus = FollowupStatus::PendienteCierre;
             $observationSuffix .= $needsReview
                 ? ' Recuperado en gestión: pasa a Pendiente de cierre.'
-                : ' Recuperado desde Caídas totales: pasa a Pendiente de cierre.';
+                : ' Recuperado desde Caídas totales (lun–vie 08:00–16:00): pasa a Pendiente de cierre.';
+        } elseif ($needsReview) {
+            $afterStatus = FollowupStatus::PendienteCierre;
+            $observationSuffix .= ' Fuera de horario operativo: recuperado en gestión → Pendiente de cierre.';
+        } else {
+            $afterStatus = FollowupStatus::Cerrado;
+            $observationSuffix .= ' Fuera de horario operativo (lun–vie 08:00–16:00 / sáb–dom): recuperación sin Pendiente de cierre.';
         }
 
-        $queueClose = ! $isStickyOpen && ! $weekendRecovery;
+        $goesToPendienteCierre = ! $isStickyOpen && $afterStatus === FollowupStatus::PendienteCierre;
         $payload = [
             'recovered_at' => $recoveredAt,
             'current_status' => MonitoringStatus::Operativo->value,
             'followup_status' => $afterStatus,
-            'recovered_while_managing' => $isStickyOpen || $weekendRecovery ? false : $needsReview,
-            'recovery_review_status' => ($queueClose && $needsReview)
+            'recovered_while_managing' => $goesToPendienteCierre ? $needsReview : false,
+            'recovery_review_status' => ($goesToPendienteCierre && $needsReview)
                 ? RecoveryReviewStatus::PendingReview->value
                 : null,
             'recovery_reviewed_at' => null,

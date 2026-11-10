@@ -55,7 +55,7 @@ const META: Record<
   'pendiente-cierre': {
     title: 'Pendiente de cierre',
     description:
-      'Recuperados en día laboral (lun–vie). Al elegir Caída de enlace / Queja pasa a Incidencias; Requerimiento a Requerimientos (re-cae sin ticket nuevo). Comentario sin resultado queda aquí («Gestión lista»). También puedes cerrar el ticket. Sáb/dom no entran aquí.',
+      'Caídas recuperadas lun–vie 08:00–16:00. Fuera de ese horario (noches / sáb–dom) solo entran si estaban En gestión. Al elegir Caída de enlace / Queja pasan a Incidencias; Requerimiento a Requerimientos. Comentario sin resultado queda aquí («Gestión lista»). También puedes cerrar el ticket.',
     fetcher: () => endpoints.incidentsPendienteCierre() as Promise<{ data: QueueRow[] }>,
   },
   graves: {

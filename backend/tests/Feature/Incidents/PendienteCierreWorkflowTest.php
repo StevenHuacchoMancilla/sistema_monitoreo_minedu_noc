@@ -108,18 +108,18 @@ class PendienteCierreWorkflowTest extends TestCase
         $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
     }
 
-    public function test_weekend_recovery_does_not_go_to_pendiente_cierre(): void
+    public function test_weekend_managing_recovery_goes_to_pendiente_cierre(): void
     {
-        // Domingo 8 nov 2026 Lima
+        // Domingo 8 nov 2026 Lima — fuera de ventana, pero estaba en gestión.
         $this->freezeLima('2026-11-08 16:00:00');
         $incident = $this->seedManagingIncident();
 
-        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'Weekend recovery');
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'Weekend recovery managing');
 
         $incident->refresh();
         $this->assertNotNull($incident->recovered_at);
-        $this->assertSame(FollowupStatus::Cerrado, $incident->followup_status);
-        $this->assertNotSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+        $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+        $this->assertTrue((bool) $incident->recovered_while_managing);
     }
 
     public function test_saturday_recovery_from_caidas_auto_closes(): void
@@ -133,6 +133,47 @@ class PendienteCierreWorkflowTest extends TestCase
 
         $incident->refresh();
         $this->assertNotNull($incident->recovered_at);
+        $this->assertSame(FollowupStatus::Cerrado, $incident->followup_status);
+    }
+
+    public function test_weekday_outside_hours_unmanaged_auto_closes(): void
+    {
+        // Lunes 9 nov 2026 Lima 19:30 — fuera de 08:00–16:00.
+        $this->freezeLima('2026-11-09 19:30:00');
+        $incident = $this->seedManagingIncident();
+        $incident->update(['followup_status' => FollowupStatus::PendienteContacto]);
+
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'Night unmanaged recovery');
+
+        $incident->refresh();
+        $this->assertNotNull($incident->recovered_at);
+        $this->assertSame(FollowupStatus::Cerrado, $incident->followup_status);
+    }
+
+    public function test_weekday_outside_hours_managing_goes_to_pendiente_cierre(): void
+    {
+        // Lunes 9 nov 2026 Lima 07:30 — antes de las 08:00.
+        $this->freezeLima('2026-11-09 07:30:00');
+        $incident = $this->seedManagingIncident();
+
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'Early managing recovery');
+
+        $incident->refresh();
+        $this->assertNotNull($incident->recovered_at);
+        $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+        $this->assertTrue((bool) $incident->recovered_while_managing);
+    }
+
+    public function test_weekday_at_16_unmanaged_auto_closes(): void
+    {
+        // 16:00 exclusive: ya no entra a Pendiente de cierre.
+        $this->freezeLima('2026-11-09 16:00:00');
+        $incident = $this->seedManagingIncident();
+        $incident->update(['followup_status' => FollowupStatus::PendienteContacto]);
+
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'At 16 unmanaged');
+
+        $incident->refresh();
         $this->assertSame(FollowupStatus::Cerrado, $incident->followup_status);
     }
 
