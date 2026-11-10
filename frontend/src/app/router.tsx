@@ -65,7 +65,7 @@ export function AppRouter() {
                 <ActiveIncidentsPage
                   key="incidents-total"
                   title="Caídas totales"
-                  description="Solo caídas reales (rojo PRTG). Los intermitentes/parciales no abren ticket ni entran aquí. Duración = Fallo por de PRTG."
+                  description="Caídas reales (rojo) e intermitentes/parciales (amarillo) al inicio. Los intermitentes no abren ticket; solo se listan para tenerlos en cuenta. Duración = Fallo por PRTG."
                   tableTitle="Caídas actuales en PRTG"
                   emptyTitle="No hay caídas en PRTG."
                   emptyDescription="Ningún local monitoreado está caído en este momento."

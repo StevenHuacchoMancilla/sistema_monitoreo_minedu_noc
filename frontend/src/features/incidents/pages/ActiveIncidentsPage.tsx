@@ -99,7 +99,12 @@ function isRecentFullDown(row: OutageRow, nowMs: number): boolean {
 }
 
 function isPartialRow(row: OutageRow): boolean {
-  return row.estado_prtg === 'PARCIAL'
+  return row.estado_prtg === 'PARCIAL' || Boolean(row.is_intermittent_watch) || Boolean(row.is_link_outage)
+}
+
+function rowKey(row: OutageRow): string {
+  if (row.incident_id != null) return `i-${row.incident_id}`
+  return `w-${row.assignment_id ?? row.cid ?? 'x'}`
 }
 
 function bucketOf(seconds: number | null): DurationBucket {
@@ -259,7 +264,7 @@ export function ActiveIncidentsPage({
       const aTime = Number.isNaN(aMs) ? 0 : aMs
       const bTime = Number.isNaN(bMs) ? 0 : bMs
       if (bTime !== aTime) return bTime - aTime
-      return b.incident_id - a.incident_id
+      return (b.incident_id ?? 0) - (a.incident_id ?? 0)
     })
   }, [scoped, followup, reopenedScope, managementScope, provincia, distrito, tecnologia, fromDate, toDate, duration, now, durationSource])
 
@@ -521,7 +526,7 @@ export function ActiveIncidentsPage({
                 <tbody>
                   {pageRows.map((row) => (
                     <OutageTableRow
-                      key={row.incident_id}
+                      key={rowKey(row)}
                       row={row}
                       now={now}
                       canManage={canManage}
@@ -529,7 +534,7 @@ export function ActiveIncidentsPage({
                       durationCaption={durationCaption}
                       showManagementTag={showManagementTag}
                       showGenerateTicket={source === 'managing'}
-                      pngBusy={pngBusyId === row.incident_id}
+                      pngBusy={row.incident_id != null && pngBusyId === row.incident_id}
                       onManage={setManageId}
                       onGenerateTicket={setTicketRow}
                       onDownloadTicketImage={(id) => {
@@ -641,12 +646,27 @@ function OutageTableRow({
   const isRecentDown = isRecentFullDown(row, now)
   const prtgDuration = row.prtg_down_since_raw?.trim() || null
 
+  const isIntermittent = isPartialRow(row)
+
   return (
-    <tr className={`${trClassName} group ${isRecentDown ? 'bg-red-50/50 dark:bg-red-950/20' : ''}`}>
+    <tr
+      className={`${trClassName} group ${
+        isRecentDown
+          ? 'bg-red-50/50 dark:bg-red-950/20'
+          : isIntermittent
+            ? 'bg-amber-50/60 dark:bg-amber-950/20'
+            : ''
+      }`}
+    >
       <td className={outageTd}>
         <div className="flex min-w-0 flex-col items-start gap-1">
           <div className="flex flex-wrap items-center gap-1">
             <PrtgStatusBadge status={row.estado_prtg} />
+            {row.is_intermittent_watch ? (
+              <Badge tone="warning" className="!text-[10px]" title="Advertencia PRTG sin ticket; no es caída">
+                Intermitente
+              </Badge>
+            ) : null}
             {isRecentDown ? (
               <Badge
                 tone="danger"
@@ -726,6 +746,10 @@ function OutageTableRow({
             >
               Mantenido en gestión
             </Badge>
+          ) : row.is_intermittent_watch ? (
+            <Badge tone="warning" className="!text-[10px] !font-medium" title="Sin ticket: solo vigilancia del Ping en advertencia">
+              Sin ticket
+            </Badge>
           ) : (
             <FollowupBadge status={row.followup_status} />
           )}
@@ -759,23 +783,29 @@ function OutageTableRow({
               {row.ticket_code ? 'Ticket / evento' : 'Generar ticket'}
             </Button>
           ) : null}
-          {showGenerateTicket && row.ticket_code && onDownloadTicketImage ? (
+          {showGenerateTicket && row.ticket_code && row.incident_id != null && onDownloadTicketImage ? (
             <IconButton
               label={`Descargar imagen ${row.ticket_code}`}
-              onClick={() => onDownloadTicketImage(row.incident_id)}
+              onClick={() => onDownloadTicketImage(row.incident_id as number)}
               disabled={pngBusy}
               className="!size-8 text-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none dark:text-teal-300"
             >
               <ImageDown className="h-4 w-4" aria-hidden />
             </IconButton>
           ) : null}
-          <IconButton
-            label={canManage ? 'Gestionar' : 'Ver detalle'}
-            onClick={() => onManage(row.incident_id)}
-            className="!size-8 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
-          >
-            {canManage ? <SquarePen className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
-          </IconButton>
+          {row.incident_id != null ? (
+            <IconButton
+              label={canManage ? 'Gestionar' : 'Ver detalle'}
+              onClick={() => onManage(row.incident_id as number)}
+              className="!size-8 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
+            >
+              {canManage ? <SquarePen className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
+            </IconButton>
+          ) : (
+            <span className="px-1 text-[10px] font-medium text-amber-700 dark:text-amber-300" title="Sin ticket: vigilancia PRTG">
+              Solo aviso
+            </span>
+          )}
         </div>
       </td>
     </tr>

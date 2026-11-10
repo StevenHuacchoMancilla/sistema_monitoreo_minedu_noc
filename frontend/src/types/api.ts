@@ -84,7 +84,7 @@ export type DashboardSummary = {
 }
 
 export type OutageRow = {
-  incident_id: number
+  incident_id: number | null
   school_id?: number | null
   assignment_id?: number | null
   cid: string | null
@@ -139,6 +139,8 @@ export type OutageRow = {
   affected_wan_node?: string | null
   affected_wan_node_label?: string | null
   is_link_outage?: boolean
+  /** Ping amarillo sin ticket: solo vigilancia, no es caída. */
+  is_intermittent_watch?: boolean
   /** El Ping de esta caída pasó de advertencia (parcial) a caído. */
   escalated_from_partial?: boolean
   /** Momento en que pasó de parcial a caído (para etiqueta Reciente). */

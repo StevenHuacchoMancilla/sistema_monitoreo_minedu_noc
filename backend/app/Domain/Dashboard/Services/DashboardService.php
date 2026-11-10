@@ -8,6 +8,7 @@ use App\Enums\CidStatus;
 use App\Enums\ContactMatchStatus;
 use App\Enums\FollowupStatus;
 use App\Enums\MonitoringStatus;
+use App\Enums\PrtgSensorRole;
 use App\Enums\RecoveryReviewStatus;
 use App\Models\Incident;
 use App\Models\NetworkAssignment;
@@ -175,7 +176,7 @@ class DashboardService
                     OR EXISTS (
                         SELECT 1 FROM prtg_sensors s
                         WHERE s.id = incidents.prtg_sensor_id
-                          AND s.normalized_status = ?
+                          AND s.normalized_status IN (?, ?)
                     )
                   )
                 ORDER BY network_assignment_id, started_at DESC NULLS LAST, id DESC
@@ -184,8 +185,30 @@ class DashboardService
                 FollowupStatus::PendienteContacto->value,
                 Incident::DETECTION_MANUAL_PARTIAL,
                 MonitoringStatus::Caido->value,
+                MonitoringStatus::Parcial->value,
             ]
         );
+
+        // Ping intermitente (amarillo) sin ticket abierto: se ven en Caídas totales, no abren caída.
+        $intermittentOnly = (int) (DB::selectOne(
+            "SELECT COUNT(DISTINCT s.network_assignment_id)::int AS c
+             FROM prtg_sensors s
+             INNER JOIN network_assignments na
+               ON na.id = s.network_assignment_id
+              AND na.deleted_at IS NULL
+              AND na.is_active = true
+             WHERE s.normalized_status = ?
+               AND (s.sensor_role = ? OR UPPER(COALESCE(s.name, '')) LIKE '%PING%')
+               AND NOT EXISTS (
+                    SELECT 1 FROM incidents i
+                    WHERE i.network_assignment_id = s.network_assignment_id
+                      AND i.recovered_at IS NULL
+               )",
+            [
+                MonitoringStatus::Parcial->value,
+                PrtgSensorRole::Ping->value,
+            ]
+        )->c ?? 0);
 
         $pendienteCierre = (int) Incident::query()
             ->where('followup_status', FollowupStatus::PendienteCierre)
@@ -204,14 +227,16 @@ class DashboardService
             ->whereNull('requirement_closed_at')
             ->count();
 
+        $totales = (int) ($row->totales ?? 0) + $intermittentOnly;
+
         return [
-            'totales' => (int) ($row->totales ?? 0),
+            'totales' => $totales,
             'pendientes' => (int) ($row->pendientes ?? 0),
             'pendiente_cierre' => $pendienteCierre,
             'incidencias_graves' => $graves,
             'requerimientos' => $requerimientos,
             // compat legacy
-            'activas' => (int) ($row->totales ?? 0),
+            'activas' => $totales,
             'recaidas' => 0,
         ];
     }
@@ -582,11 +607,14 @@ class DashboardService
                         ->orWhereNotNull('requirement_closed_at');
                 });
         } else {
+            // Caídas reales (rojo) + intermitentes/parciales (amarillo) + caídas de enlace manuales.
+            // Los intermitentes no abren ticket nuevo, pero sí se listan (arriba en el UI).
             $query->active()->where(function ($q) {
                 $q->whereHas(
                     'sensor',
-                    fn ($sensor) => $sensor->where('normalized_status', MonitoringStatus::Caido->value)
-                )->orWhere('detection_source', Incident::DETECTION_MANUAL_PARTIAL);
+                    fn ($sensor) => $sensor->whereIn('normalized_status', MonitoringStatus::outageValues())
+                )->orWhere('detection_source', Incident::DETECTION_MANUAL_PARTIAL)
+                    ->orWhereIn('current_status', MonitoringStatus::outageValues());
             });
         }
 
@@ -661,7 +689,7 @@ class DashboardService
             ->unique('incident_id')
             ->keyBy('incident_id');
 
-        return $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds, $requirementSchoolIds, $escalatedAtByIncident) {
+        $rows = $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds, $requirementSchoolIds, $escalatedAtByIncident) {
             $school = $incident->school;
             $assignment = $incident->networkAssignment;
             $sensor = $incident->sensor;
@@ -675,6 +703,9 @@ class DashboardService
             $durationSeconds = $downClock
                 ? max(0, now()->getTimestamp() - $downClock->getTimestamp())
                 : null;
+            $estadoPrtg = $incident->isManualPartial()
+                ? MonitoringStatus::Parcial->value
+                : ($sensor?->normalized_status?->value ?? $incident->current_status);
 
             return [
                 'incident_id' => $incident->id,
@@ -690,9 +721,7 @@ class DashboardService
                 ...$location,
                 'tecnologia' => $assignment?->tecnologia_acceso,
                 'nodo_pop' => $assignment?->nodo_pop,
-                'estado_prtg' => $incident->isManualPartial()
-                    ? MonitoringStatus::Parcial->value
-                    : ($sensor?->normalized_status?->value ?? $incident->current_status),
+                'estado_prtg' => $estadoPrtg,
                 'estado_prtg_text' => $incident->isManualPartial()
                     ? ('Enlace '.($incident->affected_wan_node?->value ?? 'PARCIAL'))
                     : $sensor?->status_text,
@@ -700,6 +729,7 @@ class DashboardService
                 'affected_wan_node' => $incident->affected_wan_node?->value,
                 'affected_wan_node_label' => $incident->affected_wan_node?->label(),
                 'is_link_outage' => $incident->isManualPartial(),
+                'is_intermittent_watch' => false,
                 'escalated_from_partial' => (bool) $incident->escalated_from_partial
                     && ($sensor?->normalized_status === MonitoringStatus::Caido
                         || (string) $incident->current_status === MonitoringStatus::Caido->value),
@@ -747,6 +777,138 @@ class DashboardService
                     ? $incident->recovery_review_status->value
                     : $incident->recovery_review_status,
                 'kept_in_management' => $incident->isKeptInManagement(),
+            ];
+        })->values();
+
+        if (! $openManagement) {
+            $rows = $rows
+                ->concat($this->intermittentWatchRows($rows->pluck('assignment_id')->filter()->all()))
+                ->values();
+        }
+
+        return $rows->sort(function (array $a, array $b): int {
+            $aPartial = (($a['estado_prtg'] ?? null) === MonitoringStatus::Parcial->value
+                || ($a['is_intermittent_watch'] ?? false)
+                || ($a['is_link_outage'] ?? false)) ? 0 : 1;
+            $bPartial = (($b['estado_prtg'] ?? null) === MonitoringStatus::Parcial->value
+                || ($b['is_intermittent_watch'] ?? false)
+                || ($b['is_link_outage'] ?? false)) ? 0 : 1;
+            if ($aPartial !== $bPartial) {
+                return $aPartial <=> $bPartial;
+            }
+
+            $aMs = isset($a['current_down_started_at']) ? strtotime((string) $a['current_down_started_at']) : 0;
+            $bMs = isset($b['current_down_started_at']) ? strtotime((string) $b['current_down_started_at']) : 0;
+            if ($aMs !== $bMs) {
+                return $bMs <=> $aMs;
+            }
+
+            return ((int) ($b['incident_id'] ?? 0)) <=> ((int) ($a['incident_id'] ?? 0));
+        })->values();
+    }
+
+    /**
+     * Ping en advertencia/intermitente sin ticket abierto: se muestra para tenerlo en cuenta.
+     *
+     * @param  list<int|string>  $excludeAssignmentIds
+     * @return Collection<int, array<string, mixed>>
+     */
+    private function intermittentWatchRows(array $excludeAssignmentIds): Collection
+    {
+        $exclude = array_values(array_unique(array_map('intval', $excludeAssignmentIds)));
+
+        $sensors = PrtgSensor::query()
+            ->with(['networkAssignment.school.contacts'])
+            ->where('normalized_status', MonitoringStatus::Parcial->value)
+            ->where(function ($q) {
+                $q->where('sensor_role', PrtgSensorRole::Ping->value)
+                    ->orWhereRaw("UPPER(COALESCE(name, '')) LIKE '%PING%'");
+            })
+            ->whereHas('networkAssignment', function ($a) {
+                $a->where('is_active', true)
+                    ->where(function ($inner) {
+                        $inner->where('monitoring_eligible', true)
+                            ->orWhereNull('monitoring_eligible');
+                    });
+            })
+            ->when($exclude !== [], fn ($q) => $q->whereNotIn('network_assignment_id', $exclude))
+            ->whereRaw(
+                'NOT EXISTS (
+                    SELECT 1 FROM incidents i
+                    WHERE i.network_assignment_id = prtg_sensors.network_assignment_id
+                      AND i.recovered_at IS NULL
+                )'
+            )
+            ->orderByDesc('last_check')
+            ->get()
+            ->unique('network_assignment_id')
+            ->values();
+
+        return $sensors->map(function (PrtgSensor $sensor) {
+            $assignment = $sensor->networkAssignment;
+            $school = $assignment?->school;
+            $contact = $school?->contacts?->first();
+            $location = PrtgOperationalLocation::apiFields($assignment, $school);
+            $downClock = $sensor->last_check;
+            $durationSeconds = $downClock
+                ? max(0, now()->getTimestamp() - $downClock->getTimestamp())
+                : null;
+
+            return [
+                'incident_id' => null,
+                'school_id' => $school?->id,
+                'assignment_id' => $assignment?->id,
+                'cid' => $assignment?->cid,
+                'tss' => $school?->current_sequence,
+                'local_educativo' => $school?->local_educativo,
+                'codigo_local' => $school?->codigo_local,
+                'ambito' => $school?->ambito,
+                'energy_type' => $school?->energy_type,
+                ...$location,
+                'tecnologia' => $assignment?->tecnologia_acceso,
+                'nodo_pop' => $assignment?->nodo_pop,
+                'estado_prtg' => MonitoringStatus::Parcial->value,
+                'estado_prtg_text' => $sensor->status_text ?: 'Intermitente / advertencia PRTG',
+                'detection_source' => null,
+                'affected_wan_node' => null,
+                'affected_wan_node_label' => null,
+                'is_link_outage' => false,
+                'is_intermittent_watch' => true,
+                'escalated_from_partial' => false,
+                'escalated_at' => null,
+                'duracion' => $downClock?->diffForHumans(now(), true),
+                'duration_seconds' => $durationSeconds,
+                'duration_label' => $durationSeconds !== null ? $this->formatTss($durationSeconds) : null,
+                'prtg_down_since_raw' => $sensor->down_since,
+                'started_at' => $downClock?->toIso8601String(),
+                'current_down_started_at' => $downClock?->toIso8601String(),
+                'in_management' => false,
+                'has_open_grave_incident' => false,
+                'is_grave_incident' => false,
+                'has_open_requirement' => false,
+                'is_requirement_case' => false,
+                'tracking' => null,
+                'followup_status' => null,
+                'management_classification' => null,
+                'management_classification_label' => null,
+                'color_key' => null,
+                'outage_text' => null,
+                'detail_text' => null,
+                'management_scope' => null,
+                'last_check' => $sensor->last_check?->toIso8601String(),
+                'contacto' => $contact?->name,
+                'telefono' => $contact?->phone,
+                'contacto_corto' => $this->shortContactName($contact),
+                'telefono_masked' => $contact?->phone,
+                'reincidente_count' => 0,
+                'reincidente' => false,
+                'ticket_code' => null,
+                'glpi_ticket' => null,
+                'responsible_area' => null,
+                'reopened_from_management' => false,
+                'recovered_at' => null,
+                'recovery_review_status' => null,
+                'kept_in_management' => false,
             ];
         });
     }
