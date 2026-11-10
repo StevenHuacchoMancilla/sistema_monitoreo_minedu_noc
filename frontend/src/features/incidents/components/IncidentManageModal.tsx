@@ -933,10 +933,38 @@ function AmbitoValue({ ambito }: { ambito?: string | null }) {
   return <span className="text-slate-400">Sin ámbito</span>
 }
 
+function EnergyValue({ energy }: { energy?: string | null }) {
+  const value = (energy ?? '').trim().toUpperCase()
+  if (value.includes('PANEL') || value.includes('SOLAR')) {
+    return (
+      <span
+        className="inline-flex rounded-md bg-yellow-50 px-2 py-0.5 text-[12px] font-semibold text-yellow-900 dark:bg-yellow-950/40 dark:text-yellow-200"
+        title={energy ?? 'Panel solar'}
+      >
+        Panel solar
+      </span>
+    )
+  }
+  if (value.includes('RED')) {
+    return (
+      <span
+        className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+        title={energy ?? 'Red pública'}
+      >
+        Red pública
+      </span>
+    )
+  }
+  if (value !== '') {
+    return <span className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{energy}</span>
+  }
+  return <span className="text-slate-400">Sin energía</span>
+}
+
 function SummaryBand({ data }: { data: IncidentDetail }) {
   const reincidencia = data.antecedentes.reincidencia
   return (
-    <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-6 dark:border-slate-800 dark:bg-slate-800">
+    <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-7 dark:border-slate-800 dark:bg-slate-800">
       <KeyValue label="Caída">{data.estado.fecha_caida ? formatDateTime(data.estado.fecha_caida) : '—'}</KeyValue>
       <KeyValue label={data.estado.recovered_at ? 'Recuperado' : 'Último check'}>
         {data.estado.recovered_at
@@ -951,6 +979,9 @@ function SummaryBand({ data }: { data: IncidentDetail }) {
       <KeyValue label="Tecnología">{data.colegio.tecnologia ?? '—'}</KeyValue>
       <KeyValue label="Ámbito">
         <AmbitoValue ambito={data.colegio.ambito} />
+      </KeyValue>
+      <KeyValue label="Energía">
+        <EnergyValue energy={data.colegio.energy_type} />
       </KeyValue>
       <KeyValue label="Reincidencia">
         {reincidencia && reincidencia.total > 1 ? (
@@ -1009,7 +1040,9 @@ function SummaryTab({ data }: { data: IncidentDetail }) {
           <KeyValue label="Ámbito">
             <AmbitoValue ambito={c.ambito} />
           </KeyValue>
-          <KeyValue label="Energía">{c.energy_type ?? '—'}</KeyValue>
+          <KeyValue label="Energía">
+            <EnergyValue energy={c.energy_type} />
+          </KeyValue>
         </dl>
       </Panel>
 
