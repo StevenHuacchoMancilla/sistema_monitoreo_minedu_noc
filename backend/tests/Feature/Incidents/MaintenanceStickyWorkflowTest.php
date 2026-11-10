@@ -152,4 +152,47 @@ class MaintenanceStickyWorkflowTest extends TestCase
         $this->assertSame($maint->id, $again->id);
         $this->assertSame(1, Incident::query()->count());
     }
+
+    public function test_mark_maintenance_leaves_pendiente_cierre_like_incidencias(): void
+    {
+        [$assignment, $sensor] = $this->seedSchool('258815');
+        $sensor->update(['normalized_status' => MonitoringStatus::Caido]);
+
+        $incident = Incident::query()->create([
+            'school_id' => $assignment->school_id,
+            'network_assignment_id' => $assignment->id,
+            'prtg_sensor_id' => $sensor->id,
+            'started_at' => now()->subHour(),
+            'prtg_down_started_at' => now()->subHour(),
+            'current_status' => MonitoringStatus::Caido->value,
+            'followup_status' => FollowupStatus::EnGestion,
+            'management_classification' => \App\Enums\ManagementClassification::ContactConfirmed,
+        ]);
+
+        app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'PRTG UP', now());
+        $incident->refresh();
+        $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+
+        app(ServiceTicketService::class)->markMaintenance($incident->fresh());
+        $incident->refresh();
+
+        $this->assertSame(FollowupStatus::EnGestion, $incident->followup_status);
+        $this->assertTrue($incident->isOpenMaintenance());
+        $this->assertTrue($incident->isStickyOpen());
+        $this->assertSame(
+            \App\Enums\RecoveryReviewStatus::ContinueMonitoring,
+            $incident->recovery_review_status
+        );
+
+        $pendiente = $this->getJson('/api/incidents/queues/pendiente-cierre')->assertOk();
+        $this->assertFalse(
+            collect($pendiente->json('data'))->pluck('incident_id')->contains($incident->id)
+        );
+
+        // Tampoco debe quedar en En gestión: vive solo en Mantenimientos (como Incidencias).
+        $managing = $this->getJson('/api/dashboard/managing')->assertOk();
+        $this->assertFalse(
+            collect($managing->json('data'))->pluck('incident_id')->contains($incident->id)
+        );
+    }
 }

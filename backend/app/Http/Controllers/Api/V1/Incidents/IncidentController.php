@@ -520,6 +520,7 @@ class IncidentController extends Controller
         }
 
         $school = $assignment->school;
+        $openCase = $this->openCaseSummaryForAssignment((int) $assignment->id);
 
         return response()->json(['data' => [
             'school_id' => $school?->id,
@@ -530,6 +531,7 @@ class IncidentController extends Controller
             'codigo_local' => $school?->codigo_local,
             'provincia' => $school?->provincia,
             'distrito' => $school?->distrito,
+            'open_case' => $openCase,
         ]]);
     }
 
@@ -1016,9 +1018,18 @@ class IncidentController extends Controller
             ->withCount('managements')
             ->where('followup_status', FollowupStatus::PendienteCierre)
             ->whereNotNull('recovered_at')
-            // Ya clasificados a Incidencias / Requerimientos no deben aparecer aquí.
+            // Ya clasificados a Incidencias / Requerimientos / Mantenimiento no deben aparecer aquí.
             ->whereRaw('NOT (COALESCE(is_grave_incident, false) = true AND grave_closed_at IS NULL)')
             ->whereRaw('NOT (COALESCE(is_requirement_case, false) = true AND requirement_closed_at IS NULL)')
+            ->where(function ($q) {
+                $q->where(function ($d) {
+                    $d->whereNull('detection_source')
+                        ->orWhere('detection_source', '!=', Incident::DETECTION_MAINTENANCE);
+                })->whereDoesntHave('serviceTicket', function ($t) {
+                    $t->where('is_maintenance', true)
+                        ->where('status', \App\Models\ServiceTicket::STATUS_OPEN);
+                });
+            })
             ->orderByDesc('recovered_at')
             ->limit(500)
             ->get()
@@ -1250,56 +1261,104 @@ class IncidentController extends Controller
      */
     private function applyOpeningGestion(Incident $incident, array $data, ?string $actor): void
     {
-        if (filled($incident->root_cause_code)) {
-            $this->serviceTickets->syncFromIncident($incident, $actor);
+        $hadCause = filled($incident->root_cause_code);
+        $row = null;
+        $scope = $incident->management_scope;
 
-            return;
+        if (! $hadCause) {
+            $row = RootCauseLegend::requirePair(
+                (string) $data['root_cause_group_code'],
+                (string) $data['root_cause_code'],
+            );
+            $scope = in_array($row['attention'], ['PEXT', 'PINT'], true)
+                ? ManagementScope::from((string) $row['attention'])
+                : $incident->management_scope;
+            $incident->fill([
+                'root_cause_group_code' => $row['group_code'],
+                'root_cause_code' => $row['code'],
+                'cause' => $row['cause'],
+                'management_scope' => $scope,
+            ]);
+        } elseif (
+            filled($data['root_cause_group_code'] ?? null)
+            && filled($data['root_cause_code'] ?? null)
+        ) {
+            // Reuso de caso abierto: permite actualizar causa si el operador la cambia.
+            try {
+                $row = RootCauseLegend::requirePair(
+                    (string) $data['root_cause_group_code'],
+                    (string) $data['root_cause_code'],
+                );
+                $scope = in_array($row['attention'], ['PEXT', 'PINT'], true)
+                    ? ManagementScope::from((string) $row['attention'])
+                    : $incident->management_scope;
+                $incident->fill([
+                    'root_cause_group_code' => $row['group_code'],
+                    'root_cause_code' => $row['code'],
+                    'cause' => $row['cause'],
+                    'management_scope' => $scope,
+                ]);
+            } catch (InvalidArgumentException) {
+                $row = null;
+            }
         }
 
-        $row = RootCauseLegend::requirePair(
-            (string) $data['root_cause_group_code'],
-            (string) $data['root_cause_code'],
-        );
-        $scope = in_array($row['attention'], ['PEXT', 'PINT'], true)
-            ? ManagementScope::from((string) $row['attention'])
-            : $incident->management_scope;
+        $detail = trim((string) ($data['detail'] ?? ''));
+        if ($detail !== '') {
+            $incident->detail_text = $detail;
+        }
 
-        $minedu = ! empty($data['minedu_reason'])
+        $mineduProvided = array_key_exists('minedu_reason', $data) && $data['minedu_reason'] !== null && $data['minedu_reason'] !== '';
+        $minedu = $mineduProvided
             ? MineduReason::from((string) $data['minedu_reason'])
             : ($incident->minedu_reason instanceof MineduReason ? $incident->minedu_reason : null);
 
-        $incident->fill([
-            'root_cause_group_code' => $row['group_code'],
-            'root_cause_code' => $row['code'],
-            'cause' => $row['cause'],
-            'detail_text' => $data['detail'] ?? $incident->detail_text,
-            'minedu_reason' => $minedu ?? $incident->minedu_reason,
-            'management_scope' => $scope,
-        ])->save();
+        if ($mineduProvided) {
+            $incident->minedu_reason = $minedu;
+            $incident->management_classification = $minedu->toManagementClassification();
+        }
+
+        $incident->save();
 
         $userId = (int) (request()->user()?->id ?? 0);
-        if ($minedu instanceof MineduReason && $minedu->marksAsIncident() && ! $incident->isOpenGrave()) {
+        // Queja / Caída de enlace → Incidencias; Requerimiento → Requerimientos (también al reusar caso).
+        if ($minedu instanceof MineduReason && $minedu->marksAsIncident()) {
             if ($incident->isOpenRequirement()) {
                 $incident->forceFill(['requirement_closed_at' => now()])->save();
             }
-            $incident->forceFill([
-                'is_grave_incident' => true,
-                'grave_opened_at' => now(),
-                'grave_opened_by_user_id' => $userId > 0 ? $userId : null,
-                'grave_closed_at' => null,
-            ])->save();
-            $this->listaDays->markAverias($incident->fresh() ?? $incident);
-        } elseif ($minedu instanceof MineduReason && $minedu->marksAsRequirement() && ! $incident->isOpenRequirement()) {
+            if (! $incident->isOpenGrave()) {
+                $incident->forceFill([
+                    'is_grave_incident' => true,
+                    'grave_opened_at' => now(),
+                    'grave_opened_by_user_id' => $userId > 0 ? $userId : null,
+                    'grave_closed_at' => null,
+                ])->save();
+                $this->listaDays->markAverias($incident->fresh() ?? $incident);
+            }
+            $this->leavePendienteCierreIfNeeded($incident->fresh() ?? $incident);
+        } elseif ($minedu instanceof MineduReason && $minedu->marksAsRequirement()) {
             if ($incident->isOpenGrave()) {
                 $incident->forceFill(['grave_closed_at' => now()])->save();
             }
-            $incident->forceFill([
-                'is_requirement_case' => true,
-                'requirement_opened_at' => now(),
-                'requirement_opened_by_user_id' => $userId > 0 ? $userId : null,
-                'requirement_closed_at' => null,
-            ])->save();
+            if (! $incident->isOpenRequirement()) {
+                $incident->forceFill([
+                    'is_requirement_case' => true,
+                    'requirement_opened_at' => now(),
+                    'requirement_opened_by_user_id' => $userId > 0 ? $userId : null,
+                    'requirement_closed_at' => null,
+                ])->save();
+            }
+            $this->leavePendienteCierreIfNeeded($incident->fresh() ?? $incident);
         }
+
+        $causeLabel = $row
+            ? ($row['code'].' · '.$row['cause'])
+            : ((string) ($incident->root_cause_code ?? '').' · '.(string) ($incident->cause ?? ''));
+        $obsParts = [
+            $hadCause ? 'Seguimiento al reutilizar ticket abierto.' : 'Causa raíz marcada al abrir el ticket.',
+            trim($causeLabel) !== '·' ? $causeLabel : null,
+            $mineduProvided && $minedu ? 'MINEDU: '.$minedu->label() : null,
+        ];
 
         IncidentManagement::query()->create([
             'incident_id' => $incident->id,
@@ -1308,15 +1367,79 @@ class IncidentController extends Controller
                 : (string) ($incident->management_classification ?: ManagementClassification::Unclassified->value),
             'scope' => $scope instanceof ManagementScope ? $scope->value : $scope,
             'detail' => $incident->detail_text,
-            'observation' => 'Causa raíz marcada al abrir el ticket. '.$row['code'].' · '.$row['cause'],
+            'observation' => implode(' ', array_filter($obsParts)),
             'created_by' => request()->user()?->id,
         ]);
 
         $fresh = $incident->fresh() ?? $incident;
         $this->serviceTickets->syncFromIncident($fresh, $actor);
-        if (\App\Models\ServiceTicket::isMaintenanceCause((string) $row['code'])) {
+        $causeCode = (string) ($fresh->root_cause_code ?? ($row['code'] ?? ''));
+        if (\App\Models\ServiceTicket::isMaintenanceCause($causeCode)) {
             $this->serviceTickets->markMaintenance($fresh);
         }
+    }
+
+    private function leavePendienteCierreIfNeeded(Incident $incident): void
+    {
+        if ($incident->followup_status !== FollowupStatus::PendienteCierre) {
+            return;
+        }
+        if (! $incident->isOpenGrave() && ! $incident->isOpenRequirement() && ! $incident->isOpenMaintenance()) {
+            return;
+        }
+        $incident->forceFill([
+            'followup_status' => FollowupStatus::EnGestion,
+            'recovery_review_status' => \App\Enums\RecoveryReviewStatus::ContinueMonitoring,
+            'recovery_reviewed_at' => now(),
+            'reopened_from_management' => true,
+            'last_contact_at' => now(),
+        ])->save();
+    }
+
+    /**
+     * @return array<string, mixed>|null
+     */
+    private function openCaseSummaryForAssignment(int $assignmentId): ?array
+    {
+        $incident = Incident::query()
+            ->with('serviceTicket')
+            ->where('network_assignment_id', $assignmentId)
+            ->where('followup_status', '!=', FollowupStatus::Cerrado->value)
+            ->orderByDesc('id')
+            ->first();
+
+        if ($incident === null) {
+            return null;
+        }
+
+        $location = 'En gestión';
+        if ($incident->isOpenGrave()) {
+            $location = 'Incidencias';
+        } elseif ($incident->isOpenRequirement()) {
+            $location = 'Requerimientos';
+        } elseif ($incident->isOpenMaintenance()) {
+            $location = 'Mantenimientos';
+        } elseif ($incident->followup_status === FollowupStatus::PendienteCierre) {
+            $location = 'Pendiente de cierre';
+        } elseif ($incident->followup_status === FollowupStatus::PendienteContacto) {
+            $location = 'Pendientes de gestión';
+        } elseif ($incident->recovered_at === null) {
+            $location = 'Caídas totales / En gestión';
+        }
+
+        return [
+            'incident_id' => $incident->id,
+            'followup_status' => $incident->followup_status?->value,
+            'followup_label' => $incident->followup_status?->label(),
+            'ticket_code' => $incident->serviceTicket?->ticket_code,
+            'location' => $location,
+            'is_grave' => $incident->isOpenGrave(),
+            'is_requirement' => $incident->isOpenRequirement(),
+            'is_maintenance' => $incident->isOpenMaintenance(),
+            'message' => 'Este colegio ya tiene un caso abierto en '.$location
+                .($incident->serviceTicket?->ticket_code ? ' ('.$incident->serviceTicket->ticket_code.')' : '')
+                .'. Al generar se reutiliza ese ticket; no se crea uno nuevo.',
+        ];
     }
 
     private function forceMarkGrave(Incident $incident, int $userId): void

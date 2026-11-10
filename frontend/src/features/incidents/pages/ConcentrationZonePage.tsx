@@ -11,6 +11,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/Sta
 import {
   DataTableContainer,
   IsoDateTimeCell,
+  tdDateClassName,
   tableClassName,
   tdClassName,
   thClassName,
@@ -199,7 +200,7 @@ function ZoneRow({ row, now }: { row: ConcentrationZoneSchool; now: number }) {
           ) : null}
         </div>
       </td>
-      <td className={tdClassName}>
+      <td className={tdDateClassName}>
         {down ? <IsoDateTimeCell value={row.down_started_at} /> : <span className="text-slate-400">—</span>}
       </td>
       <td className={`${tdClassName} whitespace-nowrap tabular-nums font-medium ${down ? 'text-red-700 dark:text-red-300' : ''}`}>

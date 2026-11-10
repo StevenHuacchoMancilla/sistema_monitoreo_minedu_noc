@@ -3,6 +3,7 @@
 namespace App\Domain\Reports\Services;
 
 use App\Domain\Reports\Support\ListaLleeEstadoResolver;
+use App\Enums\FollowupStatus;
 use App\Enums\ListaLleeEstado;
 use App\Models\Incident;
 use App\Models\ListaLleeDay;
@@ -234,6 +235,8 @@ class ListaLleeDayService
         $this->fillRowFromIncident($row, $incident, $estado);
         $row->lista_estado = $estado;
         $row->save();
+        // Un colegio / CID por día: evita doble fila si se marcó incidencia duplicada.
+        $this->dedupeDayRowsByCid($day);
     }
 
     public function setDetalle(Incident $incident, ?string $detalle): void
@@ -396,6 +399,70 @@ class ListaLleeDayService
             $row->detalle = $keepDetalle;
             $row->lista_estado = $estado;
             $row->save();
+        }
+
+        $this->dedupeDayRowsByCid($day);
+    }
+
+    /**
+     * Una fila por CID en el día. Si hubo incidencia duplicada (mismo colegio),
+     * se conserva la más completa / abierta y se elimina la otra.
+     */
+    private function dedupeDayRowsByCid(ListaLleeDay $day): void
+    {
+        $groups = ListaLleeDayRow::query()
+            ->where('lista_llee_day_id', $day->id)
+            ->whereNotNull('cid')
+            ->where('cid', '!=', '')
+            ->with('incident')
+            ->orderBy('id')
+            ->get()
+            ->groupBy(fn (ListaLleeDayRow $row) => (string) $row->cid);
+
+        foreach ($groups as $group) {
+            if ($group->count() < 2) {
+                continue;
+            }
+
+            $sorted = $group->sortByDesc(function (ListaLleeDayRow $row): int {
+                $incident = $row->incident;
+                $score = 0;
+                if ($incident !== null) {
+                    if ($incident->isOpenGrave()) {
+                        $score += 1000;
+                    }
+                    if ($incident->isOpenRequirement()) {
+                        $score += 900;
+                    }
+                    if ($incident->isOpenMaintenance()) {
+                        $score += 800;
+                    }
+                    if ($incident->followup_status !== FollowupStatus::Cerrado) {
+                        $score += 200;
+                    }
+                }
+                if (filled($row->root_cause_code)) {
+                    $score += 50;
+                }
+                if (filled($row->detalle)) {
+                    $score += 20;
+                }
+                if ($row->lista_estado === ListaLleeEstado::Averias
+                    || $row->lista_estado === ListaLleeEstado::Averias->value) {
+                    $score += 10;
+                }
+
+                // Ante empate, conservar la fila más antigua (primera marcada).
+                return ($score * 1_000_000) - (int) $row->id;
+            })->values();
+
+            $keepId = (int) $sorted->first()->id;
+            foreach ($sorted as $row) {
+                if ((int) $row->id === $keepId) {
+                    continue;
+                }
+                $row->delete();
+            }
         }
     }
 

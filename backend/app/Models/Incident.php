@@ -103,10 +103,13 @@ class Incident extends Model
             || $this->isOpenMaintenance();
     }
 
-    /** Recuperado en PRTG pero mantenido en gestión (re-cae sin ticket nuevo). */
+    /**
+     * Mantenido en gestión (sticky): re-cae sin ticket nuevo hasta cierre manual.
+     * Vale recuperado en PRTG o re-caído; la bandera CONTINUE_MONITORING no se pierde al reabrir.
+     */
     public function isKeptInManagement(): bool
     {
-        if ($this->recovered_at === null) {
+        if ($this->followup_status === FollowupStatus::Cerrado) {
             return false;
         }
         if ($this->recovery_review_status !== RecoveryReviewStatus::ContinueMonitoring) {

@@ -10,6 +10,18 @@ import { RootCausePicker } from './RootCausePicker'
 
 export type TicketKind = 'CORRECTIVO' | 'PREVENTIVO' | 'ASIGNACION_LIBRE'
 
+type OpenCase = {
+  incident_id: number
+  followup_status?: string | null
+  followup_label?: string | null
+  ticket_code?: string | null
+  location: string
+  is_grave?: boolean
+  is_requirement?: boolean
+  is_maintenance?: boolean
+  message: string
+}
+
 type Found = {
   cid: string | null
   tss: number | null
@@ -17,6 +29,7 @@ type Found = {
   codigo_local: string | null
   provincia: string | null
   distrito: string | null
+  open_case?: OpenCase | null
 }
 
 const textareaClass = `${inputClassName} !h-auto min-h-20 resize-y py-2`
@@ -28,7 +41,7 @@ function kindHelp(kind: TicketKind): string {
   if (kind === 'ASIGNACION_LIBRE') {
     return 'Asignación libre: ticket sin denominación correctivo/preventivo. Seguimiento normal en Detalle; Detalle de evento solo si va técnico.'
   }
-  return 'Correctivo → Incidencias. Si el colegio ya está caído en PRTG, se continúa ese ticket. Queja/Caída de enlace MINEDU también van a Incidencias.'
+  return 'Correctivo → Incidencias. Si el colegio ya tiene caso abierto, se reutiliza ese ticket. Queja / Caída de enlace → Incidencias; Requerimiento → Requerimientos; causa GS01 → Mantenimientos.'
 }
 
 export function ManualTicketModal({
@@ -220,10 +233,27 @@ export function ManualTicketModal({
           ) : null}
         </div>
         {found ? (
-          <p className="mt-3 rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:bg-slate-950 dark:text-slate-200">
-            CID {found.cid ?? '—'} · TSS {found.tss ?? '—'} · {found.local_educativo ?? 'Sin nombre'}
-            {found.provincia ? ` · ${found.provincia}` : ''}
-          </p>
+          <div className="mt-3 space-y-2">
+            <p className="rounded-lg bg-slate-50 px-3 py-2 text-sm text-slate-700 dark:bg-slate-950 dark:text-slate-200">
+              CID {found.cid ?? '—'} · TSS {found.tss ?? '—'} · {found.local_educativo ?? 'Sin nombre'}
+              {found.provincia ? ` · ${found.provincia}` : ''}
+            </p>
+            {found.open_case ? (
+              <div
+                className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+                role="status"
+              >
+                <p className="font-semibold">Ya está en {found.open_case.location}</p>
+                <p className="mt-0.5 text-[13px] leading-snug">{found.open_case.message}</p>
+                {found.open_case.followup_label ? (
+                  <p className="mt-1 text-[12px] text-amber-800 dark:text-amber-200">
+                    Estado actual: {found.open_case.followup_label}
+                    {found.open_case.ticket_code ? ` · ${found.open_case.ticket_code}` : ''}
+                  </p>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
         ) : null}
         {error ? <p className="mt-3 text-sm text-red-600">{error}</p> : null}
         <div className="mt-4 flex justify-end gap-2">
@@ -231,7 +261,9 @@ export function ManualTicketModal({
           {!found ? (
             <Button type="submit" loading={lookup.isPending}>Buscar colegio</Button>
           ) : (
-            <Button type="submit" loading={create.isPending}>Generar ticket</Button>
+            <Button type="submit" loading={create.isPending}>
+              {found.open_case ? 'Continuar en el caso abierto' : 'Generar ticket'}
+            </Button>
           )}
         </div>
       </form>

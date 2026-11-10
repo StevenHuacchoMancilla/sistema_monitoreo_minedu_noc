@@ -103,6 +103,31 @@ class IncidentService
             ->whereNull('recovered_at')
             ->first();
 
+        // Sticky primero: si hay "mantener en gestión" / incidencia / requerimiento / mantenimiento,
+        // no debe nacer una caída pendiente de cero (ni quedar una huérfana sin etiqueta).
+        $openSticky = $this->findOpenSticky($assignment->id, $active?->id);
+
+        if ($openSticky !== null && $openSticky->recovered_at !== null) {
+            if ($active !== null && $active->id !== $openSticky->id) {
+                $this->closeOrphanDuplicateFall($active, $openSticky);
+            }
+
+            return $this->reopenStickyCase($openSticky, $sensor, $downSince, $onAnomaly);
+        }
+
+        // Huérfana activa + sticky aún "en gestión" (CONTINUE_MONITORING) pero ya down:
+        // absorber la huérfana y quedarse con el sticky.
+        if (
+            $active !== null
+            && $openSticky !== null
+            && $active->id !== $openSticky->id
+            && $openSticky->isKeptInManagement()
+        ) {
+            $this->closeOrphanDuplicateFall($active, $openSticky);
+
+            return $this->reopenStickyCase($openSticky, $sensor, $downSince, $onAnomaly);
+        }
+
         if ($active) {
             // Caída parcial manual + Ping total CAÍDO → escalar a caída total (ya no es solo un enlace).
             if ($active->isManualPartial()) {
@@ -147,46 +172,6 @@ class IncidentService
 
             return $active->fresh() ?? $active;
         }
-
-        // Sticky abierto (incidencia, requerimiento, mantenido en gestión o mantenimiento):
-        // re-cae sin ticket / caída nueva.
-        $openSticky = Incident::query()
-            ->with('serviceTicket')
-            ->where('network_assignment_id', $assignment->id)
-            ->where('followup_status', '!=', FollowupStatus::Cerrado->value)
-            ->where(function ($q) {
-                $q->where(function ($recovered) {
-                    // Incidencia / requerimiento / mantener en gestión: ya recuperados en PRTG.
-                    $recovered->whereNotNull('recovered_at')
-                        ->where(function ($inner) {
-                            $inner->where(function ($g) {
-                                $g->where('is_grave_incident', true)->whereNull('grave_closed_at');
-                            })->orWhere(function ($r) {
-                                $r->where('is_requirement_case', true)->whereNull('requirement_closed_at');
-                            })->orWhere(function ($k) {
-                                $k->where('recovery_review_status', \App\Enums\RecoveryReviewStatus::ContinueMonitoring->value)
-                                    ->whereIn('followup_status', FollowupStatus::managingValues());
-                            });
-                        });
-                })->orWhere(function ($maint) {
-                    // Mantenimiento abierto: aunque Ping esté operativo o recovered_at sea null
-                    // (en mantenimiento apagan equipos y PRTG cae; no generar caída nueva).
-                    $maint->where(function ($src) {
-                        $src->where('detection_source', Incident::DETECTION_MAINTENANCE)
-                            ->orWhereHas('serviceTicket', function ($t) {
-                                $t->where('is_maintenance', true)
-                                    ->where('status', \App\Models\ServiceTicket::STATUS_OPEN);
-                            });
-                    })->where(function ($ticket) {
-                        $ticket->whereDoesntHave('serviceTicket')
-                            ->orWhereHas('serviceTicket', function ($t) {
-                                $t->where('status', \App\Models\ServiceTicket::STATUS_OPEN);
-                            });
-                    });
-                });
-            })
-            ->orderByDesc('id')
-            ->first();
 
         if ($openSticky !== null) {
             return $this->reopenStickyCase($openSticky, $sensor, $downSince, $onAnomaly);
@@ -278,7 +263,7 @@ class IncidentService
         $followup = $keepFollowup ? $incident->followup_status : FollowupStatus::EnGestion;
 
         $wasKeptManaging = $incident->isKeptInManagement()
-            || $incident->recovery_review_status === \App\Enums\RecoveryReviewStatus::ContinueMonitoring;
+            || $incident->recovery_review_status === RecoveryReviewStatus::ContinueMonitoring;
         $label = $incident->isOpenMaintenance()
             ? 'Re-caída con mantenimiento abierto: se reutiliza el mismo caso (sin nueva caída).'
             : ($incident->isOpenRequirement()
@@ -289,7 +274,9 @@ class IncidentService
                         ? 'Re-caída con caso mantenido en gestión: se reutiliza el mismo caso y ticket.'
                         : 'Re-caída sticky: se reutiliza el mismo caso y ticket.')));
 
-        $incident->forceFill([
+        // Mantener CONTINUE_MONITORING al re-caer: si se borra, al recuperar deja de ser sticky
+        // y la siguiente caída nace como Pendiente de gestión (caso 487 / TSS).
+        $fill = [
             'recovered_at' => null,
             'prtg_up_at' => null,
             'current_status' => $sensor->normalized_status?->value ?? MonitoringStatus::Caido->value,
@@ -297,10 +284,16 @@ class IncidentService
             'prtg_down_started_at' => $downAt,
             'followup_status' => $followup,
             'recovered_while_managing' => false,
-            'recovery_review_status' => null,
-            'recovery_reviewed_at' => null,
             'reopened_from_management' => $wasKeptManaging ? true : $incident->reopened_from_management,
-        ])->save();
+        ];
+        if ($wasKeptManaging) {
+            $fill['recovery_review_status'] = RecoveryReviewStatus::ContinueMonitoring;
+        } else {
+            $fill['recovery_review_status'] = null;
+            $fill['recovery_reviewed_at'] = null;
+        }
+
+        $incident->forceFill($fill)->save();
 
         IncidentUpdate::query()->create([
             'incident_id' => $incident->id,
@@ -316,6 +309,81 @@ class IncidentService
         $this->trackingHooks->onIncidentTechnicallyDown($fresh);
 
         return $fresh;
+    }
+
+    /**
+     * Caso sticky abierto del assignment (incidencia / requerimiento / mantener en gestión / mantenimiento).
+     */
+    private function findOpenSticky(int $assignmentId, ?int $excludeIncidentId = null): ?Incident
+    {
+        return Incident::query()
+            ->with('serviceTicket')
+            ->where('network_assignment_id', $assignmentId)
+            ->where('followup_status', '!=', FollowupStatus::Cerrado->value)
+            ->when($excludeIncidentId !== null, fn ($q) => $q->where('id', '!=', $excludeIncidentId))
+            ->where(function ($q) {
+                $q->where(function ($g) {
+                    $g->where('is_grave_incident', true)->whereNull('grave_closed_at');
+                })->orWhere(function ($r) {
+                    $r->where('is_requirement_case', true)->whereNull('requirement_closed_at');
+                })->orWhere(function ($k) {
+                    // CONTINUE_MONITORING con o sin recovered_at (re-caído sticky).
+                    $k->where('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value)
+                        ->whereIn('followup_status', FollowupStatus::managingValues());
+                })->orWhere(function ($maint) {
+                    $maint->where(function ($src) {
+                        $src->where('detection_source', Incident::DETECTION_MAINTENANCE)
+                            ->orWhereHas('serviceTicket', function ($t) {
+                                $t->where('is_maintenance', true)
+                                    ->where('status', \App\Models\ServiceTicket::STATUS_OPEN);
+                            });
+                    })->where(function ($ticket) {
+                        $ticket->whereDoesntHave('serviceTicket')
+                            ->orWhereHas('serviceTicket', function ($t) {
+                                $t->where('status', \App\Models\ServiceTicket::STATUS_OPEN);
+                            });
+                    });
+                });
+            })
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /** Cierra una caída nueva que nació por error mientras existía un sticky. */
+    private function closeOrphanDuplicateFall(Incident $orphan, Incident $sticky): void
+    {
+        if ($orphan->followup_status === FollowupStatus::Cerrado) {
+            return;
+        }
+
+        $before = $orphan->followup_status?->value;
+        $orphan->forceFill([
+            'followup_status' => FollowupStatus::Cerrado,
+            'recovered_at' => $orphan->recovered_at ?? now(),
+            'current_status' => MonitoringStatus::Operativo->value,
+            'recovery_review_status' => null,
+            'recovery_reviewed_at' => null,
+        ])->save();
+
+        IncidentUpdate::query()->create([
+            'incident_id' => $orphan->id,
+            'type' => 'SYSTEM',
+            'status_before' => $before,
+            'status_after' => FollowupStatus::Cerrado->value,
+            'observation' => 'Duplicado absorbido: se reutiliza el caso sticky #'.$sticky->id
+                .' (mantener en gestión / incidencia / requerimiento / mantenimiento).',
+            'created_at' => now(),
+        ]);
+
+        try {
+            $this->serviceTickets->close($orphan, 'sistema', now());
+        } catch (\Throwable $e) {
+            Log::warning('No se pudo cerrar ticket de caída huérfana', [
+                'orphan_id' => $orphan->id,
+                'sticky_id' => $sticky->id,
+                'error' => $e->getMessage(),
+            ]);
+        }
     }
 
     /** Solo parcial → caído. Una recuperación desde amarillo no marca nada. */
@@ -404,9 +472,15 @@ class IncidentService
 
         // Colas sticky abiertas: PRTG UP no cierra ni quita el flag; solo marca recuperación técnica.
         $isStickyOpen = $incident->isStickyOpen();
+        $wasKeptManaging = $incident->isKeptInManagement()
+            || $incident->recovery_review_status === RecoveryReviewStatus::ContinueMonitoring;
         $stickyKind = $incident->isOpenMaintenance()
             ? 'mantenimiento'
-            : ($incident->isOpenRequirement() ? 'requerimiento' : 'incidencia grave');
+            : ($incident->isOpenRequirement()
+                ? 'requerimiento'
+                : ($wasKeptManaging
+                    ? 'caso mantenido en gestión'
+                    : 'incidencia grave'));
 
         if ($isStickyOpen) {
             $afterStatus = $incident->followup_status ?? FollowupStatus::EnGestion;
@@ -430,11 +504,17 @@ class IncidentService
             'current_status' => MonitoringStatus::Operativo->value,
             'followup_status' => $afterStatus,
             'recovered_while_managing' => $goesToPendienteCierre ? $needsReview : false,
-            'recovery_review_status' => ($goesToPendienteCierre && $needsReview)
-                ? RecoveryReviewStatus::PendingReview->value
-                : null,
-            'recovery_reviewed_at' => null,
         ];
+        if ($wasKeptManaging && $isStickyOpen) {
+            // No borrar CONTINUE_MONITORING: sin eso la siguiente caída nace de cero.
+            $payload['recovery_review_status'] = RecoveryReviewStatus::ContinueMonitoring->value;
+        } elseif ($goesToPendienteCierre && $needsReview) {
+            $payload['recovery_review_status'] = RecoveryReviewStatus::PendingReview->value;
+            $payload['recovery_reviewed_at'] = null;
+        } elseif (! $isStickyOpen) {
+            $payload['recovery_review_status'] = null;
+            $payload['recovery_reviewed_at'] = null;
+        }
         if ($prtgEvidence !== null) {
             $payload['prtg_up_at'] = OperationalTime::toStorage($prtgEvidence);
         }

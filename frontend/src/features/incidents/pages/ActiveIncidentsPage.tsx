@@ -18,6 +18,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/Sta
 import {
   DataTableContainer,
   IsoDateTimeCell,
+  tdDateClassName,
   Truncate,
   tableClassName,
   tdClassName,
@@ -709,7 +710,7 @@ function OutageTableRow({
       <td className={`${outageTd} font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
         {row.tss ?? '—'}
       </td>
-      <td className={outageTd}>
+      <td className={`${tdDateClassName} !align-top`}>
         <IsoDateTimeCell value={clock} />
       </td>
       <td className={`${outageTd} font-semibold tabular-nums ${DURATION_CLASS[bucket]}`}>
@@ -738,10 +739,10 @@ function OutageTableRow({
             >
               En requerimiento
             </Badge>
-          ) : row.kept_in_management ? (
+          ) : row.kept_in_management || (row.reopened_from_management && row.recovery_review_status === 'CONTINUE_MONITORING') ? (
             <Badge
               tone="cyan"
-              title="Recuperado en PRTG pero mantenido en gestión. Si vuelve a caer, se reutiliza el mismo ticket."
+              title="Mantenido en gestión: mismo ticket hasta cierre manual, aunque haya levantamientos o re-caídas."
               className="!text-[10px] !font-medium"
             >
               Mantenido en gestión

@@ -40,6 +40,10 @@ export const thClassName =
 export const tdClassName =
   'min-w-0 max-w-0 overflow-hidden px-2.5 py-2 align-middle text-[13px] leading-snug text-slate-700 dark:text-slate-300'
 
+/** Celdas de caída / recuperación: fecha y hora completas, sin ellipsis. */
+export const tdDateClassName =
+  'whitespace-nowrap px-2.5 py-2 align-middle text-[13px] leading-snug text-slate-700 dark:text-slate-300'
+
 export const trClassName =
   'border-b border-slate-100 bg-white last:border-0 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60'
 

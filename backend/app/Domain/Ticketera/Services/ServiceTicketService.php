@@ -7,6 +7,7 @@ use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\MineduReason;
 use App\Enums\MonitoringStatus;
+use App\Enums\RecoveryReviewStatus;
 use App\Models\Incident;
 use App\Models\IncidentUpdate;
 use App\Models\NetworkAssignment;
@@ -98,6 +99,29 @@ class ServiceTicketService
         $ticket = $this->ensureForIncident($incident);
         $ticket->is_maintenance = $flag;
         $ticket->save();
+
+        // Igual que Incidencias: mantenimiento abierto no vive en Pendiente de cierre.
+        if ($flag) {
+            $incident->refresh();
+            if ($incident->followup_status === FollowupStatus::PendienteCierre) {
+                $before = $incident->followup_status->value;
+                $incident->forceFill([
+                    'followup_status' => FollowupStatus::EnGestion,
+                    'recovery_review_status' => RecoveryReviewStatus::ContinueMonitoring,
+                    'recovery_reviewed_at' => now(),
+                    'reopened_from_management' => true,
+                    'last_contact_at' => now(),
+                ])->save();
+                IncidentUpdate::query()->create([
+                    'incident_id' => $incident->id,
+                    'type' => 'SYSTEM',
+                    'status_before' => $before,
+                    'status_after' => FollowupStatus::EnGestion->value,
+                    'observation' => 'Salió de Pendiente de cierre: ticket marcado como mantenimiento (sticky hasta cierre manual).',
+                    'created_at' => now(),
+                ]);
+            }
+        }
 
         return $ticket->fresh() ?? $ticket;
     }

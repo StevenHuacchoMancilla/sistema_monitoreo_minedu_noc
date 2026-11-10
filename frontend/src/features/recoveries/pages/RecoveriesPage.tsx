@@ -25,6 +25,7 @@ import { Badge } from '../../../components/ui/SoftBadge'
 import {
   DataTableContainer,
   IsoDateTimeCell,
+  tdDateClassName,
   Truncate,
   tableClassName,
   tdClassName,
@@ -530,10 +531,10 @@ function RecoveryRow({
           {localSubtext}
         </span>
       </td>
-      <td className={tdClassName}>
+      <td className={tdDateClassName}>
         <IsoDateTimeCell value={row.started_at} />
       </td>
-      <td className={tdClassName}>
+      <td className={tdDateClassName}>
         <IsoDateTimeCell value={row.recovered_at} dateClassName="text-emerald-700 dark:text-emerald-400" />
         {row.same_day ? (
           <span className="mt-0.5 block text-[10px] font-medium tracking-wide text-slate-400 dark:text-slate-500">

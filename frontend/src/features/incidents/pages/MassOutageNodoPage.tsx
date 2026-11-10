@@ -19,6 +19,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/Sta
 import {
   DataTableContainer,
   IsoDateTimeCell,
+  tdDateClassName,
   Truncate,
   tableClassName,
   tdClassName,
@@ -345,7 +346,7 @@ function NodoRow({
           ) : null}
         </div>
       </td>
-      <td className={tdClassName}>
+      <td className={tdDateClassName}>
         {down ? <IsoDateTimeCell value={row.down_started_at} /> : <span className="text-slate-400">—</span>}
       </td>
       <td

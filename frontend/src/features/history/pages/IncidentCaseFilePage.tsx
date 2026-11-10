@@ -251,7 +251,7 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
               <Field label="Estado" value={<PrtgStatusBadge status={prtg.estado} />} />
               <Field label="Sensor" value={prtg.sensor_objid != null ? String(prtg.sensor_objid) : null} />
               <Field label="Texto" value={prtg.estado_texto} wide />
-              <Field label="Última lectura" value={formatDateTime(prtg.last_check)} wide />
+              <Field label="Última lectura" value={formatDateTime(prtg.last_check)} wide truncate={false} />
             </dl>
           </Panel>
 
@@ -292,7 +292,11 @@ function CaseSummary({ data }: { data: IncidentCaseFile }) {
         <Field label="PEXT / PINT" value={gestion.scope} />
         <Field label="Área responsable" value={gestion.responsible_area} />
         <Field label="Ticket GLPI" value={gestion.glpi_ticket} />
-        <Field label="Último contacto" value={gestion.last_contact_at ? formatDateTime(gestion.last_contact_at) : null} />
+        <Field
+          label="Último contacto"
+          value={gestion.last_contact_at ? formatDateTime(gestion.last_contact_at) : null}
+          truncate={false}
+        />
         <Field
           label="Revisión recuperación"
           value={recovery.review_label ?? (recovery.requires_review ? 'Pendiente' : null)}
@@ -494,14 +498,29 @@ function DateTimeValue({ value, hint }: { value: string | null; hint?: string })
   )
 }
 
-function Field({ label, value, wide = false }: { label: string; value: ReactNode; wide?: boolean }) {
+function Field({
+  label,
+  value,
+  wide = false,
+  truncate = true,
+}: {
+  label: string
+  value: ReactNode
+  wide?: boolean
+  /** false para fechas/horas completas. */
+  truncate?: boolean
+}) {
   const empty = value == null || value === '' || value === '—'
   return (
     <div className={`min-w-0 ${wide ? 'col-span-2' : ''}`}>
       <dt className="text-[10.5px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
         {label}
       </dt>
-      <dd className="mt-0.5 truncate text-[13px] text-slate-900 dark:text-slate-100">
+      <dd
+        className={`mt-0.5 text-[13px] text-slate-900 dark:text-slate-100 ${
+          truncate ? 'truncate' : 'leading-tight tabular-nums'
+        }`}
+      >
         {empty ? <span className="text-slate-400">—</span> : value}
       </dd>
     </div>

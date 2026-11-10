@@ -9,6 +9,7 @@ import { Badge } from '../../../components/ui/SoftBadge'
 import {
   DataTableContainer,
   IsoDateTimeCell,
+  tdDateClassName,
   Truncate,
   tableClassName,
   tdClassName,
@@ -172,7 +173,7 @@ export function OutagesFeedPage() {
                         {[row.codigo_local, row.tecnologia, row.distrito].filter(Boolean).join(' · ') || '—'}
                       </span>
                     </td>
-                    <td className={tdClassName}>
+                    <td className={tdDateClassName}>
                       <IsoDateTimeCell value={row.started_at} dateClassName="text-red-700 dark:text-red-400" />
                       {row.is_recent ? (
                         <Badge tone="warning" className="mt-0.5" title="Caído hace menos de 30 minutos">

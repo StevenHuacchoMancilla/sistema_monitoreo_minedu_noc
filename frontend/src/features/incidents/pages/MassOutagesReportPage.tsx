@@ -8,6 +8,7 @@ import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/Sta
 import {
   DataTableContainer,
   IsoDateTimeCell,
+  tdDateClassName,
   Truncate,
   tableClassName,
   tdClassName,
@@ -172,7 +173,7 @@ export function MassOutagesReportPage() {
                       <Truncate title={ubic}>{ubic}</Truncate>
                     </td>
                     <td className={`${tdClassName} whitespace-nowrap`}>{row.tecnologia ?? '—'}</td>
-                    <td className={tdClassName}>
+                    <td className={tdDateClassName}>
                       <IsoDateTimeCell value={row.down_started_at} />
                     </td>
                     <td className={`${tdClassName} tabular-nums font-medium text-red-700 dark:text-red-300`}>

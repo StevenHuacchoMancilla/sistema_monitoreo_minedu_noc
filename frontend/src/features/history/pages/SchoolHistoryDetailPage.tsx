@@ -22,6 +22,7 @@ import { Badge } from '../../../components/ui/SoftBadge'
 import {
   DataTableContainer,
   IsoDateTimeCell,
+  tdDateClassName,
   Truncate,
   tableClassName,
   tdClassName,
@@ -391,10 +392,10 @@ export function SchoolHistoryDetailPage() {
                               <span className="text-[12px] text-amber-700 dark:text-amber-300">Sin ticket</span>
                             )}
                           </td>
-                          <td className={tdClassName}>
+                          <td className={tdDateClassName}>
                             <IsoDateTimeCell value={row.started_at} />
                           </td>
-                          <td className={tdClassName}>
+                          <td className={tdDateClassName}>
                             {row.recovered_at ? (
                               <IsoDateTimeCell
                                 value={row.recovered_at}

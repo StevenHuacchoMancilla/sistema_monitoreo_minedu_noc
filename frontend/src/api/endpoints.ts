@@ -84,6 +84,17 @@ export const endpoints = {
       codigo_local: string | null
       provincia: string | null
       distrito: string | null
+      open_case?: {
+        incident_id: number
+        followup_status?: string | null
+        followup_label?: string | null
+        ticket_code?: string | null
+        location: string
+        is_grave?: boolean
+        is_requirement?: boolean
+        is_maintenance?: boolean
+        message: string
+      } | null
     } | null }>(`/incidents/lookup?q=${encodeURIComponent(q)}`),
   createManualTicket: (body: {
     q: string

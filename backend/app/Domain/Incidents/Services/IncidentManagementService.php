@@ -227,6 +227,18 @@ class IncidentManagementService
             $this->serviceTickets->syncFromIncident($fresh, is_string($actorName) ? $actorName : null);
             if (\App\Models\ServiceTicket::isMaintenanceCause($fresh->root_cause_code)) {
                 $this->serviceTickets->markMaintenance($fresh);
+                // Misma lógica que Incidencias/Requerimientos: sale de Pendiente de cierre.
+                if ($this->leavePendienteCierreForSticky($fresh)) {
+                    IncidentUpdate::query()->create([
+                        'incident_id' => $fresh->id,
+                        'type' => 'SYSTEM',
+                        'status_before' => FollowupStatus::PendienteCierre->value,
+                        'status_after' => FollowupStatus::EnGestion->value,
+                        'observation' => 'Salió de Pendiente de cierre: causa de mantenimiento (sticky hasta cierre manual).',
+                        'user_id' => $userId > 0 ? $userId : null,
+                        'created_at' => now(),
+                    ]);
+                }
             }
 
             $this->audit->record(
@@ -321,7 +333,7 @@ class IncidentManagementService
     }
 
     /**
-     * Si ya está en Incidencias/Requerimientos, no puede seguir en Pendiente de cierre.
+     * Si ya está en Incidencias / Requerimientos / Mantenimiento, no puede seguir en Pendiente de cierre.
      */
     private function leavePendienteCierreForSticky(Incident $incident): bool
     {
@@ -329,7 +341,11 @@ class IncidentManagementService
         if ($incident->followup_status !== FollowupStatus::PendienteCierre) {
             return false;
         }
-        if (! $incident->isOpenGrave() && ! $incident->isOpenRequirement()) {
+        if (
+            ! $incident->isOpenGrave()
+            && ! $incident->isOpenRequirement()
+            && ! $incident->isOpenMaintenance()
+        ) {
             return false;
         }
 

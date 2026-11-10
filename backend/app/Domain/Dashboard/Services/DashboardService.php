@@ -55,6 +55,15 @@ class DashboardService
                     WHERE followup_status IN (?, ?, ?, ?, ?)
                       AND NOT (is_grave_incident = true AND grave_closed_at IS NULL)
                       AND NOT (is_requirement_case = true AND requirement_closed_at IS NULL)
+                      AND NOT (
+                        detection_source = ?
+                        OR EXISTS (
+                          SELECT 1 FROM service_tickets st
+                          WHERE st.incident_id = incidents.id
+                            AND st.is_maintenance = true
+                            AND st.status = ?
+                        )
+                      )
                       AND (
                         (
                           recovered_at IS NULL
@@ -82,6 +91,8 @@ class DashboardService
                 CidStatus::Valid->value,
                 ...$cidMissing,
                 ...$managing,
+                Incident::DETECTION_MAINTENANCE,
+                \App\Models\ServiceTicket::STATUS_OPEN,
                 Incident::DETECTION_MANUAL_PARTIAL,
                 MonitoringStatus::Caido->value,
                 RecoveryReviewStatus::ContinueMonitoring->value,
@@ -215,6 +226,15 @@ class DashboardService
             ->whereNotNull('recovered_at')
             ->whereRaw('NOT (COALESCE(is_grave_incident, false) = true AND grave_closed_at IS NULL)')
             ->whereRaw('NOT (COALESCE(is_requirement_case, false) = true AND requirement_closed_at IS NULL)')
+            ->where(function ($q) {
+                $q->where(function ($d) {
+                    $d->whereNull('detection_source')
+                        ->orWhere('detection_source', '!=', Incident::DETECTION_MAINTENANCE);
+                })->whereDoesntHave('serviceTicket', function ($t) {
+                    $t->where('is_maintenance', true)
+                        ->where('status', \App\Models\ServiceTicket::STATUS_OPEN);
+                });
+            })
             ->count();
 
         $graves = (int) Incident::query()
@@ -590,7 +610,7 @@ class DashboardService
 
         if ($openManagement) {
             // En gestión: caídos activos + recuperados “mantener en gestión”.
-            // Incidencias / requerimientos sticky viven en sus apartados.
+            // Incidencias / requerimientos / mantenimiento sticky viven en sus apartados.
             $query->whereIn('followup_status', FollowupStatus::managingValues())
                 ->where(function ($q) {
                     $q->whereNull('recovered_at')
@@ -605,6 +625,14 @@ class DashboardService
                 })->where(function ($q) {
                     $q->where('is_requirement_case', false)
                         ->orWhereNotNull('requirement_closed_at');
+                })->where(function ($q) {
+                    $q->where(function ($d) {
+                        $d->whereNull('detection_source')
+                            ->orWhere('detection_source', '!=', Incident::DETECTION_MAINTENANCE);
+                    })->whereDoesntHave('serviceTicket', function ($t) {
+                        $t->where('is_maintenance', true)
+                            ->where('status', \App\Models\ServiceTicket::STATUS_OPEN);
+                    });
                 });
         } else {
             // Caídas reales (rojo) + intermitentes/parciales (amarillo) + caídas de enlace manuales.
@@ -651,8 +679,30 @@ class DashboardService
 
         $incidents = $query->get();
         if (! $openManagement) {
-            // Una caída visible por asignación (evita dobles por sensores de ramas antiguas).
-            $incidents = $incidents->unique('network_assignment_id')->values();
+            // Una caída visible por asignación. Preferir sticky / en gestión sobre huérfanas Pendiente.
+            $incidents = $incidents
+                ->groupBy('network_assignment_id')
+                ->map(function (Collection $group) {
+                    return $group->sortByDesc(function (Incident $incident): int {
+                        $score = 0;
+                        if ($incident->isStickyOpen()) {
+                            $score += 1000;
+                        }
+                        if ($incident->isKeptInManagement()) {
+                            $score += 500;
+                        }
+                        $followup = $incident->followup_status?->value;
+                        if ($followup !== null && in_array($followup, FollowupStatus::managingValues(), true)) {
+                            $score += 200;
+                        }
+                        if ($incident->reopened_from_management) {
+                            $score += 50;
+                        }
+
+                        return $score + (int) $incident->id;
+                    })->first();
+                })
+                ->values();
         }
 
         $assignmentIds = $incidents->pluck('network_assignment_id')->filter()->unique()->values();

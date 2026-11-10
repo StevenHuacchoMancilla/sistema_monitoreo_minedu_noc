@@ -12,6 +12,7 @@ import { IconButton } from '../../../components/ui/IconButton'
 import { FormField, Select } from '../../../components/ui/FormControls'
 import { ErrorState, LoadingState } from '../../../components/ui/States'
 import { inputClassName } from '../../../lib/uiTokens'
+import { IsoDateTimeCell } from '../../../components/ui/DataTableFrame'
 import { formatDateTime, formatDuration } from '../../../lib/datetime'
 import { useBodyScrollLock } from '../../../lib/useBodyScrollLock'
 import { useNow } from '../../../lib/useNow'
@@ -93,11 +94,26 @@ function Panel({ title, icon, action, children }: { title: string; icon?: ReactN
   )
 }
 
-function KeyValue({ label, children }: { label: string; children: ReactNode }) {
+function KeyValue({
+  label,
+  children,
+  truncate = true,
+}: {
+  label: string
+  children: ReactNode
+  /** false para fechas/horas (caída, recuperación) que deben verse completas. */
+  truncate?: boolean
+}) {
   return (
     <div className="min-w-0 bg-slate-50 px-3 py-2 dark:bg-slate-950">
       <dt className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">{label}</dt>
-      <dd className="mt-0.5 truncate text-[13px] font-medium text-slate-900 dark:text-slate-100">{children ?? '—'}</dd>
+      <dd
+        className={`mt-0.5 text-[13px] font-medium text-slate-900 dark:text-slate-100 ${
+          truncate ? 'truncate' : 'leading-tight'
+        }`}
+      >
+        {children ?? '—'}
+      </dd>
     </div>
   )
 }
@@ -964,14 +980,19 @@ function EnergyValue({ energy }: { energy?: string | null }) {
 function SummaryBand({ data }: { data: IncidentDetail }) {
   const reincidencia = data.antecedentes.reincidencia
   return (
-    <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-7 dark:border-slate-800 dark:bg-slate-800">
-      <KeyValue label="Caída">{data.estado.fecha_caida ? formatDateTime(data.estado.fecha_caida) : '—'}</KeyValue>
-      <KeyValue label={data.estado.recovered_at ? 'Recuperado' : 'Último check'}>
-        {data.estado.recovered_at
-          ? formatDateTime(data.estado.recovered_at)
-          : data.estado.ultima_comprobacion
-            ? formatDateTime(data.estado.ultima_comprobacion)
-            : '—'}
+    <dl className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-slate-200 bg-slate-200 sm:grid-cols-3 xl:grid-cols-[minmax(7.5rem,1.15fr)_minmax(7.5rem,1.15fr)_repeat(5,minmax(0,1fr))] dark:border-slate-800 dark:bg-slate-800">
+      <KeyValue label="Caída" truncate={false}>
+        <IsoDateTimeCell value={data.estado.fecha_caida} />
+      </KeyValue>
+      <KeyValue label={data.estado.recovered_at ? 'Recuperado' : 'Último check'} truncate={false}>
+        <IsoDateTimeCell
+          value={data.estado.recovered_at ?? data.estado.ultima_comprobacion}
+          dateClassName={
+            data.estado.recovered_at
+              ? 'text-emerald-700 dark:text-emerald-400'
+              : 'text-slate-900 dark:text-slate-100'
+          }
+        />
       </KeyValue>
       <KeyValue label="Seguimiento">
         <FollowupBadge status={data.estado.followup_status} />
@@ -1051,8 +1072,8 @@ function SummaryTab({ data }: { data: IncidentDetail }) {
           <KeyValue label="Estado">
             <PrtgStatusBadge status={data.estado.estado_prtg} />
           </KeyValue>
-          <KeyValue label="Último check">
-            {data.estado.ultima_comprobacion ? formatDateTime(data.estado.ultima_comprobacion) : '—'}
+          <KeyValue label="Último check" truncate={false}>
+            <IsoDateTimeCell value={data.estado.ultima_comprobacion} />
           </KeyValue>
           <KeyValue label="Sensor PRTG">{data.estado.prtg_sensor_objid ?? '—'}</KeyValue>
           <KeyValue label="Nodo / POP">{c.nodo_pop}</KeyValue>

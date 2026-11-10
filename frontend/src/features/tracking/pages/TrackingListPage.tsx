@@ -25,6 +25,7 @@ import {
   Truncate,
   tableClassName,
   tdClassName,
+  tdDateClassName,
   thClassName,
   theadClassName,
   trClassName,
@@ -414,7 +415,7 @@ export function TrackingListPage() {
                           </Truncate>
                         ) : null}
                       </td>
-                      <td className={tdClassName}>
+                      <td className={tdDateClassName}>
                         <DateTimeCell value={row.opened_at_display} />
                       </td>
                       <td className={`${tdClassName} hidden md:table-cell`}>
@@ -428,7 +429,7 @@ export function TrackingListPage() {
                       <td className={tdClassName}>
                         <Badge tone={trackingStatusTone(row.status)}>{row.status_label || row.status || '—'}</Badge>
                       </td>
-                      <td className={`${tdClassName} hidden lg:table-cell`}>
+                      <td className={`${tdDateClassName} hidden lg:table-cell`}>
                         <DateTimeCell value={row.closed_at_display} />
                       </td>
                       <td className={`${tdClassName} hidden lg:table-cell`}>

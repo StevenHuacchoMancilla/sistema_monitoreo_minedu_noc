@@ -16,6 +16,7 @@ import { PageHeader } from '../../../components/ui/PageHeader'
 import {
   DataTableContainer,
   IsoDateTimeCell,
+  tdDateClassName,
   Truncate,
   tableClassName,
   tdClassName,
@@ -214,10 +215,10 @@ export function SchoolHistoryIndexPage() {
                       <td className={tdClassName}>
                         <PrtgStatusBadge status={row.estado_actual} />
                       </td>
-                      <td className={`${tdClassName} hidden lg:table-cell`}>
+                      <td className={`${tdDateClassName} hidden lg:table-cell`}>
                         <IsoDateTimeCell value={row.ultima_caida} />
                       </td>
-                      <td className={`${tdClassName} hidden xl:table-cell`}>
+                      <td className={`${tdDateClassName} hidden xl:table-cell`}>
                         <IsoDateTimeCell value={row.ultima_recuperacion} />
                       </td>
                       <td className="sticky right-0 z-10 bg-white px-3 py-2.5 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">

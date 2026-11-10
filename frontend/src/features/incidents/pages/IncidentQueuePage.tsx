@@ -1,16 +1,18 @@
 import { useMemo, useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Link, useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { ImageDown } from 'lucide-react'
+import { CircleX, Eye, History, ImageDown, SquarePen, Ticket } from 'lucide-react'
 import { AppLayout } from '../../../layouts/AppLayout'
 import { PageHeader } from '../../../components/ui/PageHeader'
 import { SectionCard } from '../../../components/ui/Card'
 import { Button } from '../../../components/ui/Button'
 import { ConfirmDialog } from '../../../components/ui/ConfirmDialog'
+import { IconButton } from '../../../components/ui/IconButton'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/States'
 import {
   DataTableContainer,
   IsoDateTimeCell,
+  tdDateClassName,
   Truncate,
   tableClassName,
   tdClassName,
@@ -30,12 +32,14 @@ type QueueKind = 'pendiente-cierre' | 'graves' | 'requerimientos'
 
 type QueueRow = {
   incident_id: number
+  school_id?: number | null
   cid?: string | null
   tss?: number | string | null
   local_educativo?: string | null
   codigo_local?: string | null
   provincia?: string | null
   distrito?: string | null
+  tecnologia?: string | null
   followup_status?: string | null
   gestion_lista?: boolean
   started_at?: string | null
@@ -59,7 +63,7 @@ const META: Record<
     fetcher: () => endpoints.incidentsPendienteCierre() as Promise<{ data: QueueRow[] }>,
   },
   graves: {
-    title: 'Incidencias graves',
+    title: 'Incidencias',
     description:
       'Casos marcados como incidencia. Si el colegio cae otra vez aparece en Caídas totales con la etiqueta «En incidencia».',
     fetcher: () => endpoints.incidentsGraves() as Promise<{ data: QueueRow[] }>,
@@ -71,6 +75,10 @@ const META: Record<
     fetcher: () => endpoints.incidentsRequerimientos() as Promise<{ data: QueueRow[] }>,
   },
 }
+
+const queueTd = `${tdClassName} !align-top`
+const actionTd =
+  'sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 !align-top text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60'
 
 export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
   const meta = META[kind]
@@ -86,6 +94,8 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
   const [closing, setClosing] = useState(false)
   const [keepRow, setKeepRow] = useState<QueueRow | null>(null)
   const [keeping, setKeeping] = useState(false)
+  const [closeQueueRow, setCloseQueueRow] = useState<QueueRow | null>(null)
+  const [closingQueue, setClosingQueue] = useState(false)
 
   const query = useQuery({
     queryKey: ['incidents', 'queue', kind],
@@ -102,6 +112,8 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
     void client.invalidateQueries({ queryKey: ['incidents', 'queue', kind], refetchType: 'active' })
     void client.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' })
   }
+
+  const markedLabel = kind === 'graves' || kind === 'requerimientos' ? 'Marcada' : 'Recuperada'
 
   return (
     <AppLayout>
@@ -122,7 +134,16 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
         }
       />
 
-      <SectionCard title={meta.title} action={<span className="text-xs text-slate-500">{rows.length} registro(s)</span>}>
+      <SectionCard
+        title={`${rows.length} registro${rows.length === 1 ? '' : 's'}`}
+        action={
+          rows.length > 0 ? (
+            <span className="text-[11px] font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
+              {meta.title}
+            </span>
+          ) : null
+        }
+      >
         {query.isLoading ? <LoadingState /> : null}
         {query.isError ? (
           <ErrorState message={query.error instanceof Error ? query.error.message : 'Error'} />
@@ -146,125 +167,171 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
               <thead className={theadClassName}>
                 <tr>
                   <th className={thClassName}>CID</th>
-                  {kind === 'pendiente-cierre' ? <th className={thClassName}>TSS</th> : null}
+                  <th className={thClassName}>TSS</th>
                   <th className={thClassName}>Local</th>
                   <th className={thClassName}>Ubicación</th>
                   <th className={thClassName}>Estado</th>
-                  <th className={thClassName}>
-                    {kind === 'graves' || kind === 'requerimientos' ? 'Marcada' : 'Recuperada'}
-                  </th>
-                  <th className={thClassName}>Acción</th>
+                  <th className={thClassName}>{markedLabel}</th>
+                  <th className={`${thClassName} text-right`}>Acción</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((row) => (
-                  <tr key={row.incident_id} className={trClassName}>
-                    <td className={tdClassName}>{row.cid ?? '—'}</td>
-                    {kind === 'pendiente-cierre' ? (
-                      <td className={`${tdClassName} font-semibold tabular-nums`}>{row.tss ?? '—'}</td>
-                    ) : null}
-                    <td className={tdClassName}>
-                      <Truncate title={row.local_educativo}>{row.local_educativo ?? '—'}</Truncate>
-                      <span className="block text-[11px] text-slate-500">{row.codigo_local ?? '—'}</span>
-                    </td>
-                    <td className={tdClassName}>
-                      <Truncate title={row.provincia}>{row.provincia ?? '—'}</Truncate>
-                      <span className="block text-[11px] text-slate-500">{row.distrito ?? '—'}</span>
-                    </td>
-                    <td className={tdClassName}>
-                      <div className="flex min-w-0 flex-col items-start gap-1">
-                        {kind === 'pendiente-cierre' && row.gestion_lista ? (
-                          <Badge tone="success" title="Gestión guardada. Cierra el ticket cuando termines.">
-                            Gestión lista
-                          </Badge>
-                        ) : (
-                          <FollowupBadge status={row.followup_status} />
-                        )}
-                      </div>
-                    </td>
-                    <td className={tdClassName}>
-                      <IsoDateTimeCell
-                        value={
-                          kind === 'graves'
-                            ? row.grave_opened_at ?? null
-                            : kind === 'requerimientos'
-                              ? row.requirement_opened_at ?? null
-                              : row.recovered_at ?? null
-                        }
-                      />
-                    </td>
-                    <td className={tdClassName}>
-                      <div className="flex flex-wrap gap-1">
-                        {kind === 'pendiente-cierre' ? (
-                          <Button size="sm" variant="primary" onClick={() => setManageId(row.incident_id)}>
-                            Seguir caso
-                          </Button>
-                        ) : (
-                          <Button size="sm" variant="secondary" onClick={() => setManageId(row.incident_id)}>
-                            Ver
-                          </Button>
-                        )}
-                        {canManage && kind === 'pendiente-cierre' ? (
-                          <>
-                            <Button size="sm" variant="secondary" onClick={() => setKeepRow(row)}>
-                              Mantener en gestión
-                            </Button>
-                            <Button size="sm" variant="secondary" onClick={() => setCloseRow(row)}>
-                              Cerrar ticket
-                            </Button>
-                          </>
-                        ) : null}
-                        {canManage && (kind === 'graves' || kind === 'requerimientos') ? (
-                          <Button size="sm" variant="primary" onClick={() => setTicketRow(row)}>
-                            {row.has_ticket || row.ticket_code ? 'Ticket / evento' : 'Generar ticket'}
-                          </Button>
-                        ) : null}
-                        {(kind === 'graves' || kind === 'requerimientos') &&
-                        (row.has_ticket || row.ticket_code) ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            loading={pngBusyId === row.incident_id}
-                            onClick={() => {
-                              setActionError(null)
-                              setPngBusyId(row.incident_id)
-                              void downloadTicketImageFromIncidentId(row.incident_id)
-                                .catch((err: unknown) =>
-                                  setActionError(err instanceof Error ? err.message : 'No se pudo generar la imagen.'),
-                                )
-                                .finally(() => setPngBusyId(null))
-                            }}
-                          >
-                            <ImageDown className="h-3.5 w-3.5" />
-                            Imagen
-                          </Button>
-                        ) : null}
-                        {canManage && kind === 'graves' ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              void endpoints.closeIncidentGrave(row.incident_id).then(refresh)
-                            }}
-                          >
-                            Cerrar incidencia
-                          </Button>
-                        ) : null}
-                        {canManage && kind === 'requerimientos' ? (
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            onClick={() => {
-                              void endpoints.closeIncidentRequirement(row.incident_id).then(refresh)
-                            }}
-                          >
-                            Cerrar requerimiento
-                          </Button>
-                        ) : null}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {rows.map((row) => {
+                  const localSub = [row.ticket_code, row.codigo_local, row.tecnologia]
+                    .filter(Boolean)
+                    .join(' · ')
+                  const hasTicket = Boolean(row.has_ticket || row.ticket_code)
+                  const markedAt =
+                    kind === 'graves'
+                      ? row.grave_opened_at ?? null
+                      : kind === 'requerimientos'
+                        ? row.requirement_opened_at ?? null
+                        : row.recovered_at ?? null
+
+                  return (
+                    <tr key={row.incident_id} className={`${trClassName} group`}>
+                      <td className={`${queueTd} font-medium tabular-nums`}>{row.cid ?? '—'}</td>
+                      <td className={`${queueTd} font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
+                        {row.tss ?? '—'}
+                      </td>
+                      <td className={queueTd}>
+                        <Truncate
+                          title={row.local_educativo}
+                          className="font-medium text-slate-900 dark:text-slate-100"
+                        >
+                          {row.local_educativo ?? '—'}
+                        </Truncate>
+                        <span
+                          className="block truncate text-[11px] text-slate-500 dark:text-slate-400"
+                          title={localSub || undefined}
+                        >
+                          {localSub || '—'}
+                        </span>
+                      </td>
+                      <td className={queueTd}>
+                        <Truncate title={row.provincia}>{row.provincia ?? '—'}</Truncate>
+                        <Truncate
+                          title={row.distrito}
+                          className="text-[11px] text-slate-500 dark:text-slate-400"
+                        >
+                          {row.distrito ?? '—'}
+                        </Truncate>
+                      </td>
+                      <td className={queueTd}>
+                        <div className="flex min-w-0 flex-col items-start gap-1">
+                          {kind === 'pendiente-cierre' && row.gestion_lista ? (
+                            <Badge tone="success" title="Gestión guardada. Cierra el ticket cuando termines.">
+                              Gestión lista
+                            </Badge>
+                          ) : (
+                            <FollowupBadge status={row.followup_status} />
+                          )}
+                        </div>
+                      </td>
+                      <td className={`${tdDateClassName} !align-top`}>
+                        <IsoDateTimeCell value={markedAt} />
+                      </td>
+                      <td className={actionTd}>
+                        <div className="inline-flex flex-wrap items-center justify-end gap-0.5">
+                          {kind === 'pendiente-cierre' ? (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                className="!h-8 !px-2.5 !text-[11px]"
+                                onClick={() => setManageId(row.incident_id)}
+                              >
+                                Seguir caso
+                              </Button>
+                              {canManage ? (
+                                <>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    className="!h-8 !px-2.5 !text-[11px]"
+                                    onClick={() => setKeepRow(row)}
+                                  >
+                                    Mantener en gestión
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="secondary"
+                                    className="!h-8 !px-2.5 !text-[11px]"
+                                    onClick={() => setCloseRow(row)}
+                                  >
+                                    Cerrar ticket
+                                  </Button>
+                                </>
+                              ) : null}
+                            </>
+                          ) : (
+                            <>
+                              <IconButton
+                                label={canManage ? 'Gestionar' : 'Ver detalle'}
+                                onClick={() => setManageId(row.incident_id)}
+                                className="!size-8 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
+                              >
+                                {canManage ? (
+                                  <SquarePen className="h-4 w-4" aria-hidden />
+                                ) : (
+                                  <Eye className="h-4 w-4" aria-hidden />
+                                )}
+                              </IconButton>
+                              {canManage ? (
+                                <IconButton
+                                  label={hasTicket ? 'Ticket / evento' : 'Generar ticket'}
+                                  onClick={() => setTicketRow(row)}
+                                  className="!size-8 text-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none dark:text-indigo-300"
+                                >
+                                  <Ticket className="h-4 w-4" aria-hidden />
+                                </IconButton>
+                              ) : null}
+                              {hasTicket ? (
+                                <IconButton
+                                  label={`Descargar imagen${row.ticket_code ? ` ${row.ticket_code}` : ''}`}
+                                  disabled={pngBusyId === row.incident_id}
+                                  onClick={() => {
+                                    setActionError(null)
+                                    setPngBusyId(row.incident_id)
+                                    void downloadTicketImageFromIncidentId(row.incident_id)
+                                      .catch((err: unknown) =>
+                                        setActionError(
+                                          err instanceof Error ? err.message : 'No se pudo generar la imagen.',
+                                        ),
+                                      )
+                                      .finally(() => setPngBusyId(null))
+                                  }}
+                                  className="!size-8 text-teal-700 focus-visible:ring-2 focus-visible:ring-teal-500 focus-visible:outline-none dark:text-teal-300"
+                                >
+                                  <ImageDown className="h-4 w-4" aria-hidden />
+                                </IconButton>
+                              ) : null}
+                              {canManage ? (
+                                <IconButton
+                                  label={kind === 'graves' ? 'Cerrar incidencia' : 'Cerrar requerimiento'}
+                                  onClick={() => setCloseQueueRow(row)}
+                                  className="!size-8 text-red-600 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none dark:text-red-400"
+                                >
+                                  <CircleX className="h-4 w-4" aria-hidden />
+                                </IconButton>
+                              ) : null}
+                              {row.school_id ? (
+                                <Link
+                                  to={`/history/schools/${row.school_id}`}
+                                  className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+                                  title="Historial del colegio"
+                                  aria-label="Historial del colegio"
+                                >
+                                  <History className="h-4 w-4" aria-hidden />
+                                </Link>
+                              ) : null}
+                            </>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </DataTableContainer>
@@ -306,8 +373,8 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
         description={
           closeRow
             ? `Se cerrará el caso${closeRow.cid ? ` CID ${closeRow.cid}` : ''}${
-                closeRow.local_educativo ? ` · ${closeRow.local_educativo}` : ''
-              }. El ticket sale de Pendiente de cierre.`
+                closeRow.tss != null ? ` · TSS ${closeRow.tss}` : ''
+              }${closeRow.local_educativo ? ` · ${closeRow.local_educativo}` : ''}. El ticket sale de Pendiente de cierre.`
             : undefined
         }
         confirmLabel="Cerrar ticket"
@@ -340,6 +407,8 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
         description={
           keepRow
             ? `Aunque esté recuperado en PRTG, el caso${keepRow.cid ? ` CID ${keepRow.cid}` : ''}${
+                keepRow.tss != null ? ` · TSS ${keepRow.tss}` : ''
+              }${
                 keepRow.local_educativo ? ` · ${keepRow.local_educativo}` : ''
               } seguirá en En gestión. Si vuelve a caer, se reutiliza el mismo ticket (no se crea uno nuevo).`
             : undefined
@@ -366,6 +435,51 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
               setActionError(err instanceof Error ? err.message : 'No se pudo mantener en gestión.')
             })
             .finally(() => setKeeping(false))
+        }}
+      />
+
+      <ConfirmDialog
+        open={closeQueueRow !== null}
+        title={kind === 'graves' ? 'Cerrar incidencia' : 'Cerrar requerimiento'}
+        description={
+          closeQueueRow
+            ? `Se cerrará ${kind === 'graves' ? 'la incidencia' : 'el requerimiento'}${
+                closeQueueRow.cid ? ` CID ${closeQueueRow.cid}` : ''
+              }${closeQueueRow.tss != null ? ` · TSS ${closeQueueRow.tss}` : ''}${
+                closeQueueRow.local_educativo ? ` · ${closeQueueRow.local_educativo}` : ''
+              }.`
+            : undefined
+        }
+        confirmLabel={kind === 'graves' ? 'Cerrar incidencia' : 'Cerrar requerimiento'}
+        cancelLabel="Cancelar"
+        tone="danger"
+        loading={closingQueue}
+        onClose={() => {
+          if (!closingQueue) setCloseQueueRow(null)
+        }}
+        onConfirm={() => {
+          if (!closeQueueRow) return
+          setClosingQueue(true)
+          setActionError(null)
+          const closeFn =
+            kind === 'graves'
+              ? endpoints.closeIncidentGrave
+              : endpoints.closeIncidentRequirement
+          void closeFn(closeQueueRow.incident_id)
+            .then(() => {
+              setCloseQueueRow(null)
+              refresh()
+            })
+            .catch((err: unknown) => {
+              setActionError(
+                err instanceof Error
+                  ? err.message
+                  : kind === 'graves'
+                    ? 'No se pudo cerrar la incidencia.'
+                    : 'No se pudo cerrar el requerimiento.',
+              )
+            })
+            .finally(() => setClosingQueue(false))
         }}
       />
     </AppLayout>

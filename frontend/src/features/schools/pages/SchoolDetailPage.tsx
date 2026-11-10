@@ -25,6 +25,7 @@ import { IncidentManageModal } from '../../incidents/components/IncidentManageMo
 import { RegisterLinkOutageModal } from '../../incidents/components/RegisterLinkOutageModal'
 import type { NetworkAssignmentPayload, SchoolGeneralPayload } from '../types/school'
 import { techBadgeClass } from '../../../lib/uiTokens'
+import { IsoDateTimeCell } from '../../../components/ui/DataTableFrame'
 import { formatDateTime } from '../../../lib/datetime'
 import { usePermissions } from '../../auth/hooks/usePermissions'
 import { P } from '../../auth/permissions'
@@ -345,7 +346,7 @@ export function SchoolDetailPage() {
                 </div>
                 <div>
                   <dt className="text-xs uppercase text-noc-muted">Último check</dt>
-                  <dd>{prtgSummary?.last_check ? formatDateTime(prtgSummary.last_check) : '—'}</dd>
+                  <dd className="leading-tight"><IsoDateTimeCell value={prtgSummary?.last_check} /></dd>
                 </div>
                 <div>
                   <dt className="text-xs uppercase text-noc-muted">Sensores</dt>
@@ -383,7 +384,7 @@ export function SchoolDetailPage() {
                   </div>
                   <div>
                     <dt className="text-xs uppercase text-noc-muted">Desde</dt>
-                    <dd>{incident.started_at ? formatDateTime(incident.started_at) : '—'}</dd>
+                    <dd className="leading-tight"><IsoDateTimeCell value={incident.started_at} /></dd>
                   </div>
                   {incident.detection_source === 'MANUAL_PARTIAL' || incident.affected_wan_node ? (
                     <div className="sm:col-span-2">
@@ -431,8 +432,14 @@ export function SchoolDetailPage() {
                     <tbody>
                       {history.map((row) => (
                         <tr key={row.id} className="border-t border-noc-border/70">
-                          <td className="px-2 py-2">{row.started_at ? formatDateTime(row.started_at) : '—'}</td>
-                          <td className="px-2 py-2">{row.recovered_at ? formatDateTime(row.recovered_at) : 'Activa'}</td>
+                          <td className="whitespace-nowrap px-2 py-2"><IsoDateTimeCell value={row.started_at} /></td>
+                          <td className="whitespace-nowrap px-2 py-2">
+                            {row.recovered_at ? (
+                              <IsoDateTimeCell value={row.recovered_at} dateClassName="text-emerald-700 dark:text-emerald-400" />
+                            ) : (
+                              'Activa'
+                            )}
+                          </td>
                           <td className="px-2 py-2"><FollowupBadge status={row.followup_status} /></td>
                         </tr>
                       ))}

@@ -9,6 +9,7 @@ import { Badge } from '../../../components/ui/SoftBadge'
 import {
   DataTableContainer,
   IsoDateTimeCell,
+  tdDateClassName,
   Truncate,
   tableClassName,
   tdClassName,
@@ -174,10 +175,10 @@ export function RestorationsPage() {
                         {[row.codigo_local, row.tecnologia, row.distrito].filter(Boolean).join(' · ') || '—'}
                       </span>
                     </td>
-                    <td className={tdClassName}>
+                    <td className={tdDateClassName}>
                       <IsoDateTimeCell value={row.started_at} />
                     </td>
-                    <td className={tdClassName}>
+                    <td className={tdDateClassName}>
                       <IsoDateTimeCell value={row.recovered_at} dateClassName="text-emerald-700 dark:text-emerald-400" />
                       {row.is_recent ? (
                         <Badge tone="cyan" className="mt-0.5" title="Recuperado hace menos de 10 minutos">
