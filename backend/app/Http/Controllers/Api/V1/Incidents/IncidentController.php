@@ -1180,7 +1180,8 @@ class IncidentController extends Controller
             $userId,
         );
         $this->serviceTickets->close($result['incident'], $request->user()?->name);
-        $this->listaDays->markRestablecido($result['incident']->fresh() ?? $result['incident']);
+        // Restablecido en Lista LLEE solo al cerrar desde Incidencias (closeGrave),
+        // no al cerrar caídas normales / Pendiente de cierre solo porque PRTG subió.
 
         return response()->json($this->show($result['incident']->fresh() ?? $result['incident'])->getData(true));
     }

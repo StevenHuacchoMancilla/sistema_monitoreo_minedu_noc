@@ -259,9 +259,55 @@ class ListaLleeDayService
         $this->setEstado($incident, ListaLleeEstado::Averias);
     }
 
+    /**
+     * Restablecido = cierre formal desde Incidencias (Averías → cerrado).
+     * No aplica a recuperaciones PRTG ni a cierres de caídas normales.
+     */
     public function markRestablecido(Incident $incident): void
     {
         $this->setEstado($incident, ListaLleeEstado::Restablecido);
+    }
+
+    /**
+     * Quita Restablecido mal asignados (cierres normales / solo operativo).
+     * Conserva solo los que tienen incidencia grave cerrada.
+     *
+     * @return int filas limpiadas
+     */
+    public function clearInvalidRestablecido(?string $date = null): int
+    {
+        $date ??= $this->todayDate();
+        $day = ListaLleeDay::query()->whereDate('report_date', $date)->first();
+        if ($day === null) {
+            return 0;
+        }
+
+        $rows = ListaLleeDayRow::query()
+            ->where('lista_llee_day_id', $day->id)
+            ->where('lista_estado', ListaLleeEstado::Restablecido->value)
+            ->with('incident')
+            ->get();
+
+        $cleared = 0;
+        foreach ($rows as $row) {
+            $incident = $row->incident;
+            $validGraveClose = $incident
+                && (bool) $incident->is_grave_incident
+                && $incident->grave_closed_at !== null;
+            if ($validGraveClose) {
+                continue;
+            }
+
+            $row->lista_estado = null;
+            $row->save();
+            if ($incident && $incident->lista_llee_estado === ListaLleeEstado::Restablecido) {
+                $incident->lista_llee_estado = null;
+                $incident->save();
+            }
+            $cleared++;
+        }
+
+        return $cleared;
     }
 
     private function seedFromPreviousDay(ListaLleeDay $today, ListaLleeDay $yesterday): void
