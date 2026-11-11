@@ -354,7 +354,7 @@ export function RecoveriesPage() {
           <SearchField
             label="Buscar"
             value={q}
-            placeholder="CID, código o colegio…"
+            placeholder="CID o TSS"
             onChange={(e) => setQ(e.target.value)}
           />
           <PrtgLocationFilterFields

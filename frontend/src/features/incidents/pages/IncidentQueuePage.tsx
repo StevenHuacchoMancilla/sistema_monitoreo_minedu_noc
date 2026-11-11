@@ -20,6 +20,8 @@ import {
   theadClassName,
   trClassName,
 } from '../../../components/ui/DataTableFrame'
+import { FilterCard } from '../../../components/ui/FilterCard'
+import { SearchField } from '../../../components/ui/FormControls'
 import { FollowupBadge } from '../../../components/monitoring/StatusBadges'
 import { Badge } from '../../../components/ui/SoftBadge'
 import { endpoints } from '../../../api/endpoints'
@@ -27,6 +29,18 @@ import { useAuth } from '../../auth/context/AuthContext'
 import { IncidentManageModal } from '../components/IncidentManageModal'
 import { GenerateTicketModal } from '../components/GenerateTicketModal'
 import { downloadTicketImageFromIncidentId } from '../lib/ticketImage'
+
+function matchesCidOrTss(row: { cid?: string | null; tss?: number | string | null }, raw: string): boolean {
+  const needle = raw.trim().toLowerCase()
+  if (!needle) return true
+  const digits = needle.replace(/\D+/g, '')
+  const cid = String(row.cid ?? '').toLowerCase()
+  if (cid && (cid.includes(needle) || (digits && cid.includes(digits)))) return true
+  const tss = row.tss == null || row.tss === '' ? '' : String(row.tss)
+  if (!tss) return false
+  if (digits && Number(tss) === Number(digits)) return true
+  return tss.toLowerCase().includes(needle) || (digits !== '' && tss.includes(digits))
+}
 
 type QueueKind = 'pendiente-cierre' | 'graves' | 'requerimientos'
 
@@ -97,6 +111,8 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
   const [closeQueueRow, setCloseQueueRow] = useState<QueueRow | null>(null)
   const [closingQueue, setClosingQueue] = useState(false)
 
+  const [search, setSearch] = useState('')
+
   const query = useQuery({
     queryKey: ['incidents', 'queue', kind],
     queryFn: meta.fetcher,
@@ -106,7 +122,11 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
     refetchOnWindowFocus: false,
   })
 
-  const rows = useMemo(() => query.data?.data ?? [], [query.data])
+  const allRows = useMemo(() => query.data?.data ?? [], [query.data])
+  const rows = useMemo(
+    () => allRows.filter((row) => matchesCidOrTss(row, search)),
+    [allRows, search],
+  )
 
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ['incidents', 'queue', kind], refetchType: 'active' })
@@ -134,8 +154,21 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
         }
       />
 
+      <div className="mb-4">
+        <FilterCard>
+          <SearchField
+            className="sm:col-span-2 xl:col-span-2"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="CID o TSS"
+          />
+        </FilterCard>
+      </div>
+
       <SectionCard
-        title={`${rows.length} registro${rows.length === 1 ? '' : 's'}`}
+        title={`${rows.length} registro${rows.length === 1 ? '' : 's'}${
+          search.trim() && rows.length !== allRows.length ? ` de ${allRows.length}` : ''
+        }`}
         action={
           rows.length > 0 ? (
             <span className="text-[11px] font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
@@ -148,7 +181,7 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
         {query.isError ? (
           <ErrorState message={query.error instanceof Error ? query.error.message : 'Error'} />
         ) : null}
-        {!query.isLoading && !query.isError && rows.length === 0 ? (
+        {!query.isLoading && !query.isError && allRows.length === 0 ? (
           <EmptyState
             title="Sin registros"
             description={
@@ -157,6 +190,9 @@ export function IncidentQueuePage({ kind }: { kind: QueueKind }) {
                 : 'No hay elementos en esta cola.'
             }
           />
+        ) : null}
+        {!query.isLoading && !query.isError && allRows.length > 0 && rows.length === 0 ? (
+          <EmptyState title="Sin coincidencias" description="Ningún registro coincide con CID o TSS." />
         ) : null}
 
         {actionError ? <p className="mb-3 text-sm text-red-600">{actionError}</p> : null}

@@ -112,7 +112,7 @@ export function SchoolHistoryIndexPage() {
           <SearchField
             label="Buscar"
             value={q}
-            placeholder="CID, código local o colegio…"
+            placeholder="CID o TSS"
             onChange={(e) => {
               setQ(e.target.value)
               setPage(1)

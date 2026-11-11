@@ -89,25 +89,19 @@ class IncidentHistoryService
             ->orderBy('schools.local_educativo');
 
         if ($search !== '') {
-            $like = '%'.mb_strtolower($search).'%';
-            $schoolQuery->where(function (Builder $q) use ($like, $search) {
-                $q->whereRaw('lower(coalesce(schools.local_educativo, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(schools.codigo_local, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(na.cid, \'\')) like ?', [$like])
-                    ->orWhereExists(function ($sub) use ($like) {
-                        $sub->selectRaw('1')
-                            ->from('service_tickets')
-                            ->whereColumn('service_tickets.school_id', 'schools.id')
-                            ->whereRaw('lower(service_tickets.ticket_code) like ?', [$like]);
-                    });
-                if (preg_match('/^TGS_/i', $search)) {
-                    $q->orWhereExists(function ($sub) use ($search) {
-                        $sub->selectRaw('1')
-                            ->from('service_tickets')
-                            ->whereColumn('service_tickets.school_id', 'schools.id')
-                            ->whereRaw('upper(service_tickets.ticket_code) = ?', [mb_strtoupper($search)]);
-                    });
-                }
+            $p = \App\Support\CidTssSearch::parse($search);
+            $schoolQuery->where(function (Builder $q) use ($p) {
+                $q->where(function (Builder $cid) use ($p) {
+                    $cid->whereRaw('lower(coalesce(na.cid, \'\')) like ?', [$p['like']]);
+                    if ($p['digits'] !== '') {
+                        $cid->orWhere('na.cid', $p['digits']);
+                    }
+                })->orWhere(function (Builder $tss) use ($p) {
+                    $tss->whereRaw('CAST(schools.current_sequence AS TEXT) like ?', [$p['like']]);
+                    if ($p['tss'] !== null) {
+                        $tss->orWhere('schools.current_sequence', $p['tss']);
+                    }
+                });
             });
         }
         if ($provincia !== '') {

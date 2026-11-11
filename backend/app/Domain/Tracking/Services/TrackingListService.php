@@ -111,25 +111,23 @@ class TrackingListService
 
         $search = trim((string) ($filters['q'] ?? $filters['search'] ?? ''));
         if ($search !== '') {
-            $like = '%'.mb_strtolower($search).'%';
-            $q->where(function (Builder $inner) use ($like, $search) {
-                $inner->whereRaw('lower(coalesce(tracking_records.ticket, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(tracking_records.report_ticket, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(tracking_records.case_code, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(tracking_records.public_id, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(tracking_records.cid_snapshot, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(tracking_records.tss_snapshot, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(tracking_records.description, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(schools.local_educativo, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(opened_users.name, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(tracking_records.opened_by_legacy_name, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(closed_users.name, \'\')) like ?', [$like])
-                    ->orWhereRaw('lower(coalesce(tracking_records.closed_by_legacy_name, \'\')) like ?', [$like]);
-
-                if (ctype_digit($search)) {
-                    $inner->orWhere('tracking_records.incident_number', (int) $search)
-                        ->orWhere('tracking_records.id', (int) $search);
-                }
+            $p = \App\Support\CidTssSearch::parse($search);
+            $q->where(function (Builder $inner) use ($p) {
+                $inner->where(function (Builder $cid) use ($p) {
+                    $cid->whereRaw('lower(coalesce(na.cid, \'\')) like ?', [$p['like']])
+                        ->orWhereRaw('lower(coalesce(tracking_records.cid_snapshot, \'\')) like ?', [$p['like']]);
+                    if ($p['digits'] !== '') {
+                        $cid->orWhere('na.cid', $p['digits'])
+                            ->orWhere('tracking_records.cid_snapshot', $p['digits']);
+                    }
+                })->orWhere(function (Builder $tss) use ($p) {
+                    $tss->whereRaw('CAST(schools.current_sequence AS TEXT) like ?', [$p['like']])
+                        ->orWhereRaw('lower(coalesce(tracking_records.tss_snapshot, \'\')) like ?', [$p['like']]);
+                    if ($p['tss'] !== null) {
+                        $tss->orWhere('schools.current_sequence', $p['tss'])
+                            ->orWhere('tracking_records.tss_snapshot', (string) $p['tss']);
+                    }
+                });
             });
         }
 

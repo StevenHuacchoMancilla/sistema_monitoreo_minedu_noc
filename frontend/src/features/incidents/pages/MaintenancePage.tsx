@@ -158,7 +158,7 @@ export function MaintenancePage() {
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') applySearch()
                 }}
-                placeholder="Colegio, CID, TSS o código TGS…"
+                placeholder="CID o TSS"
               />
             </div>
           </FormField>

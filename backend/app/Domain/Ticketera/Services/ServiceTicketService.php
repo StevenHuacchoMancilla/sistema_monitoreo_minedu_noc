@@ -616,19 +616,8 @@ class ServiceTicketService
             ->orderByDesc($status === ServiceTicket::STATUS_CLOSED ? 'closed_at' : 'opened_at')
             ->orderByDesc('id');
 
-        $needle = trim((string) $q);
-        if ($needle !== '') {
-            $like = '%'.$needle.'%';
-            $query->where(function ($w) use ($like, $needle) {
-                $w->where('ticket_code', 'like', $like)
-                    ->orWhere('cid', 'like', $like)
-                    ->orWhere('tss', 'like', $like)
-                    ->orWhere('school_name', 'like', $like)
-                    ->orWhere('technician_name', 'like', $like);
-                if (ctype_digit($needle)) {
-                    $w->orWhere('tss', $needle)->orWhere('cid', $needle);
-                }
-            });
+        if (trim((string) $q) !== '') {
+            \App\Support\CidTssSearch::constrainTicketCidTss($query, $q);
         }
 
         $total = (clone $query)->count();

@@ -172,7 +172,7 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
                   className="pl-8"
                   value={q}
                   onChange={(e) => setQ(e.target.value)}
-                  placeholder="Ej. 258778 o nombre del local"
+                  placeholder="CID o TSS"
                 />
               </div>
               {selectedSchoolId ? (

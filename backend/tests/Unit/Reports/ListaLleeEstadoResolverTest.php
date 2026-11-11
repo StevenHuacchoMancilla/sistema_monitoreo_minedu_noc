@@ -21,6 +21,17 @@ class ListaLleeEstadoResolverTest extends TestCase
         $this->assertNull(ListaLleeEstadoResolver::resolve($incident));
     }
 
+    public function test_open_requirement_infers_requerimiento(): void
+    {
+        $incident = new Incident([
+            'is_requirement_case' => true,
+            'requirement_closed_at' => null,
+            'current_status' => MonitoringStatus::Caido->value,
+        ]);
+
+        $this->assertSame(ListaLleeEstado::Requerimiento, ListaLleeEstadoResolver::resolve($incident));
+    }
+
     public function test_manual_estado_is_used(): void
     {
         $incident = new Incident([

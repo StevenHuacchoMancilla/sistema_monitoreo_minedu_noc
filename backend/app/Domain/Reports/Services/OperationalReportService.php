@@ -179,18 +179,7 @@ class OperationalReportService
         }
 
         if (! empty($filters['search'])) {
-            $term = '%'.mb_strtolower(trim((string) $filters['search'])).'%';
-            $query->where(function (Builder $q) use ($term) {
-                $q->whereHas('school', function (Builder $s) use ($term) {
-                    $s->whereRaw('LOWER(local_educativo) like ?', [$term])
-                        ->orWhereRaw('LOWER(codigo_local) like ?', [$term]);
-                })->orWhereHas('networkAssignment', function (Builder $a) use ($term) {
-                    $a->whereRaw('LOWER(cid) like ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(prtg_device_name, \'\')) like ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(prtg_province, \'\')) like ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(prtg_district, \'\')) like ?', [$term]);
-                });
-            });
+            \App\Support\CidTssSearch::constrainIncident($query, (string) $filters['search']);
         }
 
         return $query;

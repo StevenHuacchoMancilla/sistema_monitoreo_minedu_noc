@@ -192,7 +192,7 @@ export function SchoolTimelines({
   const filteredSchools = schools.filter((school) => {
     const text = query.trim().toUpperCase()
     if (!text || school.cid === cid) return true
-    return `${school.cid} ${school.name} ${school.tss}`.toUpperCase().includes(text)
+    return `${school.cid} ${school.tss}`.toUpperCase().includes(text)
   })
 
   const school = schools.find((item) => item.cid === cid)
@@ -317,7 +317,7 @@ export function SchoolTimelines({
     >
       <div className="mb-3 grid gap-3 lg:grid-cols-2">
         <FormField label="Buscar por CID, TSS o nombre">
-          <Input value={query} placeholder="CID o nombre del colegio" onChange={(event) => setQuery(event.target.value)} />
+          <Input value={query} placeholder="CID o TSS" onChange={(event) => setQuery(event.target.value)} />
         </FormField>
         <FormField label="Colegio de las gráficas">
           <Select value={cid} onChange={(event) => onCidChange(event.target.value)}>

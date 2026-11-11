@@ -312,6 +312,8 @@ class IncidentManagementService
                 ])->save();
                 $notes[] = 'Pasó a Requerimientos';
             }
+            app(\App\Domain\Reports\Services\ListaLleeDayService::class)
+                ->markRequerimiento($incident->fresh() ?? $incident);
             if ($this->leavePendienteCierreForSticky($incident)) {
                 $notes[] = 'Salió de Pendiente de cierre';
             }

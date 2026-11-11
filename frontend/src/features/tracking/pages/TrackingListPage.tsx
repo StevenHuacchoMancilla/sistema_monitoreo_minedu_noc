@@ -240,7 +240,7 @@ export function TrackingListPage() {
           <SearchField
             label="Buscar"
             value={q}
-            placeholder="N°, ticket, TSS, CID, colegio, responsable…"
+            placeholder="CID o TSS"
             onChange={(e) => setQ(e.target.value)}
           />
           <FormField label="Estado">

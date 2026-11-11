@@ -330,7 +330,7 @@ export function GeneralReportPage() {
             label="Buscar"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            placeholder="CID, TSS, ticket, colegio…"
+            placeholder="CID o TSS"
           />
 
           <PrtgLocationFilterFields

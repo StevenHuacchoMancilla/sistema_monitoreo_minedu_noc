@@ -139,17 +139,11 @@ class ListaLleeDayService
         }
 
         if (! empty($filters['search'])) {
-            $term = mb_strtolower(trim((string) $filters['search']));
-            $rows = array_values(array_filter($rows, function (array $row) use ($term) {
-                $hay = mb_strtolower(implode(' ', [
-                    (string) ($row['cid'] ?? ''),
-                    (string) ($row['local_educativo'] ?? ''),
-                    (string) ($row['root_cause_code'] ?? ''),
-                    (string) ($row['codigo_local'] ?? ''),
-                ]));
-
-                return str_contains($hay, $term);
-            }));
+            $raw = (string) $filters['search'];
+            $rows = array_values(array_filter(
+                $rows,
+                fn (array $row) => \App\Support\CidTssSearch::matchesRowCidTss($row, $raw)
+            ));
         }
 
         if (! empty($filters['province'])) {
@@ -262,6 +256,12 @@ class ListaLleeDayService
         $this->setEstado($incident, ListaLleeEstado::Averias);
     }
 
+    /** Auto ESTADO cuando la razón MINEDU es Requerimiento. */
+    public function markRequerimiento(Incident $incident): void
+    {
+        $this->setEstado($incident, ListaLleeEstado::Requerimiento);
+    }
+
     /**
      * Restablecido = cierre formal desde Incidencias (Averías → cerrado).
      * No aplica a recuperaciones PRTG ni a cierres de caídas normales.
@@ -357,6 +357,11 @@ class ListaLleeDayService
                 $incident->lista_llee_estado = ListaLleeEstado::Averias;
                 $incident->lista_detalle = null;
                 $incident->save();
+            } elseif ($incident->isOpenRequirement()) {
+                $row->lista_estado = ListaLleeEstado::Requerimiento;
+                $incident->lista_llee_estado = ListaLleeEstado::Requerimiento;
+                $incident->lista_detalle = null;
+                $incident->save();
             }
             $row->save();
         }
@@ -390,6 +395,12 @@ class ListaLleeDayService
                 $estado = ListaLleeEstado::Averias;
                 if ($incident->lista_llee_estado !== ListaLleeEstado::Averias) {
                     $incident->lista_llee_estado = ListaLleeEstado::Averias;
+                    $incident->save();
+                }
+            } elseif ($incident->isOpenRequirement() && $this->shouldAutoMarkRequerimiento($estado)) {
+                $estado = ListaLleeEstado::Requerimiento;
+                if ($incident->lista_llee_estado !== ListaLleeEstado::Requerimiento) {
+                    $incident->lista_llee_estado = ListaLleeEstado::Requerimiento;
                     $incident->save();
                 }
             }
@@ -524,6 +535,17 @@ class ListaLleeDayService
         $base['activa'] = $estado !== ListaLleeEstado::Restablecido && $estado !== ListaLleeEstado::Activo;
 
         return $base;
+    }
+
+    /**
+     * Autocompleta Requerimiento solo si aún no hay estado operativo manual,
+     * o si quedó Averías/Descartes al pasar de Incidencias a Requerimientos.
+     */
+    private function shouldAutoMarkRequerimiento(?ListaLleeEstado $estado): bool
+    {
+        return $estado === null
+            || $estado === ListaLleeEstado::Averias
+            || $estado === ListaLleeEstado::DescartesEnCurso;
     }
 
     /**

@@ -81,7 +81,7 @@ class InternetUsageReportService
     {
         $query = NetworkAssignment::query()
             ->with([
-                'school:id,local_educativo,codigo_local,provincia,distrito',
+                'school:id,local_educativo,codigo_local,current_sequence,provincia,distrito',
                 'sensors' => fn ($q) => $q->whereIn('sensor_role', [
                     PrtgSensorRole::Transmision->value,
                     PrtgSensorRole::Recepcion->value,
@@ -93,14 +93,7 @@ class InternetUsageReportService
             ]));
 
         if ($search !== null && trim($search) !== '') {
-            $term = '%'.mb_strtolower(trim($search)).'%';
-            $query->where(function ($q) use ($term) {
-                $q->whereRaw('LOWER(cid) like ?', [$term])
-                    ->orWhereHas('school', function ($s) use ($term) {
-                        $s->whereRaw('LOWER(local_educativo) like ?', [$term])
-                            ->orWhereRaw('LOWER(COALESCE(codigo_local, \'\')) like ?', [$term]);
-                    });
-            });
+            \App\Support\CidTssSearch::constrainAssignment($query, $search);
         }
 
         $from = OperationalTime::dayStart(OperationalTime::now()->startOfMonth());

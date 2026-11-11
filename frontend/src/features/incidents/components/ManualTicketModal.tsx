@@ -151,7 +151,7 @@ export function ManualTicketModal({
             </Select>
           </FormField>
           <FormField label="CID o TSS">
-            <Input value={q} onChange={(event) => { setQ(event.target.value); setFound(null) }} placeholder="258394 o 90" required />
+            <Input value={q} onChange={(event) => { setQ(event.target.value); setFound(null) }} placeholder="CID o TSS" required />
           </FormField>
           <RootCausePicker
             groupCode={causeGroup}

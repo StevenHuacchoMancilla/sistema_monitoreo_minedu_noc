@@ -454,7 +454,7 @@ export function OperationalReportPage() {
               setSearch(e.target.value)
               setPage(1)
             }}
-            placeholder="CID, local, código…"
+            placeholder="CID o TSS"
           />
         </FilterCard>
 

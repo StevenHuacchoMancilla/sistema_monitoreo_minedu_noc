@@ -141,7 +141,7 @@ export function TicketeraPage() {
     const metric = (group: { rows: PreparedRow[]; opened: number }) => (rankMetric === 'open' ? group.opened : group.rows.length)
     const direction = rankOrder === 'asc' ? 1 : -1
     const ranked = [...map.values()]
-      .filter((group) => !queryText || `${group.cid} ${group.tss} ${group.name}`.toUpperCase().includes(queryText))
+      .filter((group) => !queryText || `${group.cid} ${group.tss}`.toUpperCase().includes(queryText))
       .sort((a, b) => direction * (metric(a) - metric(b)) || a.cid.localeCompare(b.cid, 'es', { numeric: true }))
     return rankLimit === 'all' ? ranked : ranked.slice(0, Number(rankLimit) || 15)
   }, [prepared, rankLimit, rankMetric, rankOrder, rankSearch])
@@ -283,7 +283,7 @@ export function TicketeraPage() {
                   <Input
                     type="search"
                     value={filters.search}
-                    placeholder="Ticket, CID, TSS, causa o MINEDU"
+                    placeholder="CID o TSS"
                     onChange={(event) => patch({ search: event.target.value })}
                   />
                 </FormField>
@@ -363,7 +363,7 @@ export function TicketeraPage() {
                     </Select>
                   </FormField>
                   <FormField label="Buscar en el ranking">
-                    <Input value={rankSearch} placeholder="CID, TSS o nombre" onChange={(event) => setRankSearch(event.target.value)} />
+                    <Input value={rankSearch} placeholder="CID o TSS" onChange={(event) => setRankSearch(event.target.value)} />
                   </FormField>
                 </div>
                 <DataTableContainer>

@@ -221,15 +221,10 @@ class IncidentRecoveryService
             ->whereBetween('recovered_at', [$from, $to]);
 
         if (! empty($filters['search']) || ! empty($filters['q'])) {
-            $term = '%'.mb_strtolower((string) ($filters['search'] ?? $filters['q'])).'%';
-            $query->where(function (Builder $q) use ($term) {
-                $q->whereHas('school', function (Builder $s) use ($term) {
-                    $s->whereRaw('lower(coalesce(local_educativo, \'\')) like ?', [$term])
-                        ->orWhereRaw('lower(coalesce(codigo_local, \'\')) like ?', [$term]);
-                })->orWhereHas('networkAssignment', function (Builder $n) use ($term) {
-                    $n->whereRaw('lower(coalesce(cid, \'\')) like ?', [$term]);
-                });
-            });
+            \App\Support\CidTssSearch::constrainIncident(
+                $query,
+                (string) ($filters['search'] ?? $filters['q'])
+            );
         }
 
         if (! empty($filters['provincia']) || ! empty($filters['distrito'])) {

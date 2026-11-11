@@ -1348,6 +1348,7 @@ class IncidentController extends Controller
                     'requirement_closed_at' => null,
                 ])->save();
             }
+            $this->listaDays->markRequerimiento($incident->fresh() ?? $incident);
             $this->leavePendienteCierreIfNeeded($incident->fresh() ?? $incident);
         }
 

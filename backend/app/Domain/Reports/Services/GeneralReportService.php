@@ -339,21 +339,7 @@ class GeneralReportService
         }
 
         if (! empty($filters['search'])) {
-            $term = '%'.mb_strtolower(trim((string) $filters['search'])).'%';
-            $query->where(function (Builder $q) use ($term) {
-                $q->whereHas('school', function (Builder $s) use ($term) {
-                    $s->whereRaw('LOWER(local_educativo) like ?', [$term])
-                        ->orWhereRaw('LOWER(codigo_local) like ?', [$term])
-                        ->orWhereRaw('CAST(current_sequence AS TEXT) like ?', [$term]);
-                })->orWhereHas('networkAssignment', function (Builder $a) use ($term) {
-                    $a->whereRaw('LOWER(cid) like ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(prtg_device_name, \'\')) like ?', [$term]);
-                })->orWhereHas('serviceTicket', function (Builder $t) use ($term) {
-                    $t->whereRaw('LOWER(ticket_code) like ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(tss, \'\')) like ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(cid, \'\')) like ?', [$term]);
-                })->orWhereRaw('LOWER(COALESCE(root_cause_code, \'\')) like ?', [$term]);
-            });
+            \App\Support\CidTssSearch::constrainIncident($query, (string) $filters['search']);
         }
 
         return $query;

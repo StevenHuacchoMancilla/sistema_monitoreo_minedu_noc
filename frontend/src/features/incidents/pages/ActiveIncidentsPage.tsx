@@ -378,7 +378,7 @@ export function ActiveIncidentsPage({
             label="Buscar"
             className="sm:col-span-2 xl:col-span-2"
             value={search}
-            placeholder="CID, colegio, código, distrito…"
+            placeholder="CID o TSS"
             onChange={(e) => withPageReset(setSearch)(e.target.value)}
           />
           <FormField label="Estado gestión">

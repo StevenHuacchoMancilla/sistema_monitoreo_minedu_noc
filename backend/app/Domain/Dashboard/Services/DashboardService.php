@@ -660,21 +660,7 @@ class DashboardService
             ->orderBy('id', $direction);
 
         if ($search) {
-            $term = '%'.mb_strtolower($search).'%';
-            $query->where(function ($q) use ($term) {
-                $q->whereHas('school', function ($school) use ($term) {
-                    $school->whereRaw('LOWER(local_educativo) like ?', [$term])
-                        ->orWhereRaw('LOWER(codigo_local) like ?', [$term])
-                        ->orWhereRaw('LOWER(distrito) like ?', [$term])
-                        ->orWhereRaw('LOWER(provincia) like ?', [$term]);
-                })->orWhereHas('networkAssignment', function ($na) use ($term) {
-                    $na->whereRaw('LOWER(cid) like ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(prtg_province, \'\')) like ?', [$term])
-                        ->orWhereRaw('LOWER(COALESCE(prtg_district, \'\')) like ?', [$term]);
-                })->orWhereHas('serviceTicket', function ($ticket) use ($term) {
-                    $ticket->whereRaw('LOWER(ticket_code) like ?', [$term]);
-                });
-            });
+            \App\Support\CidTssSearch::constrainIncident($query, $search);
         }
 
         $incidents = $query->get();
@@ -1315,13 +1301,12 @@ class DashboardService
             $stat = $stats->get($school->id);
             $assignment = $school->activeAssignment;
             $ping = $assignment ? $pings->get($assignment->id) : null;
-            $local = (string) ($school->local_educativo ?? '');
             $cid = (string) ($assignment?->cid ?? '');
-            if ($search) {
-                $haystack = mb_strtolower($local.' '.$cid.' '.(string) $school->codigo_local);
-                if (! str_contains($haystack, mb_strtolower($search))) {
-                    continue;
-                }
+            if ($search && ! \App\Support\CidTssSearch::matchesRowCidTss([
+                'cid' => $cid,
+                'tss' => $school->current_sequence,
+            ], $search)) {
+                continue;
             }
             $rows[] = [
                 'school_id' => $school->id,

@@ -189,21 +189,7 @@ export function prepare(
       })
       if (!matches) return false
       if (query) {
-        const haystack = fold(
-          [
-            row.ticket,
-            row.cid,
-            row.tss,
-            row.nombre,
-            row.provincia,
-            row.distrito,
-            row.codigo,
-            row.grupo,
-            row.minedu,
-            row.causa,
-            row.detalle,
-          ].join(' '),
-        )
+        const haystack = fold([row.cid, row.tss].join(' '))
         if (!haystack.includes(query)) return false
       }
       if (active) return intervals.some((interval) => overlaps(row, interval, clock))

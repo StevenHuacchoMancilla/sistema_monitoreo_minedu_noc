@@ -133,7 +133,7 @@ export function TrackingReportPage() {
             label="Buscar"
             value={q}
             onChange={(e) => setQ(e.target.value)}
-            placeholder="N°, ticket, TSS, CID, local…"
+            placeholder="CID o TSS"
           />
           <FormField label="Estado">
             <Select value={status} onChange={(e) => setStatus(e.target.value)}>

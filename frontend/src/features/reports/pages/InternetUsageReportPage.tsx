@@ -43,7 +43,7 @@ export function InternetUsageReportPage() {
         <SearchField
           value={search}
           onChange={(event) => setSearch(event.target.value)}
-          placeholder="CID, colegio o código de local"
+          placeholder="CID o TSS"
         />
       </form>
 

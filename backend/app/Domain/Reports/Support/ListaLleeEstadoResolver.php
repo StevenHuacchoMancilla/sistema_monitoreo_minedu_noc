@@ -8,7 +8,7 @@ use App\Models\Incident;
 
 /**
  * ESTADO de la LISTA DE LLEE: lo define el operador en Vista de reporte.
- * Si aún no eligió, no se inventa un valor (null).
+ * Si aún no eligió, se infiere Requerimiento / Averías desde colas sticky.
  */
 final class ListaLleeEstadoResolver
 {
@@ -21,6 +21,13 @@ final class ListaLleeEstadoResolver
         $raw = $incident->getAttributes()['lista_llee_estado'] ?? null;
         if (is_string($raw) && $raw !== '') {
             return ListaLleeEstado::tryFrom($raw);
+        }
+
+        if ($incident->isOpenRequirement()) {
+            return ListaLleeEstado::Requerimiento;
+        }
+        if ($incident->isOpenGrave()) {
+            return ListaLleeEstado::Averias;
         }
 
         return null;

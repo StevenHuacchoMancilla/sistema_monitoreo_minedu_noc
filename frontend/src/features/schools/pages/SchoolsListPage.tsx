@@ -150,7 +150,7 @@ export function SchoolsListPage() {
               setQ(e.target.value)
               setPage(1)
             }}
-            placeholder="Buscar por CID, código local, modular o nombre..."
+            placeholder="CID o TSS"
           />
           <FormField label="Provincia" className="min-w-0">
             <Select

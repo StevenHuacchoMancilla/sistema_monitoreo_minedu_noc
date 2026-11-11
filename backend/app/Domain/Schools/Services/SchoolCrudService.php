@@ -53,14 +53,7 @@ class SchoolCrudService
         }
 
         if (! empty($filters['q'])) {
-            $term = '%'.mb_strtolower((string) $filters['q']).'%';
-            $query->where(function ($q) use ($term) {
-                $q->whereRaw('LOWER(local_educativo) like ?', [$term])
-                    ->orWhereRaw('LOWER(codigo_local) like ?', [$term])
-                    ->orWhereRaw('LOWER(COALESCE(codigo_modular, \'\')) like ?', [$term])
-                    ->orWhereRaw('LOWER(COALESCE(legacy_reference, \'\')) like ?', [$term])
-                    ->orWhereHas('activeAssignment', fn ($a) => $a->whereRaw('LOWER(COALESCE(cid, \'\')) like ?', [$term]));
-            });
+            \App\Support\CidTssSearch::constrainSchool($query, (string) $filters['q']);
         }
 
         return $query->paginate((int) ($filters['per_page'] ?? 25));
