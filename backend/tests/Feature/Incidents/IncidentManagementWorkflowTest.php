@@ -105,6 +105,30 @@ class IncidentManagementWorkflowTest extends TestCase
         $this->assertSame(1, $closing->json('total'));
     }
 
+    public function test_root_cause_can_be_cleared(): void
+    {
+        $incident = $this->seedIncident();
+        $incident->forceFill([
+            'root_cause_group_code' => 'GS',
+            'root_cause_code' => 'GS03',
+            'cause' => 'Causa no determinada (comentario obligatorio)',
+        ])->save();
+
+        $this->postJson("/api/incidents/{$incident->id}/managements", [
+            'detail' => 'Sin causa: es requerimiento',
+            'minedu_reason' => 'REQUERIMIENTO',
+            'root_cause_group_code' => null,
+            'root_cause_code' => null,
+            'cause' => null,
+        ])->assertOk();
+
+        $incident->refresh();
+        $this->assertNull($incident->root_cause_group_code);
+        $this->assertNull($incident->root_cause_code);
+        $this->assertNull($incident->cause);
+        $this->assertTrue($incident->isOpenRequirement());
+    }
+
     public function test_no_response_and_link_outage_are_excluded_from_closing(): void
     {
         $a = $this->seedIncident();

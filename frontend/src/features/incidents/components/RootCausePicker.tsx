@@ -153,7 +153,7 @@ export function RootCausePicker({
             </div>
           </dl>
         ) : (
-          <p className="mt-1 text-sm text-slate-400">Elige el grupo y la causa; el resto se completa solo.</p>
+          <p className="mt-1 text-sm text-slate-400">Opcional. Elige grupo y causa, o déjalo vacío (p. ej. Requerimientos).</p>
         )}
       </div>
     </div>

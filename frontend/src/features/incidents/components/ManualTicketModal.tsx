@@ -101,8 +101,8 @@ export function ManualTicketModal({
             q: q.trim(),
             detail: detail || null,
             minedu_reason: reason || null,
-            root_cause_group_code: causeGroup,
-            root_cause_code: causeCode,
+            root_cause_group_code: causeGroup || null,
+            root_cause_code: causeCode || null,
             ...visitPayload,
           })
         : endpoints.createManualTicket({
@@ -110,8 +110,8 @@ export function ManualTicketModal({
             kind,
             detail: detail || null,
             minedu_reason: reason || null,
-            root_cause_group_code: causeGroup,
-            root_cause_code: causeCode,
+            root_cause_group_code: causeGroup || null,
+            root_cause_code: causeCode || null,
             ...visitPayload,
           }),
     onSuccess: (detailResponse) => {
@@ -133,8 +133,8 @@ export function ManualTicketModal({
             lookup.mutate()
             return
           }
-          if (!causeGroup || !causeCode) {
-            setError('Elige el grupo y la causa raíz.')
+          if ((causeGroup && !causeCode) || (!causeGroup && causeCode)) {
+            setError('Completa grupo y causa raíz, o déjalos vacíos (opcional en Requerimientos).')
             return
           }
           create.mutate()
@@ -156,7 +156,6 @@ export function ManualTicketModal({
           <RootCausePicker
             groupCode={causeGroup}
             causeCode={causeCode}
-            required
             onGroupChange={(next) => {
               setCauseGroup(next)
               setCauseCode('')

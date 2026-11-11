@@ -87,6 +87,9 @@ class IncidentManagementService
         }
 
         $rootCause = null;
+        $clearRootCause = false;
+        $rootCauseProvided = array_key_exists('root_cause_group_code', $payload)
+            || array_key_exists('root_cause_code', $payload);
         $groupCode = trim((string) ($payload['root_cause_group_code'] ?? ''));
         $causeCode = trim((string) ($payload['root_cause_code'] ?? ''));
         if ($groupCode !== '' || $causeCode !== '') {
@@ -94,6 +97,9 @@ class IncidentManagementService
             if (in_array($rootCause['attention'] ?? null, ['PEXT', 'PINT'], true)) {
                 $scope = ManagementScope::from((string) $rootCause['attention']);
             }
+        } elseif ($rootCauseProvided) {
+            // Vacío explícito = quitar causa (p. ej. Requerimientos sin código).
+            $clearRootCause = true;
         }
 
         $minedu = array_key_exists('minedu_reason', $payload)
@@ -103,7 +109,7 @@ class IncidentManagementService
             : null;
         $mineduProvided = array_key_exists('minedu_reason', $payload);
 
-        return DB::transaction(function () use ($incident, $payload, $classification, $scope, $contact, $viaDescartes, $userId, $rootCause, $minedu, $mineduProvided) {
+        return DB::transaction(function () use ($incident, $payload, $classification, $scope, $contact, $viaDescartes, $userId, $rootCause, $clearRootCause, $minedu, $mineduProvided) {
             $before = [
                 'management_classification' => $incident->management_classification?->value,
                 'management_scope' => $incident->management_scope?->value,
@@ -176,9 +182,15 @@ class IncidentManagementService
                 'last_managed_contact_id' => $contact?->id ?? $incident->last_managed_contact_id,
                 'followup_status' => $followup,
                 'last_contact_at' => now(),
-                'root_cause_group_code' => $rootCause !== null ? $rootCause['group_code'] : $incident->root_cause_group_code,
-                'root_cause_code' => $rootCause !== null ? $rootCause['code'] : $incident->root_cause_code,
-                'cause' => $rootCause !== null ? $rootCause['cause'] : ($payload['cause'] ?? $incident->cause),
+                'root_cause_group_code' => $rootCause !== null
+                    ? $rootCause['group_code']
+                    : ($clearRootCause ? null : $incident->root_cause_group_code),
+                'root_cause_code' => $rootCause !== null
+                    ? $rootCause['code']
+                    : ($clearRootCause ? null : $incident->root_cause_code),
+                'cause' => $rootCause !== null
+                    ? $rootCause['cause']
+                    : ($clearRootCause ? null : ($payload['cause'] ?? $incident->cause)),
                 'minedu_reason' => $mineduProvided ? $minedu : $incident->minedu_reason,
             ];
 

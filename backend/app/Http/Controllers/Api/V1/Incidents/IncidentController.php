@@ -542,8 +542,8 @@ class IncidentController extends Controller
             'detail' => ['nullable', 'string', 'max:5000'],
             'kind' => ['nullable', Rule::in(\App\Models\ServiceTicket::kinds())],
             'minedu_reason' => ['nullable', Rule::in(MineduReason::operableValues())],
-            'root_cause_group_code' => ['required', 'string', 'max:8'],
-            'root_cause_code' => ['required', 'string', 'max:16'],
+            'root_cause_group_code' => ['nullable', 'string', 'max:8'],
+            'root_cause_code' => ['nullable', 'string', 'max:16'],
             'arrived_at' => ['nullable', 'date'],
             'departed_at' => ['nullable', 'date'],
             'restored_at' => ['nullable', 'date'],
@@ -557,10 +557,17 @@ class IncidentController extends Controller
             return response()->json(['message' => 'No autenticado.'], 401);
         }
 
-        try {
-            RootCauseLegend::requirePair((string) $data['root_cause_group_code'], (string) $data['root_cause_code']);
-        } catch (InvalidArgumentException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+        $openGroup = trim((string) ($data['root_cause_group_code'] ?? ''));
+        $openCause = trim((string) ($data['root_cause_code'] ?? ''));
+        if ($openGroup !== '' || $openCause !== '') {
+            try {
+                RootCauseLegend::requirePair($openGroup, $openCause);
+            } catch (InvalidArgumentException $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+        } else {
+            $data['root_cause_group_code'] = null;
+            $data['root_cause_code'] = null;
         }
 
         $lookup = $this->lookupSchool($request->duplicate(['q' => $data['q']]))->getData(true);
@@ -607,8 +614,8 @@ class IncidentController extends Controller
             'detail' => ['nullable', 'string', 'max:5000'],
             'opened_at' => ['nullable', 'date'],
             'minedu_reason' => ['nullable', Rule::in(MineduReason::operableValues())],
-            'root_cause_group_code' => ['required', 'string', 'max:8'],
-            'root_cause_code' => ['required', 'string', 'max:16'],
+            'root_cause_group_code' => ['nullable', 'string', 'max:8'],
+            'root_cause_code' => ['nullable', 'string', 'max:16'],
             'arrived_at' => ['nullable', 'date'],
             'departed_at' => ['nullable', 'date'],
             'restored_at' => ['nullable', 'date'],
@@ -622,10 +629,17 @@ class IncidentController extends Controller
             return response()->json(['message' => 'No autenticado.'], 401);
         }
 
-        try {
-            RootCauseLegend::requirePair((string) $data['root_cause_group_code'], (string) $data['root_cause_code']);
-        } catch (InvalidArgumentException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
+        $openGroup = trim((string) ($data['root_cause_group_code'] ?? ''));
+        $openCause = trim((string) ($data['root_cause_code'] ?? ''));
+        if ($openGroup !== '' || $openCause !== '') {
+            try {
+                RootCauseLegend::requirePair($openGroup, $openCause);
+            } catch (InvalidArgumentException $e) {
+                return response()->json(['message' => $e->getMessage()], 422);
+            }
+        } else {
+            $data['root_cause_group_code'] = null;
+            $data['root_cause_code'] = null;
         }
 
         $lookup = $this->lookupSchool($request->duplicate(['q' => $data['q']]))->getData(true);
@@ -843,6 +857,13 @@ class IncidentController extends Controller
             if (in_array($legend['attention'] ?? null, ['PEXT', 'PINT'], true)) {
                 $data['management_scope'] = $legend['attention'];
             }
+        } elseif (
+            array_key_exists('root_cause_group_code', $data)
+            || array_key_exists('root_cause_code', $data)
+        ) {
+            $data['root_cause_group_code'] = null;
+            $data['root_cause_code'] = null;
+            $data['cause'] = null;
         }
 
         $before = $incident->followup_status?->value;
@@ -1264,31 +1285,14 @@ class IncidentController extends Controller
         $hadCause = filled($incident->root_cause_code);
         $row = null;
         $scope = $incident->management_scope;
+        $groupIn = trim((string) ($data['root_cause_group_code'] ?? ''));
+        $causeIn = trim((string) ($data['root_cause_code'] ?? ''));
+        $hasCausePair = $groupIn !== '' && $causeIn !== '';
 
-        if (! $hadCause) {
-            $row = RootCauseLegend::requirePair(
-                (string) $data['root_cause_group_code'],
-                (string) $data['root_cause_code'],
-            );
-            $scope = in_array($row['attention'], ['PEXT', 'PINT'], true)
-                ? ManagementScope::from((string) $row['attention'])
-                : $incident->management_scope;
-            $incident->fill([
-                'root_cause_group_code' => $row['group_code'],
-                'root_cause_code' => $row['code'],
-                'cause' => $row['cause'],
-                'management_scope' => $scope,
-            ]);
-        } elseif (
-            filled($data['root_cause_group_code'] ?? null)
-            && filled($data['root_cause_code'] ?? null)
-        ) {
-            // Reuso de caso abierto: permite actualizar causa si el operador la cambia.
+        // Causa opcional (Requerimientos u otros); si viene el par, se aplica o actualiza.
+        if ($hasCausePair) {
             try {
-                $row = RootCauseLegend::requirePair(
-                    (string) $data['root_cause_group_code'],
-                    (string) $data['root_cause_code'],
-                );
+                $row = RootCauseLegend::requirePair($groupIn, $causeIn);
                 $scope = in_array($row['attention'], ['PEXT', 'PINT'], true)
                     ? ManagementScope::from((string) $row['attention'])
                     : $incident->management_scope;
@@ -1298,7 +1302,10 @@ class IncidentController extends Controller
                     'cause' => $row['cause'],
                     'management_scope' => $scope,
                 ]);
-            } catch (InvalidArgumentException) {
+            } catch (InvalidArgumentException $e) {
+                if (! $hadCause) {
+                    throw $e;
+                }
                 $row = null;
             }
         }

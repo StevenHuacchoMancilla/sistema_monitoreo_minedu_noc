@@ -77,9 +77,23 @@ class ServiceTicketService
 
         $incident->loadMissing(['school', 'networkAssignment']);
         $patch = $this->snapshot($incident, []);
-        foreach (['segment', 'attention', 'cause', 'cause_code', 'minedu', 'detail', 'area', 'school_name'] as $field) {
+        // Causa raíz es opcional: si el incidente la quitó, también limpia el ticket.
+        if (! filled($incident->root_cause_code)) {
+            $patch['cause_code'] = null;
+            $patch['cause'] = null;
+            $patch['segment'] = null;
+            $patch['attention'] = null;
+        }
+        foreach (['minedu', 'detail', 'area', 'school_name'] as $field) {
             if (! filled($patch[$field] ?? null)) {
                 unset($patch[$field]);
+            }
+        }
+        if (filled($incident->root_cause_code)) {
+            foreach (['segment', 'attention', 'cause', 'cause_code'] as $field) {
+                if (! filled($patch[$field] ?? null)) {
+                    unset($patch[$field]);
+                }
             }
         }
         $ticket->fill($patch);

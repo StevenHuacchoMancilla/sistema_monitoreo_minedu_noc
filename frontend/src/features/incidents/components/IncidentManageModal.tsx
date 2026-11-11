@@ -551,9 +551,9 @@ export function IncidentManageModal({
                 </div>
               </Panel>
 
-              <Panel title="Causa raíz">
+              <Panel title="Causa raíz (opcional)">
                 <p className="mb-3 text-[12px] text-slate-500">
-                  Actualízala si cambia el diagnóstico (ej. de equipos apagados a corte de energía).
+                  Opcional. En Requerimientos suele ir vacía. Puedes quitarla eligiendo «— Elige el grupo —» y guardar.
                 </p>
                 <RootCausePicker
                   groupCode={causeGroup}
