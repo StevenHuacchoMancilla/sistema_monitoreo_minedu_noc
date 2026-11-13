@@ -53,7 +53,8 @@ const HISTORY_TABS: Array<{
   hint: string
 }> = [
   { id: 'caidas_normales', label: 'Caídas normales', hint: 'Mayoría operativa: caídas PRTG sin avería / req / mant.' },
-  { id: 'averias', label: 'Averías', hint: 'Quejas y caídas de enlace (MINEDU / incidencias graves).' },
+  { id: 'averias', label: 'Averías', hint: 'Quejas y caídas de enlace MINEDU / incidencias graves.' },
+  { id: 'enlace_parcial', label: 'Enlace parcial', hint: 'Un WAN caído con Ping operativo (doble WAN / P2P).' },
   { id: 'requerimientos', label: 'Requerimientos', hint: 'Casos marcados como requerimiento.' },
   { id: 'mantenimientos', label: 'Mantenimientos', hint: 'Tickets de mantenimiento preventivo o correctivo.' },
 ]
@@ -279,7 +280,7 @@ export function SchoolHistoryDetailPage() {
                 <p className="text-sm text-slate-600 dark:text-slate-300">{activeTab.hint}</p>
               </div>
             </div>
-            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-5">
               {HISTORY_TABS.map((tab) => {
                 const count = categoryCounts?.[tab.id] ?? 0
                 const selected = category === tab.id
@@ -440,7 +441,9 @@ export function SchoolHistoryDetailPage() {
                                         ? 'bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200'
                                         : row.category === 'requerimientos'
                                           ? 'bg-violet-50 text-violet-800 dark:bg-violet-950 dark:text-violet-200'
-                                          : 'bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200'
+                                          : row.category === 'enlace_parcial'
+                                            ? 'bg-amber-50 text-amber-900 dark:bg-amber-950 dark:text-amber-200'
+                                            : 'bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200'
                                     }`}
                                   >
                                     {row.category_label}

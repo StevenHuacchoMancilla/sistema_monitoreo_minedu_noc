@@ -56,7 +56,7 @@ class DashboardService
                       AND NOT (is_grave_incident = true AND grave_closed_at IS NULL)
                       AND NOT (is_requirement_case = true AND requirement_closed_at IS NULL)
                       AND NOT (
-                        detection_source = ?
+                        detection_source IN (?, ?)
                         OR EXISTS (
                           SELECT 1 FROM service_tickets st
                           WHERE st.incident_id = incidents.id
@@ -67,13 +67,10 @@ class DashboardService
                       AND (
                         (
                           recovered_at IS NULL
-                          AND (
-                            detection_source = ?
-                            OR EXISTS (
-                              SELECT 1 FROM prtg_sensors s
-                              WHERE s.id = incidents.prtg_sensor_id
-                                AND s.normalized_status = ?
-                            )
+                          AND EXISTS (
+                            SELECT 1 FROM prtg_sensors s
+                            WHERE s.id = incidents.prtg_sensor_id
+                              AND s.normalized_status = ?
                           )
                         )
                         OR (
@@ -92,8 +89,8 @@ class DashboardService
                 ...$cidMissing,
                 ...$managing,
                 Incident::DETECTION_MAINTENANCE,
-                \App\Models\ServiceTicket::STATUS_OPEN,
                 Incident::DETECTION_MANUAL_PARTIAL,
+                \App\Models\ServiceTicket::STATUS_OPEN,
                 MonitoringStatus::Caido->value,
                 RecoveryReviewStatus::ContinueMonitoring->value,
                 $dayStart,
@@ -146,6 +143,7 @@ class DashboardService
                 'pendiente_cierre' => $outageNav['pendiente_cierre'],
                 'incidencias_graves' => $outageNav['incidencias_graves'],
                 'requerimientos' => $outageNav['requerimientos'],
+                'enlace_parcial' => $outageNav['enlace_parcial'] ?? 0,
                 'mantenimientos' => (int) \App\Models\ServiceTicket::query()
                     ->where('is_maintenance', true)
                     ->where('status', \App\Models\ServiceTicket::STATUS_OPEN)
@@ -182,13 +180,11 @@ class DashboardService
                     followup_status
                 FROM incidents
                 WHERE recovered_at IS NULL
-                  AND (
-                    detection_source = ?
-                    OR EXISTS (
+                  AND (detection_source IS NULL OR detection_source <> ?)
+                  AND EXISTS (
                         SELECT 1 FROM prtg_sensors s
                         WHERE s.id = incidents.prtg_sensor_id
                           AND s.normalized_status IN (?, ?)
-                    )
                   )
                 ORDER BY network_assignment_id, started_at DESC NULLS LAST, id DESC
              ) t",
@@ -199,6 +195,11 @@ class DashboardService
                 MonitoringStatus::Parcial->value,
             ]
         );
+
+        $enlaceParcial = (int) Incident::query()
+            ->where('detection_source', Incident::DETECTION_MANUAL_PARTIAL)
+            ->whereNull('recovered_at')
+            ->count();
 
         // Ping intermitente (amarillo) sin ticket abierto: se ven en Caídas totales, no abren caída.
         $intermittentOnly = (int) (DB::selectOne(
@@ -255,6 +256,7 @@ class DashboardService
             'pendiente_cierre' => $pendienteCierre,
             'incidencias_graves' => $graves,
             'requerimientos' => $requerimientos,
+            'enlace_parcial' => $enlaceParcial,
             // compat legacy
             'activas' => $totales,
             'recaidas' => 0,
@@ -628,22 +630,28 @@ class DashboardService
                 })->where(function ($q) {
                     $q->where(function ($d) {
                         $d->whereNull('detection_source')
-                            ->orWhere('detection_source', '!=', Incident::DETECTION_MAINTENANCE);
+                            ->orWhereNotIn('detection_source', [
+                                Incident::DETECTION_MAINTENANCE,
+                                Incident::DETECTION_MANUAL_PARTIAL,
+                            ]);
                     })->whereDoesntHave('serviceTicket', function ($t) {
                         $t->where('is_maintenance', true)
                             ->where('status', \App\Models\ServiceTicket::STATUS_OPEN);
                     });
                 });
         } else {
-            // Caídas reales (rojo) + intermitentes/parciales (amarillo) + caídas de enlace manuales.
-            // Los intermitentes no abren ticket nuevo, pero sí se listan (arriba en el UI).
-            $query->active()->where(function ($q) {
-                $q->whereHas(
-                    'sensor',
-                    fn ($sensor) => $sensor->whereIn('normalized_status', MonitoringStatus::outageValues())
-                )->orWhere('detection_source', Incident::DETECTION_MANUAL_PARTIAL)
-                    ->orWhereIn('current_status', MonitoringStatus::outageValues());
-            });
+            // Caídas reales (rojo) + intermitentes PRTG (amarillo). Enlace parcial vive en su apartado.
+            $query->active()
+                ->where(function ($q) {
+                    $q->whereNull('detection_source')
+                        ->orWhere('detection_source', '!=', Incident::DETECTION_MANUAL_PARTIAL);
+                })
+                ->where(function ($q) {
+                    $q->whereHas(
+                        'sensor',
+                        fn ($sensor) => $sensor->whereIn('normalized_status', MonitoringStatus::outageValues())
+                    )->orWhereIn('current_status', MonitoringStatus::outageValues());
+                });
         }
 
         $query

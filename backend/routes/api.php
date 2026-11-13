@@ -78,6 +78,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/incidents/queues/pendiente-cierre', [IncidentController::class, 'pendienteCierre']);
         Route::get('/incidents/queues/graves', [IncidentController::class, 'graves']);
         Route::get('/incidents/queues/requerimientos', [IncidentController::class, 'requerimientos']);
+        Route::get('/incidents/queues/enlace-parcial', [IncidentController::class, 'enlaceParcial']);
         Route::get('/incidents/lookup', [IncidentController::class, 'lookupSchool']);
         Route::get('/incidents/maintenance', [IncidentController::class, 'maintenanceIndex']);
         Route::get('/incidents/same-hour', [IncidentController::class, 'sameHour']);

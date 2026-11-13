@@ -55,6 +55,7 @@ export type DashboardSummary = {
     pendiente_cierre?: number
     incidencias_graves?: number
     requerimientos?: number
+    enlace_parcial?: number
     recaida_gestion?: number
     mantenimientos?: number
     concentraciones: number

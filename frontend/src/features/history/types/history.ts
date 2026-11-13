@@ -115,6 +115,7 @@ export type SchoolHistoryOverview = {
       averias: number
       requerimientos: number
       mantenimientos: number
+      enlace_parcial: number
     }
     ultimos_30_dias: {
       caidas: number
@@ -131,6 +132,7 @@ export type SchoolHistoryCategory =
   | 'averias'
   | 'requerimientos'
   | 'mantenimientos'
+  | 'enlace_parcial'
 
 export type Reincidencia = {
   numero: number | null

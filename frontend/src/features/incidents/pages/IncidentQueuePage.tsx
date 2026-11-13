@@ -42,7 +42,7 @@ function matchesCidOrTss(row: { cid?: string | null; tss?: number | string | nul
   return tss.toLowerCase().includes(needle) || (digits !== '' && tss.includes(digits))
 }
 
-type QueueKind = 'pendiente-cierre' | 'graves' | 'requerimientos'
+type QueueKind = 'pendiente-cierre' | 'graves' | 'requerimientos' | 'enlace-parcial'
 
 type QueueRow = {
   incident_id: number
@@ -87,6 +87,12 @@ const META: Record<
     description:
       'Casos etiquetados como Requerimiento. Si el colegio se restablece y vuelve a caer, reaparece con la misma etiqueta salvo que cambies el resultado de gestión.',
     fetcher: () => endpoints.incidentsRequerimientos() as Promise<{ data: QueueRow[] }>,
+  },
+  'enlace-parcial': {
+    title: 'Enlace parcial',
+    description:
+      'Un enlace WAN caído con Ping OPERATIVO (doble WAN / P2P). No entran a Pendientes ni En gestión. Quedan abiertos hasta cierre manual; si el colegio cae por PRTG se genera un ticket nuevo aparte.',
+    fetcher: () => endpoints.incidentsEnlaceParcial() as Promise<{ data: QueueRow[] }>,
   },
 }
 

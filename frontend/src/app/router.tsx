@@ -84,7 +84,9 @@ export function AppRouter() {
                   key="incidents-pendiente-gestion"
                   title="Pendientes de gestión"
                   description="Colegios caídos que aún no tienen ticket en gestión. Desde aquí (o desde Caídas totales) se inicia el seguimiento."
-                  filter={(row) => row.followup_status === 'PENDIENTE_CONTACTO'}
+                  filter={(row) =>
+                    row.followup_status === 'PENDIENTE_CONTACTO' && !row.is_link_outage
+                  }
                   durationSource="current_down"
                 />
               }
@@ -97,6 +99,7 @@ export function AppRouter() {
                   title="En gestión"
                   description="Seguimiento operativo del ticket: agrega mensajes y gestiones. Si PRTG recupera (24h), pasan a Pendiente de cierre."
                   filter={(row) =>
+                    !row.is_link_outage &&
                     !row.is_grave_incident &&
                     !row.has_open_grave_incident &&
                     !row.is_requirement_case &&
@@ -117,6 +120,10 @@ export function AppRouter() {
             <Route
               path="/incidents/requerimientos"
               element={<IncidentQueuePage key="requerimientos" kind="requerimientos" />}
+            />
+            <Route
+              path="/incidents/enlace-parcial"
+              element={<IncidentQueuePage key="enlace-parcial" kind="enlace-parcial" />}
             />
             <Route path="/maintenance" element={<MaintenancePage />} />
             <Route path="/maintenance/finalizados" element={<Navigate to="/maintenance?tab=finalizados" replace />} />

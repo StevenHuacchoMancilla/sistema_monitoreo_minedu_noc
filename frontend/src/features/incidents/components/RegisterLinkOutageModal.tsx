@@ -56,7 +56,8 @@ const TIPO_OPTIONS: Array<{
 
 /**
  * Registra caída de un solo enlace (doble WAN) mientras el Ping puede seguir OPERATIVO.
- * Al guardar aplica TIPO 1/2/3: TIPO 1 entra al reporte; 2 y 3 abren Tracking.
+ * Va al apartado Enlace parcial (no a Pendientes/En gestión). Si PRTG cae total después,
+ * nace un ticket nuevo; este caso queda abierto hasta cierre manual.
  */
 export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, schoolLabel }: Props) {
   const client = useQueryClient()
@@ -155,7 +156,7 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
               Caída de un enlace (doble WAN)
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Para P2P / doble WAN: el colegio puede seguir con internet. No reemplaza la caída total de Ping.
+              Para P2P / doble WAN: el colegio puede seguir con internet. Queda en Enlace parcial hasta cierre manual; una caída total PRTG genera ticket nuevo aparte.
             </p>
           </div>
           <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={onClose} aria-label="Cerrar">

@@ -1105,6 +1105,27 @@ class IncidentController extends Controller
         return response()->json(['data' => $rows]);
     }
 
+    /** Caídas de enlace parcial (doble WAN) abiertas hasta cierre manual. */
+    public function enlaceParcial(Request $request): JsonResponse
+    {
+        $rows = Incident::query()
+            ->with([
+                'school',
+                'networkAssignment',
+                'sensor',
+                'serviceTicket',
+                'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
+            ])
+            ->where('detection_source', Incident::DETECTION_MANUAL_PARTIAL)
+            ->whereNull('recovered_at')
+            ->orderByDesc('started_at')
+            ->limit(500)
+            ->get()
+            ->map(fn (Incident $i) => $this->queueRow($i));
+
+        return response()->json(['data' => $rows]);
+    }
+
     public function markGrave(Request $request, Incident $incident): JsonResponse
     {
         $data = $request->validate([
@@ -1264,6 +1285,13 @@ class IncidentController extends Controller
             'is_requirement_case' => $incident->isOpenRequirement(),
             'requirement_opened_at' => $incident->requirement_opened_at?->toIso8601String(),
             'estado_prtg' => $incident->current_status,
+            'detection_source' => $incident->detection_source,
+            'is_link_outage' => $incident->isManualPartial(),
+            'affected_wan_node' => $incident->affected_wan_node?->value
+                ?? (is_string($incident->affected_wan_node) ? $incident->affected_wan_node : null),
+            'affected_wan_label' => $incident->affected_wan_node instanceof \App\Enums\AffectedWanNode
+                ? $incident->affected_wan_node->label()
+                : null,
             'responsible_area' => $incident->responsible_area,
             'glpi_ticket' => $incident->glpi_ticket,
             'ticket_code' => $incident->serviceTicket?->ticket_code,

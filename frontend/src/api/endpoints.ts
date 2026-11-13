@@ -239,6 +239,8 @@ export const endpoints = {
   incidentsGraves: () => apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/graves'),
   incidentsRequerimientos: () =>
     apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/requerimientos'),
+  incidentsEnlaceParcial: () =>
+    apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/enlace-parcial'),
   markIncidentGrave: (id: number, observation?: string) =>
     apiPost(`/incidents/${id}/mark-grave`, { observation }),
   closeIncidentGrave: (id: number, observation?: string) =>

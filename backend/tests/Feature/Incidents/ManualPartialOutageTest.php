@@ -78,13 +78,18 @@ class ManualPartialOutageTest extends TestCase
         $this->assertSame(0, $closed);
         $this->assertNull($incident->fresh()->recovered_at);
 
-        // Escalada: Ping CAÍDO convierte a incidencia total.
+        // Ping CAÍDO genera caída total NUEVA; el enlace parcial permanece abierto.
         $sensor->update(['normalized_status' => MonitoringStatus::Caido]);
-        app(\App\Domain\Incidents\Services\IncidentService::class)->ensureOpen($assignment, $sensor->fresh());
-        $escalated = $incident->fresh();
-        $this->assertFalse($escalated->isManualPartial());
-        $this->assertNull($escalated->affected_wan_node);
-        $this->assertSame(MonitoringStatus::Caido->value, $escalated->current_status);
+        $total = app(\App\Domain\Incidents\Services\IncidentService::class)->ensureOpen($assignment, $sensor->fresh());
+        $partial = $incident->fresh();
+        $this->assertTrue($partial->isManualPartial());
+        $this->assertNull($partial->recovered_at);
+        $this->assertSame(AffectedWanNode::Principal, $partial->affected_wan_node);
+        $this->assertNotSame($partial->id, $total->id);
+        $this->assertFalse($total->isManualPartial());
+        $this->assertSame(MonitoringStatus::Caido->value, $total->current_status);
+        $this->assertNull($total->recovered_at);
+        $this->assertSame(2, Incident::query()->where('network_assignment_id', $assignment->id)->whereNull('recovered_at')->count());
     }
 
     public function test_rejects_when_ping_already_down(): void

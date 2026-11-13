@@ -243,6 +243,7 @@ class IncidentHistoryService
             'averias' => 0,
             'requerimientos' => 0,
             'mantenimientos' => 0,
+            'enlace_parcial' => 0,
         ];
         $last30 = $incidents->filter(fn (Incident $i) => $i->started_at && $i->started_at->gte($now->copy()->subDays(30)));
 
@@ -406,7 +407,7 @@ class IncidentHistoryService
         }
 
         $category = strtolower(trim((string) ($filters['category'] ?? '')));
-        if (in_array($category, ['caidas_normales', 'averias', 'requerimientos', 'mantenimientos'], true)) {
+        if (in_array($category, ['caidas_normales', 'averias', 'requerimientos', 'mantenimientos', 'enlace_parcial'], true)) {
             $this->applyHistoryCategoryFilter($query, $category);
         }
 
@@ -449,6 +450,7 @@ class IncidentHistoryService
                     'averias' => 'Avería',
                     'requerimientos' => 'Requerimiento',
                     'mantenimientos' => 'Mantenimiento',
+                    'enlace_parcial' => 'Enlace parcial',
                     default => 'Caída normal',
                 },
                 'root_cause_code' => $incident->root_cause_code,
@@ -560,7 +562,7 @@ class IncidentHistoryService
 
     /**
      * Categoría exclusiva del historial por colegio.
-     * Prioridad: mantenimiento > requerimiento > avería > caída normal.
+     * Prioridad: mantenimiento > enlace parcial > requerimiento > avería > caída normal.
      */
     private function resolveHistoryCategory(Incident $incident): string
     {
@@ -571,6 +573,10 @@ class IncidentHistoryService
 
         if ($isMaintenance) {
             return 'mantenimientos';
+        }
+
+        if ($incident->detection_source === Incident::DETECTION_MANUAL_PARTIAL || $incident->isManualPartial()) {
+            return 'enlace_parcial';
         }
 
         $minedu = $incident->minedu_reason instanceof MineduReason
@@ -601,6 +607,10 @@ class IncidentHistoryService
                 ->orWhere('detection_source', Incident::DETECTION_PREVENTIVE);
         };
 
+        $isEnlaceParcialSql = function (Builder $q): void {
+            $q->where('detection_source', Incident::DETECTION_MANUAL_PARTIAL);
+        };
+
         $isRequirementSql = function (Builder $q): void {
             $q->where('is_requirement_case', true)
                 ->orWhere('minedu_reason', MineduReason::Requerimiento->value);
@@ -616,15 +626,21 @@ class IncidentHistoryService
 
         match ($category) {
             'mantenimientos' => $query->where($isMaintenanceSql),
+            'enlace_parcial' => $query
+                ->where($isEnlaceParcialSql)
+                ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql)),
             'requerimientos' => $query
                 ->where($isRequirementSql)
-                ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql)),
+                ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql))
+                ->whereNot(fn (Builder $q) => $q->where($isEnlaceParcialSql)),
             'averias' => $query
                 ->where($isAveriaSql)
                 ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql))
+                ->whereNot(fn (Builder $q) => $q->where($isEnlaceParcialSql))
                 ->whereNot(fn (Builder $q) => $q->where($isRequirementSql)),
             default => $query
                 ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql))
+                ->whereNot(fn (Builder $q) => $q->where($isEnlaceParcialSql))
                 ->whereNot(fn (Builder $q) => $q->where($isRequirementSql))
                 ->whereNot(fn (Builder $q) => $q->where($isAveriaSql)),
         };

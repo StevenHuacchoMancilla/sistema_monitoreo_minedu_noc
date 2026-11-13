@@ -97,10 +97,16 @@ class IncidentService
         ?CarbonInterface $downSince = null,
         ?Closure $onAnomaly = null,
     ): Incident {
+        // Enlace parcial (MANUAL_PARTIAL) no cuenta como caída activa PRTG: permanece abierto
+        // hasta cierre manual y no bloquea ni se convierte en la caída total.
         $active = Incident::query()
             ->where('network_assignment_id', $assignment->id)
             ->where('prtg_sensor_id', $sensor->id)
             ->whereNull('recovered_at')
+            ->where(function ($q) {
+                $q->whereNull('detection_source')
+                    ->orWhere('detection_source', '!=', Incident::DETECTION_MANUAL_PARTIAL);
+            })
             ->first();
 
         // Sticky primero: si hay "mantener en gestión" / incidencia / requerimiento / mantenimiento,
@@ -129,31 +135,6 @@ class IncidentService
         }
 
         if ($active) {
-            // Caída parcial manual + Ping total CAÍDO → escalar a caída total (ya no es solo un enlace).
-            if ($active->isManualPartial()) {
-                $beforeFollowup = $active->followup_status?->value;
-                $active->update([
-                    'detection_source' => 'REALTIME_SYNC',
-                    'affected_wan_node' => null,
-                    'current_status' => $sensor->normalized_status?->value ?? MonitoringStatus::Caido->value,
-                    'prtg_down_started_at' => $downSince !== null
-                        ? OperationalTime::toStorage($downSince)
-                        : $active->prtg_down_started_at,
-                ]);
-                IncidentUpdate::query()->create([
-                    'incident_id' => $active->id,
-                    'type' => 'SYSTEM',
-                    'status_before' => $beforeFollowup,
-                    'status_after' => $beforeFollowup,
-                    'observation' => 'Escalada: Ping total CAÍDO. La caída parcial de enlace pasa a incidencia PRTG completa.',
-                    'created_at' => now(),
-                ]);
-                $fresh = $active->fresh() ?? $active;
-                $this->trackingHooks->onIncidentTechnicallyDown($fresh);
-
-                return $fresh;
-            }
-
             $beforeStatus = (string) ($active->current_status instanceof MonitoringStatus
                 ? $active->current_status->value
                 : ($active->current_status ?? ''));
@@ -703,7 +684,8 @@ class IncidentService
 
     /**
      * Registra caída de un solo enlace (doble WAN / P2P) mientras el Ping puede seguir OPERATIVO.
-     * No se auto-cierra por PRTG; se cierra al cerrar Tracking o al escalar a CAÍDO total.
+     * No se auto-cierra por PRTG. Queda en apartado Enlace parcial hasta cierre manual.
+     * Una caída total PRTG posterior genera ticket nuevo; este caso permanece abierto.
      */
     public function openManualPartial(
         NetworkAssignment $assignment,
@@ -731,17 +713,29 @@ class IncidentService
             );
         }
 
-        $existing = Incident::query()
-            ->falls()
+        $existingPartial = Incident::query()
             ->where('network_assignment_id', $assignment->id)
+            ->where('detection_source', Incident::DETECTION_MANUAL_PARTIAL)
             ->whereNull('recovered_at')
             ->first();
 
-        if ($existing) {
+        if ($existingPartial) {
+            throw new InvalidArgumentException('Ya hay una caída de enlace parcial abierta para este colegio.');
+        }
+
+        $existingTotal = Incident::query()
+            ->falls()
+            ->where('network_assignment_id', $assignment->id)
+            ->whereNull('recovered_at')
+            ->where(function ($q) {
+                $q->whereNull('detection_source')
+                    ->orWhere('detection_source', '!=', Incident::DETECTION_MANUAL_PARTIAL);
+            })
+            ->first();
+
+        if ($existingTotal) {
             throw new InvalidArgumentException(
-                $existing->isManualPartial()
-                    ? 'Ya hay una caída de enlace abierta para este colegio.'
-                    : 'Ya hay una incidencia activa (caída total). Continúa la gestión desde caídas activas.'
+                'Ya hay una incidencia activa (caída total). Continúa la gestión desde caídas activas.'
             );
         }
 
@@ -788,7 +782,7 @@ class IncidentService
             'type' => 'SYSTEM',
             'status_before' => null,
             'status_after' => FollowupStatus::PendienteContacto->value,
-            'observation' => "Incidencia manual: caída de enlace ({$nodeLabel}). Colegio puede seguir OPERATIVO en Ping. Cierre vía Tracking o al caer ambos enlaces.",
+            'observation' => "Incidencia manual: caída de enlace parcial ({$nodeLabel}). Colegio puede seguir OPERATIVO en Ping. Queda en Enlace parcial hasta cierre manual; una caída total PRTG genera ticket nuevo aparte.",
             'user_id' => $userId,
             'created_at' => now(),
         ]);
