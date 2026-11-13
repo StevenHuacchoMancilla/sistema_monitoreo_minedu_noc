@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
 use App\Http\Controllers\Api\V1\Dashboard\PrtgDashboardController;
 use App\Http\Controllers\Api\V1\History\SchoolHistoryController;
+use App\Http\Controllers\Api\V1\Incidents\IncidentAttachmentController;
 use App\Http\Controllers\Api\V1\Incidents\IncidentController;
 use App\Http\Controllers\Api\V1\Incidents\RecoveredIncidentController;
 use App\Http\Controllers\Api\V1\Monitoring\PrtgLocationController;
@@ -85,6 +86,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/notifications/outages', [OperationalNotificationController::class, 'outages']);
         Route::get('/notifications/live', [OperationalNotificationController::class, 'live']);
         Route::get('/incidents/{incident}', [IncidentController::class, 'show']);
+        Route::get('/incidents/{incident}/attachments', [IncidentAttachmentController::class, 'index']);
         Route::get('/assignments/{assignment}/prtg-sensors', [PrtgSensorController::class, 'byAssignment']);
     });
 
@@ -162,6 +164,8 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('/incidents/{incident}/clock-stop', [IncidentController::class, 'clockStop']);
             Route::put('/incidents/{incident}/visit', [IncidentController::class, 'recordVisit']);
             Route::post('/incidents/{incident}/ensure-ticket', [IncidentController::class, 'ensureTicket']);
+            Route::post('/incidents/{incident}/attachments', [IncidentAttachmentController::class, 'store']);
+            Route::delete('/incidents/{incident}/attachments/{attachment}', [IncidentAttachmentController::class, 'destroy']);
             Route::put('/incidents/{incident}/lista-estado', [ReportController::class, 'updateListaEstado']);
             Route::put('/incidents/{incident}/lista-detalle', [ReportController::class, 'updateListaDetalle']);
         });

@@ -45,7 +45,18 @@ import {
   fetchSchoolHistoryOverview,
   incidentCaseFilePath,
 } from '../api/historyApi'
-import type { SchoolHistoryIncidentRow } from '../types/history'
+import type { SchoolHistoryCategory, SchoolHistoryIncidentRow } from '../types/history'
+
+const HISTORY_TABS: Array<{
+  id: SchoolHistoryCategory
+  label: string
+  hint: string
+}> = [
+  { id: 'caidas_normales', label: 'Caídas normales', hint: 'Mayoría operativa: caídas PRTG sin avería / req / mant.' },
+  { id: 'averias', label: 'Averías', hint: 'Quejas y caídas de enlace (MINEDU / incidencias graves).' },
+  { id: 'requerimientos', label: 'Requerimientos', hint: 'Casos marcados como requerimiento.' },
+  { id: 'mantenimientos', label: 'Mantenimientos', hint: 'Tickets de mantenimiento preventivo o correctivo.' },
+]
 
 export function SchoolHistoryDetailPage() {
   const { schoolId } = useParams()
@@ -58,6 +69,7 @@ export function SchoolHistoryDetailPage() {
   const [status, setStatus] = useState('ALL')
   const [scope, setScope] = useState('')
   const [ticketSearch, setTicketSearch] = useState('')
+  const [category, setCategory] = useState<SchoolHistoryCategory>('caidas_normales')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
 
@@ -73,6 +85,7 @@ export function SchoolHistoryDetailPage() {
       'school',
       id,
       'incidents',
+      category,
       dateFrom,
       dateTo,
       status,
@@ -83,6 +96,7 @@ export function SchoolHistoryDetailPage() {
     ],
     queryFn: () =>
       fetchSchoolHistoryIncidents(id, {
+        category,
         date_from: dateFrom || undefined,
         date_to: dateTo || undefined,
         status: status === 'ALL' ? undefined : status,
@@ -101,6 +115,8 @@ export function SchoolHistoryDetailPage() {
   const statistics = overview.data?.statistics
   const rows = incidents.data?.data ?? []
   const meta = incidents.data?.meta
+  const categoryCounts = statistics?.por_categoria
+  const activeTab = HISTORY_TABS.find((tab) => tab.id === category) ?? HISTORY_TABS[0]
 
   const cid = network?.cid ?? null
   const tech = network?.tecnologia_acceso ?? null
@@ -256,6 +272,41 @@ export function SchoolHistoryDetailPage() {
             </SectionCard>
           </div>
 
+          <div className="mb-4 rounded-xl border border-slate-200 bg-white p-3 dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-2 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <p className="text-[11px] font-semibold tracking-wide text-slate-500 uppercase">Historial por tipo</p>
+                <p className="text-sm text-slate-600 dark:text-slate-300">{activeTab.hint}</p>
+              </div>
+            </div>
+            <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+              {HISTORY_TABS.map((tab) => {
+                const count = categoryCounts?.[tab.id] ?? 0
+                const selected = category === tab.id
+                return (
+                  <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setCategory(tab.id)
+                      setPage(1)
+                    }}
+                    className={`rounded-lg border px-3 py-2.5 text-left transition ${
+                      selected
+                        ? 'border-slate-900 bg-slate-900 text-white dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900'
+                        : 'border-slate-200 bg-slate-50 hover:border-slate-300 dark:border-slate-700 dark:bg-slate-800/50'
+                    }`}
+                  >
+                    <span className="block text-[12px] font-semibold">{tab.label}</span>
+                    <span className={`mt-0.5 block text-lg font-bold tabular-nums ${selected ? '' : 'text-slate-900 dark:text-slate-100'}`}>
+                      {count}
+                    </span>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
           <div className="mb-4">
             <FilterCard
               actions={
@@ -323,9 +374,9 @@ export function SchoolHistoryDetailPage() {
             </FilterCard>
           </div>
 
-          <SectionCard title="Tickets / caídas">
+          <SectionCard title={`${activeTab.label} · tickets`}>
             <p className="mb-3 text-xs text-slate-500 dark:text-slate-400">
-              El ticket TGS nace al gestionar. Cada ticket tiene su historial de gestiones y cierre. Puedes volver a descargar la imagen del ticket con el ícono verde.
+              El ticket TGS nace al gestionar. Cada apartado muestra solo ese tipo. Puedes volver a descargar la imagen del ticket con el ícono verde.
             </p>
             {pngError ? <p className="mb-3 text-sm text-red-600">{pngError}</p> : null}
             {incidents.isLoading ? <LoadingState /> : null}
@@ -382,9 +433,18 @@ export function SchoolHistoryDetailPage() {
                                 <span className="font-mono text-[12px] font-semibold text-slate-900 dark:text-slate-100">
                                   {row.ticket_code}
                                 </span>
-                                {row.is_maintenance ? (
-                                  <span className="mt-0.5 block w-fit rounded-full bg-teal-50 px-1.5 py-0.5 text-[10px] font-bold text-teal-800 dark:bg-teal-950 dark:text-teal-200">
-                                    Mantenimiento{row.ticket_kind_label ? ` · ${row.ticket_kind_label}` : ''}
+                                {row.category && row.category !== 'caidas_normales' ? (
+                                  <span
+                                    className={`mt-0.5 block w-fit rounded-full px-1.5 py-0.5 text-[10px] font-bold ${
+                                      row.category === 'mantenimientos'
+                                        ? 'bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200'
+                                        : row.category === 'requerimientos'
+                                          ? 'bg-violet-50 text-violet-800 dark:bg-violet-950 dark:text-violet-200'
+                                          : 'bg-rose-50 text-rose-800 dark:bg-rose-950 dark:text-rose-200'
+                                    }`}
+                                  >
+                                    {row.category_label}
+                                    {row.is_maintenance && row.ticket_kind_label ? ` · ${row.ticket_kind_label}` : ''}
                                   </span>
                                 ) : null}
                               </div>

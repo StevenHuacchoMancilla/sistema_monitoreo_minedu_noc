@@ -280,18 +280,7 @@ class ServiceTicketService
                 : null;
         }
 
-        if (array_key_exists('closed_at', $payload)) {
-            if ($payload['closed_at']) {
-                $ticket->closed_at = OperationalTime::toStorage($this->parseLocal($payload['closed_at']));
-                $ticket->status = ServiceTicket::STATUS_CLOSED;
-                if ($actorName && trim((string) $ticket->closed_by_name) === '') {
-                    $ticket->closed_by_name = $actorName;
-                }
-            } else {
-                $ticket->closed_at = null;
-                $ticket->status = ServiceTicket::STATUS_OPEN;
-            }
-        }
+        // Guardar detalle/visita no cierra el ticket: el cierre es solo vía close() / close-ticket.
 
         $ticket->save();
 

@@ -173,3 +173,42 @@ export function apiPatch<T>(path: string, body: unknown): Promise<T> {
 export function apiDelete<T>(path: string): Promise<T> {
   return request<T>(path, { method: 'DELETE' })
 }
+
+/** POST multipart/form-data (no Content-Type: lo pone el browser con boundary). */
+export async function apiUploadFormData<T>(path: string, formData: FormData): Promise<T> {
+  await ensureCsrfCookie()
+  const xsrf = readCookie('XSRF-TOKEN')
+  const response = await fetch(`${API_URL}${path}`, {
+    method: 'POST',
+    credentials: 'include',
+    headers: {
+      Accept: 'application/json',
+      'X-Requested-With': 'XMLHttpRequest',
+      ...(xsrf ? { 'X-XSRF-TOKEN': xsrf } : {}),
+    },
+    body: formData,
+  })
+
+  const contentType = response.headers.get('content-type') ?? ''
+  const body = contentType.includes('application/json')
+    ? await response.json().catch(() => null)
+    : await response.text().catch(() => null)
+
+  if (!response.ok) {
+    const message = (() => {
+      if (response.status === 403) return 'No tienes permisos para realizar esta acción.'
+      if (typeof body === 'object' && body) {
+        const obj = body as { message?: unknown; errors?: Record<string, string[] | string> }
+        if (obj.errors && typeof obj.errors === 'object') {
+          const first = Object.values(obj.errors).flat().find((v) => typeof v === 'string' && v.trim())
+          if (typeof first === 'string') return first
+        }
+        if (typeof obj.message === 'string' && obj.message.trim()) return obj.message
+      }
+      return `API ${response.status}`
+    })()
+    throw new ApiError(response.status, message, body)
+  }
+
+  return body as T
+}

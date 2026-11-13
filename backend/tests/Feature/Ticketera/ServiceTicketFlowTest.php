@@ -26,9 +26,10 @@ class ServiceTicketFlowTest extends TestCase
         $incidents = app(IncidentService::class);
 
         $first = $incidents->ensureOpen($assignment, $sensor, now()->subHour());
-        $ticket = ServiceTicket::query()->where('incident_id', $first->id)->first();
+        // TGS nace al gestionar (no al detectar PRTG).
+        $ticket = app(ServiceTicketService::class)->ensureForIncident($first, 'Steven');
         $this->assertNotNull($ticket);
-        $this->assertSame('TGS_258900_1', $ticket->ticket_code);
+        $this->assertMatchesRegularExpression('/^TGS_258900_1_\d{14}$/', $ticket->ticket_code);
         $this->assertSame(ServiceTicket::KIND_CORRECTIVE, $ticket->kind);
         $this->assertSame(ServiceTicket::STATUS_OPEN, $ticket->status);
 
@@ -46,9 +47,16 @@ class ServiceTicketFlowTest extends TestCase
             'closed_at' => '2026-11-05 16:00',
         ], 'Steven');
         $ticket->refresh();
-        $this->assertSame(ServiceTicket::STATUS_CLOSED, $ticket->status);
+        // Guardar detalle no cierra: el cierre es solo vía close().
+        $this->assertSame(ServiceTicket::STATUS_OPEN, $ticket->status);
+        $this->assertNull($ticket->closed_at);
         $this->assertStringContainsString('Cambio de patchcord', app(ServiceTicketService::class)->eventText($ticket));
         $this->assertStringContainsString('Patchcord LC', app(ServiceTicketService::class)->eventText($ticket));
+
+        app(ServiceTicketService::class)->close($first->fresh(), 'Steven', now());
+        $ticket->refresh();
+        $this->assertSame(ServiceTicket::STATUS_CLOSED, $ticket->status);
+        $this->assertNotNull($ticket->closed_at);
 
         $this->assertMatchesRegularExpression('/^TGS_258900_2_\d{14}$/', app(ServiceTicketService::class)->nextCode('258900'));
     }

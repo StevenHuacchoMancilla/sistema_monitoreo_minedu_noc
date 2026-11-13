@@ -181,6 +181,11 @@ class Incident extends Model
         return $this->hasMany(IncidentManagement::class)->orderByDesc('id');
     }
 
+    public function attachments(): HasMany
+    {
+        return $this->hasMany(IncidentAttachment::class)->orderByDesc('id');
+    }
+
     public function fieldDispatches(): HasMany
     {
         return $this->hasMany(FieldDispatch::class)->orderByDesc('id');

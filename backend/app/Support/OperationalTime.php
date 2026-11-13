@@ -51,22 +51,12 @@ final class OperationalTime
     }
 
     /**
-     * Ventana operativa de Pendiente de cierre: lun–vie 08:00–16:00 (America/Lima).
-     * 16:00 exclusive (igual que SLA efectiva).
+     * @deprecated Monitoreo 24h: Pendiente de cierre ya no usa ventana 08:00–16:00.
+     * Conservado por compatibilidad; siempre true.
      */
     public static function isPendienteCierreWindow(?CarbonInterface $at = null): bool
     {
-        $local = $at === null
-            ? self::now()
-            : Carbon::instance($at)->setTimezone(self::tz());
-
-        if ($local->isSaturday() || $local->isSunday()) {
-            return false;
-        }
-
-        $minutes = ((int) $local->format('H')) * 60 + (int) $local->format('i');
-
-        return $minutes >= 8 * 60 && $minutes < 16 * 60;
+        return true;
     }
 
     public static function format(?CarbonInterface $at, string $format): ?string

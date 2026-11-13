@@ -82,6 +82,7 @@ class IncidentController extends Controller
             'fieldDispatches',
             'activeTracking.openedBy:id,name',
             'serviceTicket',
+            'attachments.user:id,name',
         ]);
 
         $historyQuery = Incident::query()
@@ -312,6 +313,9 @@ class IncidentController extends Controller
                 'created_at' => $u->created_at?->toIso8601String(),
             ])->values()->all(),
             'timeline' => IncidentTimelineBuilder::build($incident),
+            'attachments' => $incident->attachments->map(
+                fn (\App\Models\IncidentAttachment $a) => $a->toApi()
+            )->values()->all(),
             'snapshots' => [
                 'school' => $incident->school_snapshot,
                 'network' => $incident->network_snapshot,

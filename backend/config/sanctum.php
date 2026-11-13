@@ -24,12 +24,15 @@ return [
             'localhost,localhost:3000,127.0.0.1,127.0.0.1:8000,::1',
             Sanctum::currentApplicationUrlWithPort(),
         )))),
-        // Acceso LAN (Vite :5173): Sanctum exige el host del Origin, no solo localhost.
+        // Acceso LAN (Vite :5173): wildcards — la IP Wi‑Fi cambia y no debe romper login.
         [
+            '192.168.*:5173',
+            '10.*:5173',
             '192.168.10.60:5173',
             '192.168.10.189:5173',
             '192.168.10.194:5173',
             '192.168.10.240:5173',
+            '192.168.10.252:5173',
             'localhost:5173',
             '127.0.0.1:5173',
             'localhost:8000',

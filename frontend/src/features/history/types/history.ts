@@ -110,6 +110,12 @@ export type SchoolHistoryOverview = {
     duracion_promedio: string | null
     mayor_caida_segundos: number | null
     mayor_caida: string | null
+    por_categoria?: {
+      caidas_normales: number
+      averias: number
+      requerimientos: number
+      mantenimientos: number
+    }
     ultimos_30_dias: {
       caidas: number
       duracion_total_segundos: number
@@ -119,6 +125,12 @@ export type SchoolHistoryOverview = {
     }
   }
 }
+
+export type SchoolHistoryCategory =
+  | 'caidas_normales'
+  | 'averias'
+  | 'requerimientos'
+  | 'mantenimientos'
 
 export type Reincidencia = {
   numero: number | null
@@ -133,6 +145,11 @@ export type SchoolHistoryIncidentRow = {
   ticket_kind?: string | null
   ticket_kind_label?: string | null
   is_maintenance?: boolean
+  is_grave_incident?: boolean
+  is_requirement_case?: boolean
+  minedu_reason?: string | null
+  category?: SchoolHistoryCategory
+  category_label?: string | null
   root_cause_code?: string | null
   detection_source?: string | null
   display_code?: string | null

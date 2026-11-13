@@ -122,9 +122,9 @@ class PendienteCierreWorkflowTest extends TestCase
         $this->assertTrue((bool) $incident->recovered_while_managing);
     }
 
-    public function test_saturday_recovery_from_caidas_auto_closes(): void
+    public function test_saturday_recovery_from_caidas_goes_to_pendiente_cierre(): void
     {
-        // Sábado 7 nov 2026 Lima
+        // Sábado 7 nov 2026 Lima — monitoreo 24h.
         $this->freezeLima('2026-11-07 11:30:00');
         $incident = $this->seedManagingIncident();
         $incident->update(['followup_status' => FollowupStatus::PendienteContacto]);
@@ -133,12 +133,13 @@ class PendienteCierreWorkflowTest extends TestCase
 
         $incident->refresh();
         $this->assertNotNull($incident->recovered_at);
-        $this->assertSame(FollowupStatus::Cerrado, $incident->followup_status);
+        $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+        $this->assertFalse((bool) $incident->recovered_while_managing);
     }
 
-    public function test_weekday_outside_hours_unmanaged_auto_closes(): void
+    public function test_weekday_night_unmanaged_goes_to_pendiente_cierre(): void
     {
-        // Lunes 9 nov 2026 Lima 19:30 — fuera de 08:00–16:00.
+        // Lunes 9 nov 2026 Lima 19:30 — monitoreo 24h.
         $this->freezeLima('2026-11-09 19:30:00');
         $incident = $this->seedManagingIncident();
         $incident->update(['followup_status' => FollowupStatus::PendienteContacto]);
@@ -147,7 +148,8 @@ class PendienteCierreWorkflowTest extends TestCase
 
         $incident->refresh();
         $this->assertNotNull($incident->recovered_at);
-        $this->assertSame(FollowupStatus::Cerrado, $incident->followup_status);
+        $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
+        $this->assertFalse((bool) $incident->recovered_while_managing);
     }
 
     public function test_weekday_outside_hours_managing_goes_to_pendiente_cierre(): void
@@ -164,9 +166,9 @@ class PendienteCierreWorkflowTest extends TestCase
         $this->assertTrue((bool) $incident->recovered_while_managing);
     }
 
-    public function test_weekday_at_16_unmanaged_auto_closes(): void
+    public function test_weekday_at_16_unmanaged_goes_to_pendiente_cierre(): void
     {
-        // 16:00 exclusive: ya no entra a Pendiente de cierre.
+        // 16:00 — monitoreo 24h: también Pendiente de cierre.
         $this->freezeLima('2026-11-09 16:00:00');
         $incident = $this->seedManagingIncident();
         $incident->update(['followup_status' => FollowupStatus::PendienteContacto]);
@@ -174,7 +176,7 @@ class PendienteCierreWorkflowTest extends TestCase
         app(IncidentService::class)->applyTechnicalRecovery($incident->fresh(), 'At 16 unmanaged');
 
         $incident->refresh();
-        $this->assertSame(FollowupStatus::Cerrado, $incident->followup_status);
+        $this->assertSame(FollowupStatus::PendienteCierre, $incident->followup_status);
     }
 
     public function test_mark_and_close_grave_endpoints(): void
@@ -342,5 +344,58 @@ class PendienteCierreWorkflowTest extends TestCase
         $this->assertTrue(
             collect($reqs->json('data'))->pluck('incident_id')->contains($incident->id)
         );
+    }
+
+    public function test_night_fall_recover_fall_creates_two_incidents(): void
+    {
+        config(['incidents.use_system_clock' => true, 'incidents.flap_reopen_seconds' => 900]);
+        $this->freezeLima('2026-11-09 22:00:00');
+
+        $school = School::query()->create([
+            'codigo_local' => '364600',
+            'local_educativo' => 'COLEGIO RECAIDA NOCHE',
+            'provincia' => 'MAYNAS',
+            'distrito' => 'IQUITOS',
+            'current_sequence' => 100,
+            'active' => true,
+        ]);
+        $assignment = NetworkAssignment::query()->create([
+            'school_id' => $school->id,
+            'cid' => '258500',
+            'cid_status' => CidStatus::Valid,
+            'monitoring_eligible' => true,
+            'prtg_device_name' => 'CID258500_TEST',
+            'is_active' => true,
+        ]);
+        $sensor = PrtgSensor::query()->create([
+            'network_assignment_id' => $assignment->id,
+            'prtg_sensor_id' => '9100',
+            'prtg_device_id' => '8100',
+            'name' => 'Ping',
+            'sensor_role' => 'PING',
+            'device_name' => 'CID258500_TEST',
+            'normalized_status' => MonitoringStatus::Caido,
+            'status_raw' => '5',
+            'last_synced_at' => now(),
+        ]);
+
+        $svc = app(IncidentService::class);
+        $first = $svc->ensureOpen($assignment, $sensor);
+        $this->assertSame(FollowupStatus::PendienteContacto, $first->followup_status);
+
+        $this->freezeLima('2026-11-09 23:00:00');
+        $svc->applyTechnicalRecovery($first->fresh(), 'Recupera 23:00');
+        $first->refresh();
+        $this->assertSame(FollowupStatus::PendienteCierre, $first->followup_status);
+        $this->assertNotNull($first->recovered_at);
+
+        $this->freezeLima('2026-11-09 23:30:00');
+        $sensor->update(['normalized_status' => MonitoringStatus::Caido]);
+        $second = $svc->ensureOpen($assignment->fresh(), $sensor->fresh());
+
+        $this->assertNotSame($first->id, $second->id);
+        $this->assertSame(FollowupStatus::PendienteContacto, $second->followup_status);
+        $this->assertNull($second->recovered_at);
+        $this->assertSame(2, Incident::query()->where('network_assignment_id', $assignment->id)->count());
     }
 }

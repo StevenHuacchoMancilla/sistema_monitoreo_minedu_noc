@@ -1,8 +1,9 @@
-import { apiGet, apiPost, apiPut, API_URL } from './client'
+import { apiDelete, apiGet, apiPost, apiPut, apiUploadFormData, API_URL } from './client'
 import type {
   Concentration,
   ConcentrationZone,
   DashboardSummary,
+  IncidentAttachment,
   IncidentDetail,
   IncidentGestionPayload,
   OutageRow,
@@ -169,6 +170,15 @@ export const endpoints = {
     activities?: string | null
     materials?: string | null
   }) => apiPut<IncidentDetail>(`/incidents/${id}/visit`, body),
+  listAttachments: (id: number) =>
+    apiGet<{ data: IncidentAttachment[] }>(`/incidents/${id}/attachments`),
+  uploadAttachment: (id: number, file: File) => {
+    const form = new FormData()
+    form.append('file', file)
+    return apiUploadFormData<{ data: IncidentAttachment }>(`/incidents/${id}/attachments`, form)
+  },
+  deleteAttachment: (id: number, attachmentId: number) =>
+    apiDelete<{ ok: boolean }>(`/incidents/${id}/attachments/${attachmentId}`),
   sameHourGroups: () =>
     apiGet<{ window_minutes: number; data: Array<Record<string, unknown>> }>('/incidents/same-hour'),
   applySameHour: (body: { incident_ids: number[]; minedu_reason: string; detail?: string | null }) =>

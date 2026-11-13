@@ -48,7 +48,6 @@ export function VisitReportPanel({
   const maintenance = Boolean(ticket?.is_maintenance)
   const [openedAt, setOpenedAt] = useState('')
   const [restoredAt, setRestoredAt] = useState('')
-  const [closedAt, setClosedAt] = useState('')
   const [arrivedAt, setArrivedAt] = useState('')
   const [departedAt, setDepartedAt] = useState('')
   const [technician, setTechnician] = useState('')
@@ -62,7 +61,6 @@ export function VisitReportPanel({
   useEffect(() => {
     setOpenedAt(limaInput(ticket?.opened_at))
     setRestoredAt(limaInput(ticket?.restored_at))
-    setClosedAt(limaInput(ticket?.closed_at))
     setArrivedAt(limaInput(ticket?.arrived_at ?? ticket?.opened_at))
     setDepartedAt(limaInput(ticket?.departed_at))
     setTechnician(ticket?.technician_name ?? '')
@@ -78,7 +76,6 @@ export function VisitReportPanel({
       endpoints.saveVisit(incidentId, {
         opened_at: undefined,
         restored_at: preventive ? undefined : restoredAt || null,
-        closed_at: closedAt || null,
         arrived_at: arrivedAt || null,
         departed_at: departedAt || null,
         technician_name: technician || null,
@@ -155,9 +152,6 @@ export function VisitReportPanel({
         )}
         <FormField label="Hora de salida">
           <Input type="datetime-local" value={departedAt} disabled={readOnly} onChange={(event) => setDepartedAt(event.target.value)} />
-        </FormField>
-        <FormField label="Hora de cierre del ticket">
-          <Input type="datetime-local" value={closedAt} disabled={readOnly} onChange={(event) => setClosedAt(event.target.value)} />
         </FormField>
         <FormField label="Actividades ejecutadas" className="md:col-span-2">
           <textarea

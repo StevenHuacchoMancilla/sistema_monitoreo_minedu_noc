@@ -19,6 +19,7 @@ import { useNow } from '../../../lib/useNow'
 import type { MineduReason } from '../../reports/types/operationalReport'
 import { incidentCaseFilePath } from '../../history/api/historyApi'
 import { VoiceDictationButton } from '../../voice/components/VoiceDictationButton'
+import { EvidenceAttachmentsPanel } from './EvidenceAttachmentsPanel'
 import { VisitReportPanel } from './VisitReportPanel'
 import { RootCausePicker } from './RootCausePicker'
 import type { IncidentDetail } from '../../../types/api'
@@ -485,6 +486,11 @@ export function IncidentManageModal({
                   </p>
                 </Panel>
               ) : null}
+              <EvidenceAttachmentsPanel
+                incidentId={incidentId}
+                attachments={data.attachments ?? []}
+                readOnly={readOnly}
+              />
               {readOnly ? (
                 <Panel title="Gestión">
                   <p className="text-[13px] text-slate-600 dark:text-slate-300">

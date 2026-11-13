@@ -480,6 +480,7 @@ export type IncidentDetail = {
     scope: string | null
     classification: string | null
   }>
+  attachments?: IncidentAttachment[]
   snapshots?: {
     school: Record<string, unknown> | null
     network: Record<string, unknown> | null
@@ -491,6 +492,16 @@ export type IncidentDetail = {
     contact_statuses: Array<{ value: string; label: string }>
     contact_results?: Array<{ value: string; label: string }>
   }
+}
+
+export type IncidentAttachment = {
+  id: number
+  original_name: string
+  mime: string | null
+  size: number
+  url: string
+  uploaded_by: string | null
+  created_at: string | null
 }
 
 export type FieldDispatchAction = 'PLAN' | 'DISPATCH' | 'ARRIVE' | 'CANCEL' | 'COMPLETE'

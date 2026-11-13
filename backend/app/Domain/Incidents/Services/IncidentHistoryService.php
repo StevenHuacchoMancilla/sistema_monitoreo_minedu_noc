@@ -8,10 +8,12 @@ use App\Domain\Incidents\Support\OutageDuration;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
+use App\Enums\MineduReason;
 use App\Enums\MonitoringStatus;
 use App\Models\Incident;
 use App\Models\PrtgSensor;
 use App\Models\School;
+use App\Models\ServiceTicket;
 use App\Models\TrackingRecord;
 use App\Support\OperationalTime;
 use Carbon\Carbon;
@@ -224,14 +226,24 @@ class IncidentHistoryService
 
         $incidents = Incident::query()
             ->where('school_id', $school->id)
+            ->with(['serviceTicket:id,incident_id,is_maintenance'])
             ->orderByDesc('started_at')
-            ->get(['id', 'started_at', 'recovered_at', 'followup_status', 'management_classification', 'management_scope']);
+            ->get([
+                'id', 'started_at', 'recovered_at', 'followup_status', 'management_classification', 'management_scope',
+                'minedu_reason', 'is_grave_incident', 'is_requirement_case', 'root_cause_code', 'detection_source',
+            ]);
 
         $now = now();
         $durations = [];
         $totalSeconds = 0;
         $recovered = 0;
         $active = 0;
+        $categoryCounts = [
+            'caidas_normales' => 0,
+            'averias' => 0,
+            'requerimientos' => 0,
+            'mantenimientos' => 0,
+        ];
         $last30 = $incidents->filter(fn (Incident $i) => $i->started_at && $i->started_at->gte($now->copy()->subDays(30)));
 
         foreach ($incidents as $incident) {
@@ -243,6 +255,8 @@ class IncidentHistoryService
             } else {
                 $active++;
             }
+            $category = $this->resolveHistoryCategory($incident);
+            $categoryCounts[$category] = ($categoryCounts[$category] ?? 0) + 1;
         }
 
         $avg = $durations !== [] ? (int) round(array_sum($durations) / count($durations)) : null;
@@ -307,6 +321,7 @@ class IncidentHistoryService
                 'duracion_promedio' => OutageDuration::human($avg),
                 'mayor_caida_segundos' => $max,
                 'mayor_caida' => OutageDuration::human($max),
+                'por_categoria' => $categoryCounts,
                 'ultimos_30_dias' => [
                     'caidas' => $last30->count(),
                     'duracion_total_segundos' => $last30Seconds,
@@ -335,6 +350,7 @@ class IncidentHistoryService
             ->select([
                 'id', 'school_id', 'started_at', 'recovered_at', 'followup_status',
                 'management_scope', 'recovery_review_status', 'cause', 'root_cause_code',
+                'detection_source', 'minedu_reason', 'is_grave_incident', 'is_requirement_case',
             ])
             ->with([
                 'serviceTicket:id,incident_id,school_id,ticket_code,status,kind,is_maintenance,opened_at,closed_at',
@@ -389,6 +405,11 @@ class IncidentHistoryService
             $query->where('management_scope', $filters['scope']);
         }
 
+        $category = strtolower(trim((string) ($filters['category'] ?? '')));
+        if (in_array($category, ['caidas_normales', 'averias', 'requerimientos', 'mantenimientos'], true)) {
+            $this->applyHistoryCategoryFilter($query, $category);
+        }
+
         $orderedIds = Incident::query()
             ->where('school_id', $school->id)
             ->orderBy('started_at')
@@ -406,6 +427,10 @@ class IncidentHistoryService
             $lastUpdate = $tracking?->latestUpdate;
 
             $ticket = $incident->serviceTicket;
+            $historyCategory = $this->resolveHistoryCategory($incident);
+            $mineduValue = $incident->minedu_reason instanceof MineduReason
+                ? $incident->minedu_reason->value
+                : (is_string($incident->minedu_reason) ? $incident->minedu_reason : null);
 
             return [
                 'id' => $incident->id,
@@ -413,9 +438,19 @@ class IncidentHistoryService
                 'ticket_status' => $ticket?->status,
                 'ticket_kind' => $ticket?->kind,
                 'ticket_kind_label' => $ticket
-                    ? \App\Models\ServiceTicket::kindLabel($ticket->kind)
+                    ? ServiceTicket::kindLabel($ticket->kind)
                     : null,
-                'is_maintenance' => (bool) ($ticket?->is_maintenance || \App\Models\ServiceTicket::isMaintenanceCause($incident->root_cause_code)),
+                'is_maintenance' => (bool) ($ticket?->is_maintenance || ServiceTicket::isMaintenanceCause($incident->root_cause_code)),
+                'is_grave_incident' => (bool) $incident->is_grave_incident,
+                'is_requirement_case' => (bool) $incident->is_requirement_case,
+                'minedu_reason' => $mineduValue,
+                'category' => $historyCategory,
+                'category_label' => match ($historyCategory) {
+                    'averias' => 'Avería',
+                    'requerimientos' => 'Requerimiento',
+                    'mantenimientos' => 'Mantenimiento',
+                    default => 'Caída normal',
+                },
                 'root_cause_code' => $incident->root_cause_code,
                 'detection_source' => $incident->detection_source,
                 'display_code' => $ticket?->ticket_code ?: 'Sin ticket',
@@ -423,7 +458,7 @@ class IncidentHistoryService
                 'recovered_at' => $incident->recovered_at?->toIso8601String(),
                 'duration_seconds' => $seconds,
                 'duration' => OutageDuration::human($seconds),
-                'same_day' => \App\Support\OperationalTime::sameLocalDay($incident->started_at, $incident->recovered_at),
+                'same_day' => OperationalTime::sameLocalDay($incident->started_at, $incident->recovered_at),
                 'followup_status' => $incident->followup_status?->value,
                 'followup_label' => $incident->followup_status?->label(),
                 'management_scope' => $incident->management_scope?->value,
@@ -521,5 +556,77 @@ class IncidentHistoryService
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * Categoría exclusiva del historial por colegio.
+     * Prioridad: mantenimiento > requerimiento > avería > caída normal.
+     */
+    private function resolveHistoryCategory(Incident $incident): string
+    {
+        $ticket = $incident->relationLoaded('serviceTicket') ? $incident->serviceTicket : null;
+        $isMaintenance = (bool) ($ticket?->is_maintenance)
+            || ServiceTicket::isMaintenanceCause($incident->root_cause_code)
+            || $incident->detection_source === Incident::DETECTION_PREVENTIVE;
+
+        if ($isMaintenance) {
+            return 'mantenimientos';
+        }
+
+        $minedu = $incident->minedu_reason instanceof MineduReason
+            ? $incident->minedu_reason->value
+            : (is_string($incident->minedu_reason) ? strtoupper($incident->minedu_reason) : null);
+
+        if ((bool) $incident->is_requirement_case || $minedu === MineduReason::Requerimiento->value) {
+            return 'requerimientos';
+        }
+
+        if (
+            (bool) $incident->is_grave_incident
+            || $minedu === MineduReason::Queja->value
+            || $minedu === MineduReason::CaidaEnlace->value
+        ) {
+            return 'averias';
+        }
+
+        return 'caidas_normales';
+    }
+
+    private function applyHistoryCategoryFilter(Builder $query, string $category): void
+    {
+        $maintenanceRoot = ServiceTicket::MAINTENANCE_ROOT_CAUSE;
+        $isMaintenanceSql = function (Builder $q) use ($maintenanceRoot): void {
+            $q->whereHas('serviceTicket', fn (Builder $t) => $t->where('is_maintenance', true))
+                ->orWhereRaw('UPPER(TRIM(COALESCE(root_cause_code, \'\'))) = ?', [$maintenanceRoot])
+                ->orWhere('detection_source', Incident::DETECTION_PREVENTIVE);
+        };
+
+        $isRequirementSql = function (Builder $q): void {
+            $q->where('is_requirement_case', true)
+                ->orWhere('minedu_reason', MineduReason::Requerimiento->value);
+        };
+
+        $isAveriaSql = function (Builder $q): void {
+            $q->where('is_grave_incident', true)
+                ->orWhereIn('minedu_reason', [
+                    MineduReason::Queja->value,
+                    MineduReason::CaidaEnlace->value,
+                ]);
+        };
+
+        match ($category) {
+            'mantenimientos' => $query->where($isMaintenanceSql),
+            'requerimientos' => $query
+                ->where($isRequirementSql)
+                ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql)),
+            'averias' => $query
+                ->where($isAveriaSql)
+                ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql))
+                ->whereNot(fn (Builder $q) => $q->where($isRequirementSql)),
+            default => $query
+                ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql))
+                ->whereNot(fn (Builder $q) => $q->where($isRequirementSql))
+                ->whereNot(fn (Builder $q) => $q->where($isAveriaSql)),
+        };
     }
 }

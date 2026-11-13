@@ -50,6 +50,9 @@ class SchoolHistoryController extends Controller
             'status' => ['nullable', 'string', Rule::in(['ALL', 'RECOVERED', 'ACTIVE', 'RECUPERADOS', 'ACTIVOS'])],
             'classification' => ['nullable', 'string', Rule::in(ManagementClassification::values())],
             'scope' => ['nullable', 'string', Rule::in(ManagementScope::values())],
+            'category' => ['nullable', 'string', Rule::in([
+                'caidas_normales', 'averias', 'requerimientos', 'mantenimientos',
+            ])],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', Rule::in([10, 25, 50])],
         ]);

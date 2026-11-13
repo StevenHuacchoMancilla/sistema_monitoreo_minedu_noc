@@ -462,15 +462,13 @@ class IncidentService
         $wasManaging = $before !== null && in_array($before, FollowupStatus::managingValues(), true);
         $hadFieldTech = $before === FollowupStatus::TecnicoEnCampo->value;
         $needsReview = $wasManaging || $hadFieldTech;
-        // Lun–vie 08:00–16:00 Lima: caídas totales recuperadas → Pendiente de cierre.
-        // Fuera de ventana (noches / sáb–dom): solo En gestión → Pendiente de cierre; el resto cierra solo.
-        $inPendienteWindow = OperationalTime::isPendienteCierreWindow($recoveredAt);
 
         $observationSuffix = $wasManaging
             ? ' Requiere cierre operativo (estaba en gestión).'
             : '';
 
         // Colas sticky abiertas: PRTG UP no cierra ni quita el flag; solo marca recuperación técnica.
+        // Monitoreo 24h: toda recuperación no-sticky → Pendiente de cierre (descartes manuales).
         $isStickyOpen = $incident->isStickyOpen();
         $wasKeptManaging = $incident->isKeptInManagement()
             || $incident->recovery_review_status === RecoveryReviewStatus::ContinueMonitoring;
@@ -485,17 +483,11 @@ class IncidentService
         if ($isStickyOpen) {
             $afterStatus = $incident->followup_status ?? FollowupStatus::EnGestion;
             $observationSuffix .= ' '.ucfirst($stickyKind).' permanece abierto (cierre manual).';
-        } elseif ($inPendienteWindow) {
+        } else {
             $afterStatus = FollowupStatus::PendienteCierre;
             $observationSuffix .= $needsReview
                 ? ' Recuperado en gestión: pasa a Pendiente de cierre.'
-                : ' Recuperado desde Caídas totales (lun–vie 08:00–16:00): pasa a Pendiente de cierre.';
-        } elseif ($needsReview) {
-            $afterStatus = FollowupStatus::PendienteCierre;
-            $observationSuffix .= ' Fuera de horario operativo: recuperado en gestión → Pendiente de cierre.';
-        } else {
-            $afterStatus = FollowupStatus::Cerrado;
-            $observationSuffix .= ' Fuera de horario operativo (lun–vie 08:00–16:00 / sáb–dom): recuperación sin Pendiente de cierre.';
+                : ' Recuperado desde Caídas totales (monitoreo 24h): pasa a Pendiente de cierre.';
         }
 
         $goesToPendienteCierre = ! $isStickyOpen && $afterStatus === FollowupStatus::PendienteCierre;

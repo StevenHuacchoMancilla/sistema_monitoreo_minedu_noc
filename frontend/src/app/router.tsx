@@ -95,7 +95,7 @@ export function AppRouter() {
                 <ActiveIncidentsPage
                   key="incidents-managing"
                   title="En gestión"
-                  description="Seguimiento operativo del ticket: agrega mensajes y gestiones. Si PRTG recupera en día laboral, pasan a Pendiente de cierre (sáb/dom no)."
+                  description="Seguimiento operativo del ticket: agrega mensajes y gestiones. Si PRTG recupera (24h), pasan a Pendiente de cierre."
                   filter={(row) =>
                     !row.is_grave_incident &&
                     !row.has_open_grave_incident &&
