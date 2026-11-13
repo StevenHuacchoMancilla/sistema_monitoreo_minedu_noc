@@ -16,7 +16,12 @@ import { IsoDateTimeCell } from '../../../components/ui/DataTableFrame'
 import { formatDateTime, formatDuration } from '../../../lib/datetime'
 import { useBodyScrollLock } from '../../../lib/useBodyScrollLock'
 import { useNow } from '../../../lib/useNow'
-import type { MineduReason } from '../../reports/types/operationalReport'
+import {
+  LISTA_ESTADO_BADGE,
+  LISTA_ESTADO_OPTIONS,
+  type ListaLleeEstado,
+  type MineduReason,
+} from '../../reports/types/operationalReport'
 import { incidentCaseFilePath } from '../../history/api/historyApi'
 import { VoiceDictationButton } from '../../voice/components/VoiceDictationButton'
 import { EvidenceAttachmentsPanel } from './EvidenceAttachmentsPanel'
@@ -157,6 +162,7 @@ export function IncidentManageModal({
   const [causeCode, setCauseCode] = useState('')
   const [causeText, setCauseText] = useState('')
   const [mineduReason, setMineduReason] = useState<'' | MineduReason>('')
+  const [listaEstado, setListaEstado] = useState<'' | ListaLleeEstado>('')
   const [savedMsg, setSavedMsg] = useState<string | null>(null)
   const [confirmClose, setConfirmClose] = useState(false)
   const initialClassRef = useRef<{
@@ -199,6 +205,10 @@ export function IncidentManageModal({
     setCauseCode(nextCode)
     setCauseText(g.cause ?? '')
     setMineduReason(nextMinedu)
+    const nextLista = (g.lista_llee_estado ?? '') as '' | ListaLleeEstado
+    setListaEstado(
+      nextLista && (LISTA_ESTADO_OPTIONS as string[]).includes(nextLista) ? nextLista : '',
+    )
     initialClassRef.current = {
       minedu: nextMinedu,
       causeGroup: nextGroup,
@@ -237,6 +247,30 @@ export function IncidentManageModal({
       setSavedMsg(data.sla?.clock_paused ? 'Parada de reloj iniciada' : 'Reloj reanudado')
       client.setQueryData(['incidents', incidentId], data)
       window.setTimeout(() => setSavedMsg(null), 3000)
+    },
+  })
+
+  const saveListaEstado = useMutation({
+    mutationFn: (value: ListaLleeEstado | null) => endpoints.updateListaEstado(incidentId, value),
+    onSuccess: async (updated, value) => {
+      setListaEstado((updated.lista_estado as ListaLleeEstado | null) ?? value ?? '')
+      setSavedMsg(updated.lista_estado ? `Lista: ${updated.lista_estado}` : 'Lista: sin estado')
+      client.setQueryData<IncidentDetail>(['incidents', incidentId], (prev) => {
+        if (!prev) return prev
+        return {
+          ...prev,
+          gestion: {
+            ...prev.gestion,
+            lista_llee_estado: updated.lista_estado,
+          },
+        }
+      })
+      await client.invalidateQueries({ queryKey: ['reports', 'operational'], refetchType: 'active' })
+      window.setTimeout(() => setSavedMsg(null), 2500)
+    },
+    onError: (err: unknown) => {
+      setSavedMsg(err instanceof Error ? err.message : 'No se pudo actualizar la lista.')
+      window.setTimeout(() => setSavedMsg(null), 4000)
     },
   })
 
@@ -313,6 +347,10 @@ export function IncidentManageModal({
       )
       setDetailText('')
       setObservation('')
+      const syncedLista = (data?.gestion?.lista_llee_estado ?? '') as '' | ListaLleeEstado
+      if (syncedLista && (LISTA_ESTADO_OPTIONS as string[]).includes(syncedLista)) {
+        setListaEstado(syncedLista)
+      }
       initialClassRef.current = {
         minedu: mineduReason,
         causeGroup,
@@ -321,6 +359,7 @@ export function IncidentManageModal({
       client.setQueryData(['incidents', incidentId], data)
       await invalidateOps()
       await client.invalidateQueries({ queryKey: ['incidents', 'queue'], refetchType: 'active' })
+      await client.invalidateQueries({ queryKey: ['reports', 'operational'], refetchType: 'active' })
       if (leftPendiente) {
         window.setTimeout(() => {
           setSavedMsg(null)
@@ -554,6 +593,44 @@ export function IncidentManageModal({
                       </label>
                     )
                   })}
+                </div>
+
+                <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+                  <FormField
+                    label="Opción lista"
+                    action={
+                      listaEstado ? (
+                        <span
+                          className={`inline-flex rounded-full px-2 py-0.5 text-[10px] font-semibold ${
+                            LISTA_ESTADO_BADGE[listaEstado] ?? 'bg-slate-100 text-slate-700'
+                          }`}
+                        >
+                          {listaEstado}
+                        </span>
+                      ) : null
+                    }
+                  >
+                    <Select
+                      value={listaEstado}
+                      disabled={saveListaEstado.isPending}
+                      onChange={(e) => {
+                        const next = e.target.value as '' | ListaLleeEstado
+                        setListaEstado(next)
+                        saveListaEstado.mutate(next || null)
+                      }}
+                      aria-label="Estado de Lista para reporte"
+                    >
+                      <option value="">— Sin estado en lista —</option>
+                      {LISTA_ESTADO_OPTIONS.map((opt) => (
+                        <option key={opt} value={opt}>
+                          {opt}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                  <p className="mt-1.5 text-[11px] text-slate-500">
+                    Misma columna ESTADO de Lista para reporte. Se guarda al elegir.
+                  </p>
                 </div>
               </Panel>
 

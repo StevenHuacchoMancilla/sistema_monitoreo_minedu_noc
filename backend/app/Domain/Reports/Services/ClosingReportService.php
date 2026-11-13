@@ -2,6 +2,7 @@
 
 namespace App\Domain\Reports\Services;
 
+use App\Enums\ListaLleeEstado;
 use PhpOffice\PhpSpreadsheet\Cell\DataType;
 use PhpOffice\PhpSpreadsheet\Spreadsheet;
 use PhpOffice\PhpSpreadsheet\Style\Alignment;
@@ -67,11 +68,15 @@ class ClosingReportService
             $sheet->setCellValue([12, $r], $row['distrito']);
             $sheet->setCellValue([13, $r], $row['zona'] ?? '');
 
-            $fill = ($row['color_key'] ?? '') === 'red' ? 'FECACA' : 'FDE68A';
+            [$fillRgb, $fontRgb] = $this->rowColors($row);
             $end = $sheet->getCell([$lastCol, $r])->getColumn();
-            $sheet->getStyle("A{$r}:{$end}{$r}")->getFill()
+            $range = "A{$r}:{$end}{$r}";
+            $sheet->getStyle($range)->getFill()
                 ->setFillType(Fill::FILL_SOLID)
-                ->getStartColor()->setRGB($fill);
+                ->getStartColor()->setRGB($fillRgb);
+            if ($fontRgb !== null) {
+                $sheet->getStyle($range)->getFont()->getColor()->setRGB($fontRgb);
+            }
         }
 
         $lastRow = max(1, count($rows) + 1);
@@ -100,5 +105,22 @@ class ClosingReportService
         foreach ($widths as $i => $width) {
             $sheet->getColumnDimensionByColumn($i + 1)->setWidth($width);
         }
+    }
+
+    /**
+     * Colores de fila según ESTADO de lista (igual que en pantalla).
+     *
+     * @param  array<string, mixed>  $row
+     * @return array{0: string, 1: ?string} [fillRgb, fontRgb]
+     */
+    private function rowColors(array $row): array
+    {
+        $estado = ListaLleeEstado::tryFrom(trim((string) ($row['lista_estado'] ?? '')));
+        if ($estado !== null) {
+            return [$estado->excelFillRgb(), $estado->excelFontRgb()];
+        }
+
+        // Sin estado: amarillo suave (como caídas pendientes en UI).
+        return ['FEF9C3', null];
     }
 }

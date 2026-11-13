@@ -74,6 +74,28 @@ enum ListaLleeEstado: string
         };
     }
 
+    /** Fondo de fila en Excel (alineado a la Lista en pantalla). */
+    public function excelFillRgb(): string
+    {
+        return match ($this) {
+            self::Averias => 'FECACA', // red-100
+            self::DescartesEnCurso => 'FFEDD5', // orange-100
+            self::SinRespuesta => 'DBEAFE', // blue-100
+            self::EquiposApagados => 'EDE9FE', // violet-100
+            self::Energia => 'FDE68A', // amber-200
+            self::Restablecido => 'D1FAE5', // emerald-100
+            self::Requerimiento => 'E2E8F0', // slate-200
+            self::EnlaceParcial => '44403C', // stone-700
+            self::Activo => 'FFFFFF',
+        };
+    }
+
+    /** Texto en Excel; null = negro por defecto. */
+    public function excelFontRgb(): ?string
+    {
+        return $this === self::EnlaceParcial ? 'FAFAF9' : null;
+    }
+
     /**
      * Orden de las tarjetas / lista desplegable (como en el Excel).
      *

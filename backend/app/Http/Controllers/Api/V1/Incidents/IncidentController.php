@@ -276,6 +276,9 @@ class IncidentController extends Controller
                 'minedu_reason_label' => $incident->minedu_reason instanceof \App\Enums\MineduReason
                     ? $incident->minedu_reason->label()
                     : null,
+                'lista_llee_estado' => $incident->lista_llee_estado instanceof \App\Enums\ListaLleeEstado
+                    ? $incident->lista_llee_estado->value
+                    : (is_string($incident->lista_llee_estado) ? $incident->lista_llee_estado : null),
                 'last_contact_at' => $incident->last_contact_at?->toIso8601String(),
             ],
             'ticket' => $incident->serviceTicket

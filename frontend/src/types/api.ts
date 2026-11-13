@@ -416,6 +416,8 @@ export type IncidentDetail = {
     root_cause_code?: string | null
     minedu_reason?: 'CAIDA_ENLACE' | 'CAIDA_ENERGIA' | 'REQUERIMIENTO' | 'QUEJA' | null
     minedu_reason_label?: string | null
+    /** ESTADO de Lista para reporte (Averias, Energia, …). */
+    lista_llee_estado?: string | null
     last_contact_at: string | null
   }
   sla?: {
