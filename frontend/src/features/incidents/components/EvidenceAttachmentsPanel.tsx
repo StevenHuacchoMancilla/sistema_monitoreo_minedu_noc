@@ -17,19 +17,48 @@ export function EvidenceAttachmentsPanel({
   const client = useQueryClient()
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
+  const [progress, setProgress] = useState<string | null>(null)
 
   const upload = useMutation({
-    mutationFn: (file: File) => endpoints.uploadAttachment(incidentId, file),
-    onSuccess: async (res) => {
-      setError(null)
-      client.setQueryData<IncidentDetail>(['incidents', incidentId], (prev) => {
-        if (!prev) return prev
-        const next = [res.data, ...(prev.attachments ?? [])]
-        return { ...prev, attachments: next }
-      })
-      await client.invalidateQueries({ queryKey: ['incidents', incidentId] })
+    mutationFn: async (files: File[]) => {
+      const uploaded: IncidentAttachment[] = []
+      const failures: string[] = []
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i]
+        setProgress(`Subiendo ${i + 1} de ${files.length}…`)
+        try {
+          const res = await endpoints.uploadAttachment(incidentId, file)
+          uploaded.push(res.data)
+        } catch (err) {
+          const reason = err instanceof Error ? err.message : 'Error al subir'
+          failures.push(`${file.name}: ${reason}`)
+        }
+      }
+      return { uploaded, failures }
     },
-    onError: (err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo subir la imagen.'),
+    onSuccess: async ({ uploaded, failures }) => {
+      setProgress(null)
+      if (uploaded.length > 0) {
+        client.setQueryData<IncidentDetail>(['incidents', incidentId], (prev) => {
+          if (!prev) return prev
+          return { ...prev, attachments: [...uploaded, ...(prev.attachments ?? [])] }
+        })
+        await client.invalidateQueries({ queryKey: ['incidents', incidentId] })
+      }
+      if (failures.length > 0) {
+        setError(
+          uploaded.length > 0
+            ? `Se subieron ${uploaded.length}. Fallaron: ${failures.join(' · ')}`
+            : failures.join(' · '),
+        )
+      } else {
+        setError(null)
+      }
+    },
+    onError: (err: unknown) => {
+      setProgress(null)
+      setError(err instanceof Error ? err.message : 'No se pudieron subir las imágenes.')
+    },
   })
 
   const remove = useMutation({
@@ -57,7 +86,7 @@ export function EvidenceAttachmentsPanel({
             Evidencias (imagen)
           </h3>
           <p className="mt-0.5 text-[12px] text-slate-500">
-            Sube fotos probatorias del ticket (JPG, PNG, WEBP o GIF · máx. 5 MB).
+            Puedes subir una o varias fotos a la vez (JPG, PNG, WEBP o GIF · máx. 5 MB c/u).
           </p>
         </div>
         {!readOnly ? (
@@ -66,11 +95,15 @@ export function EvidenceAttachmentsPanel({
               ref={inputRef}
               type="file"
               accept="image/jpeg,image/png,image/webp,image/gif"
+              multiple
               className="hidden"
               onChange={(event) => {
-                const file = event.target.files?.[0]
+                const list = event.target.files
                 event.target.value = ''
-                if (file) upload.mutate(file)
+                if (!list || list.length === 0) return
+                const files = Array.from(list)
+                setError(null)
+                upload.mutate(files)
               }}
             />
             <Button
@@ -80,7 +113,7 @@ export function EvidenceAttachmentsPanel({
               loading={upload.isPending}
               onClick={() => inputRef.current?.click()}
             >
-              Subir imagen
+              {upload.isPending ? progress ?? 'Subiendo…' : 'Subir imágenes'}
             </Button>
           </>
         ) : null}
