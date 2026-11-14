@@ -221,9 +221,20 @@ export const endpoints = {
       rows: Array<Record<string, string | number | null>>
     }>('/reports/minedu'),
   usageReport: (search = '') =>
-    apiGet<{ total: number; rows: Array<Record<string, string | number | null>> }>(
-      `/reports/usage${search ? `?search=${encodeURIComponent(search)}` : ''}`,
-    ),
+    apiGet<{
+      total: number
+      rows: Array<Record<string, string | number | null>>
+      top?: {
+        period_label: string
+        rural: Array<Record<string, string | number | null>>
+        urbano: Array<Record<string, string | number | null>>
+      }
+      top_caballococha?: {
+        period_label: string
+        rural: Array<Record<string, string | number | null>>
+        urbano: Array<Record<string, string | number | null>>
+      }
+    }>(`/reports/usage${search ? `?search=${encodeURIComponent(search)}` : ''}`),
   closingXlsxUrl: () => `${API_URL}/reports/closing.xlsx`,
   mineduXlsxUrl: () => `${API_URL}/reports/minedu.xlsx`,
   usageXlsxUrl: (search = '') =>
