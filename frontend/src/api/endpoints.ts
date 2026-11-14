@@ -188,7 +188,6 @@ export const endpoints = {
     network_assignment_id?: number
     cid?: string
     affected_wan_node: 'PRINCIPAL' | 'SECUNDARIO'
-    classification: 'CONTACT_CONFIRMED' | 'LINK_OUTAGE' | 'NO_RESPONSE'
     detail?: string
   }) => apiPost<IncidentDetail>('/incidents/manual-partial', body),
   recoveryReview: (

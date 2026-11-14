@@ -378,8 +378,6 @@ class IncidentController extends Controller
             'network_assignment_id' => ['nullable', 'integer', 'required_without_all:school_id,cid'],
             'cid' => ['nullable', 'string', 'max:40', 'required_without_all:school_id,network_assignment_id'],
             'affected_wan_node' => ['required', Rule::in(AffectedWanNode::values())],
-            // Opcional por compatibilidad con front antiguo; default TIPO 2 (enlace P2P).
-            'classification' => ['nullable', Rule::in(ManagementClassification::operableValues())],
             'detail' => ['nullable', 'string', 'max:5000'],
         ]);
 
@@ -388,7 +386,6 @@ class IncidentController extends Controller
             return response()->json(['message' => 'No autenticado.'], 401);
         }
 
-        $classification = (string) ($data['classification'] ?? ManagementClassification::LinkOutage->value);
         $assignment = null;
         if (! empty($data['network_assignment_id'])) {
             $assignment = NetworkAssignment::query()
@@ -417,29 +414,19 @@ class IncidentController extends Controller
         }
 
         try {
+            // Sin TIPO 1/2/3: queda en Enlace parcial (NEW_OUTAGE / Pendiente contacto).
+            // Causa, razón MINEDU y seguimiento se definen después en la gestión del caso.
             $incident = $this->incidents->openManualPartial(
                 $assignment,
                 AffectedWanNode::from((string) $data['affected_wan_node']),
                 $userId,
                 $data['detail'] ?? null,
             );
-
-            // Clasificación inmediata: TIPO 1 → reporte; TIPO 2/3 → Tracking abierto.
-            $applied = $this->managements->apply($incident, [
-                'classification' => $classification,
-                'detail' => $data['detail'] ?? null,
-                'created_by' => $userId,
-            ]);
         } catch (InvalidArgumentException $e) {
             return response()->json(['message' => $e->getMessage()], 422);
         }
 
-        $payload = $this->show($incident->fresh() ?? $incident)->getData(true);
-        if (is_array($payload)) {
-            $payload['tracking_sync'] = $applied['tracking'];
-        }
-
-        return response()->json($payload);
+        return $this->show($incident->fresh() ?? $incident);
     }
 
     public function storeManagement(Request $request, Incident $incident): JsonResponse

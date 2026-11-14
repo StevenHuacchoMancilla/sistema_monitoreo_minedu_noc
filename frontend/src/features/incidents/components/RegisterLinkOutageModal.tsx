@@ -7,12 +7,9 @@ import { Button } from '../../../components/ui/Button'
 import { FormField, Input, Select } from '../../../components/ui/FormControls'
 import { useDebouncedValue } from '../../../lib/useDebouncedValue'
 import type { SchoolListRow } from '../../schools/types/school'
-import type { ManagementPayload } from '../../reports/types/operationalReport'
 
 type LinkOutageCreated = {
   incidentId: number
-  classification: ManagementPayload['classification']
-  trackingId: number | null
 }
 
 type Props = {
@@ -24,40 +21,10 @@ type Props = {
   schoolLabel?: string
 }
 
-const TIPO_OPTIONS: Array<{
-  value: ManagementPayload['classification']
-  label: string
-  hint: string
-  selected: string
-  radio: string
-}> = [
-  {
-    value: 'CONTACT_CONFIRMED',
-    label: 'TIPO 1',
-    hint: 'Para reporte (colegio con impacto a reportar)',
-    selected: 'border-red-600 bg-red-50 ring-2 ring-red-500/30 dark:border-red-500 dark:bg-red-950/50',
-    radio: 'text-red-600',
-  },
-  {
-    value: 'LINK_OUTAGE',
-    label: 'TIPO 2',
-    hint: 'Solo un enlace caído · gestión en Tracking',
-    selected: 'border-orange-500 bg-orange-50 ring-2 ring-orange-500/30 dark:border-orange-400 dark:bg-orange-950/40',
-    radio: 'text-orange-600',
-  },
-  {
-    value: 'NO_RESPONSE',
-    label: 'TIPO 3',
-    hint: 'Sin respuesta / energía · gestión en Tracking',
-    selected: 'border-yellow-500 bg-yellow-50 ring-2 ring-yellow-500/30 dark:border-yellow-400 dark:bg-yellow-950/30',
-    radio: 'text-yellow-600',
-  },
-]
-
 /**
  * Registra caída de un solo enlace (doble WAN) mientras el Ping puede seguir OPERATIVO.
- * Va al apartado Enlace parcial (no a Pendientes/En gestión). Si PRTG cae total después,
- * nace un ticket nuevo; este caso queda abierto hasta cierre manual.
+ * Va al apartado Enlace parcial hasta cierre manual. Si PRTG cae total después,
+ * nace un ticket nuevo; este caso queda abierto.
  */
 export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, schoolLabel }: Props) {
   const client = useQueryClient()
@@ -65,7 +32,6 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
   const [selectedSchoolId, setSelectedSchoolId] = useState<number | null>(schoolId ?? null)
   const [selectedLabel, setSelectedLabel] = useState(schoolLabel ?? '')
   const [node, setNode] = useState<'PRINCIPAL' | 'SECUNDARIO' | ''>('')
-  const [classification, setClassification] = useState<ManagementPayload['classification'] | ''>('LINK_OUTAGE')
   const [detail, setDetail] = useState('')
   const [error, setError] = useState<string | null>(null)
   const debounced = useDebouncedValue(q.trim(), 300)
@@ -85,33 +51,23 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
   const create = useMutation({
     mutationFn: () => {
       if (!selectedSchoolId) throw new Error('Selecciona un colegio')
-      if (!node) throw new Error('Selecciona el nodo afectado')
-      if (!classification || classification === 'COMPLAINT') {
-        throw new Error('Selecciona TIPO 1, 2 o 3')
-      }
+      if (!node) throw new Error('Selecciona el enlace afectado')
       return endpoints.createManualPartial({
         school_id: selectedSchoolId,
         affected_wan_node: node,
-        classification,
         detail: detail.trim() || undefined,
       })
     },
     onSuccess: async (data) => {
       const id = Number(data?.incident?.id ?? data?.estado?.n_incidencia)
-      const trackingId = data.tracking_sync?.tracking_id ?? data.active_tracking?.id ?? null
       await client.invalidateQueries({ queryKey: ['dashboard'] })
       await client.invalidateQueries({ queryKey: ['schools'] })
       await client.invalidateQueries({ queryKey: ['reports'] })
       await client.invalidateQueries({ queryKey: ['tracking'] })
-      onCreated({
-        incidentId: id,
-        classification: classification as ManagementPayload['classification'],
-        trackingId: trackingId != null ? Number(trackingId) : null,
-      })
+      onCreated({ incidentId: id })
       onClose()
       setQ('')
       setNode('')
-      setClassification('LINK_OUTAGE')
       setDetail('')
       setError(null)
       if (!schoolId) {
@@ -133,9 +89,8 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
         if (typeof err.body?.message === 'string') msg = err.body.message
         else if (typeof err.message === 'string') msg = err.message
       }
-      // Laravel sin locale muestra "validation.required"
       if (msg === 'validation.required' || msg.startsWith('validation.')) {
-        msg = 'Falta un dato obligatorio. Selecciona colegio, enlace afectado y TIPO 1/2/3.'
+        msg = 'Falta un dato obligatorio. Selecciona colegio y enlace afectado.'
       }
       setError(msg)
     },
@@ -144,7 +99,6 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
   if (!open) return null
 
   const rows = search.data?.data ?? []
-  const goesToTracking = classification === 'LINK_OUTAGE' || classification === 'NO_RESPONSE'
 
   return (
     <div className="fixed inset-0 z-50 flex items-end justify-center bg-slate-900/50 p-3 sm:items-center" role="dialog" aria-modal>
@@ -156,7 +110,9 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
               Caída de un enlace (doble WAN)
             </p>
             <p className="mt-1 text-xs text-slate-500">
-              Para P2P / doble WAN: el colegio puede seguir con internet. Queda en Enlace parcial hasta cierre manual; una caída total PRTG genera ticket nuevo aparte.
+              Para P2P / doble WAN: el colegio puede seguir con internet. Queda en Enlace parcial hasta cierre
+              manual; una caída total PRTG genera ticket nuevo aparte. La causa y el seguimiento se definen
+              después en la gestión del caso.
             </p>
           </div>
           <button type="button" className="rounded-lg p-1.5 text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" onClick={onClose} aria-label="Cerrar">
@@ -240,44 +196,6 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
             </Select>
           </FormField>
 
-          <fieldset>
-            <legend className="mb-1.5 text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:text-slate-400">
-              Clasificación (TIPO)
-            </legend>
-            <div className="grid gap-2 sm:grid-cols-3">
-              {TIPO_OPTIONS.map((opt) => {
-                const active = classification === opt.value
-                return (
-                  <label
-                    key={opt.value}
-                    className={[
-                      'cursor-pointer rounded-xl border px-2.5 py-2.5 transition-colors',
-                      active
-                        ? opt.selected
-                        : 'border-slate-200 bg-white hover:border-slate-300 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600',
-                    ].join(' ')}
-                  >
-                    <span className="flex items-start gap-2">
-                      <input
-                        type="radio"
-                        name="link-outage-tipo"
-                        className={`mt-0.5 ${opt.radio}`}
-                        checked={active}
-                        onChange={() => setClassification(opt.value)}
-                      />
-                      <span>
-                        <span className="block text-sm font-bold text-slate-900 dark:text-slate-100">{opt.label}</span>
-                        <span className="mt-0.5 block text-[11px] leading-snug text-slate-500 dark:text-slate-400">
-                          {opt.hint}
-                        </span>
-                      </span>
-                    </span>
-                  </label>
-                )
-              })}
-            </div>
-          </fieldset>
-
           <FormField label="Detalle (opcional)">
             <Input
               value={detail}
@@ -296,13 +214,13 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
               type="button"
               size="sm"
               loading={create.isPending}
-              disabled={!selectedSchoolId || !node || !classification}
+              disabled={!selectedSchoolId || !node}
               onClick={() => {
                 setError(null)
                 create.mutate()
               }}
             >
-              {goesToTracking ? 'Registrar e ir a Tracking' : 'Registrar (para reporte)'}
+              Registrar y gestionar
             </Button>
           </div>
         </div>
