@@ -11,7 +11,7 @@ function toQuery(params: Record<string, string | number | undefined | null>): st
 }
 
 export function fetchUsers(params: Record<string, string | number | undefined | null> = {}) {
-  return apiGet<UsersListResponse>(`/usuarios${toQuery(params)}`)
+  return apiGet<UsersListResponse>(`/users${toQuery(params)}`)
 }
 
 export function createUser(body: {
@@ -22,27 +22,27 @@ export function createUser(body: {
   role: ManagedUserRole
   active?: boolean
 }) {
-  return apiPost<{ data: ManagedUser }>('/usuarios', body)
+  return apiPost<{ data: ManagedUser }>('/users', body)
 }
 
 export function updateUser(
   id: number,
   body: { name?: string; email?: string; role?: ManagedUserRole },
 ) {
-  return apiPut<{ data: ManagedUser }>(`/usuarios/${id}`, body)
+  return apiPut<{ data: ManagedUser }>(`/users/${id}`, body)
 }
 
 export function deactivateUser(id: number) {
-  return apiPost<{ data: ManagedUser }>(`/usuarios/${id}/deactivate`)
+  return apiPost<{ data: ManagedUser }>(`/users/${id}/deactivate`)
 }
 
 export function reactivateUser(id: number) {
-  return apiPost<{ data: ManagedUser }>(`/usuarios/${id}/reactivate`)
+  return apiPost<{ data: ManagedUser }>(`/users/${id}/reactivate`)
 }
 
 export function resetUserPassword(
   id: number,
   body: { password: string; password_confirmation: string },
 ) {
-  return apiPost<{ message: string; data: ManagedUser }>(`/usuarios/${id}/reset-password`, body)
+  return apiPost<{ message: string; data: ManagedUser }>(`/users/${id}/reset-password`, body)
 }
