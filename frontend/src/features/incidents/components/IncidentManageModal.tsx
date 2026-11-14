@@ -417,9 +417,12 @@ export function IncidentManageModal({
               <h2 id={titleId} className="truncate text-base font-bold text-slate-950 dark:text-slate-50">
                 {data?.ticket?.ticket_code
                   ? data.ticket.ticket_code
-                  : data?.colegio.cid
-                    ? `CID ${data.colegio.cid}`
-                    : `Caso #${incidentId}`}
+                  : [
+                      data?.colegio.cid ? `CID ${data.colegio.cid}` : null,
+                      data?.colegio.current_sequence != null ? `TSS ${data.colegio.current_sequence}` : null,
+                    ]
+                      .filter(Boolean)
+                      .join(' · ') || `Caso #${incidentId}`}
                 {data?.colegio.local_educativo ? (
                   <span className="font-medium text-slate-500 dark:text-slate-400"> · {data.colegio.local_educativo}</span>
                 ) : null}
@@ -429,6 +432,16 @@ export function IncidentManageModal({
               </h2>
               {data ? (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                  {data.ticket?.ticket_code && data.colegio.cid ? (
+                    <Badge tone="neutral" title="CID">
+                      CID {data.colegio.cid}
+                    </Badge>
+                  ) : null}
+                  {data.ticket?.ticket_code && data.colegio.current_sequence != null ? (
+                    <Badge tone="neutral" title="TSS · N° colegio">
+                      TSS {data.colegio.current_sequence}
+                    </Badge>
+                  ) : null}
                   <PrtgStatusBadge status={data.estado.estado_prtg} />
                   {data.ticket?.kind === 'PREVENTIVO' ? (
                     <Badge tone={data.ticket.status === 'CERRADO' ? 'success' : 'warning'}>
@@ -439,11 +452,6 @@ export function IncidentManageModal({
                       {recovered ? 'Duró' : 'Caído'} {formatDuration(seconds)}
                     </Badge>
                   )}
-                  {data.ticket?.ticket_code ? (
-                    <Badge tone="neutral" title="Código de ticketera">
-                      {data.ticket.ticket_code}
-                    </Badge>
-                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -503,6 +511,22 @@ export function IncidentManageModal({
 
           {data && tab === 'management' ? (
             <div className="space-y-4">
+              {data.estado.has_open_requirement ||
+              ((data.estado.open_requirement_count ?? 0) > 0 && !data.estado.is_requirement_case) ? (
+                <div
+                  role="status"
+                  className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[13px] text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
+                >
+                  Este colegio tiene{' '}
+                  <strong>
+                    {(data.estado.open_requirement_count ?? 1) === 1
+                      ? '1 requerimiento'
+                      : `${data.estado.open_requirement_count} requerimientos`}
+                  </strong>{' '}
+                  abierto{(data.estado.open_requirement_count ?? 1) === 1 ? '' : 's'} en la cola Requerimientos. Esta
+                  caída es un ticket aparte; el requerimiento no se reutiliza.
+                </div>
+              ) : null}
               <ContactsPanel
                 contacts={data.contactos}
                 selectedId={contactId}
@@ -825,8 +849,8 @@ export function IncidentManageModal({
         description={
           data
             ? `Se cerrará el caso${data.colegio?.cid ? ` CID ${data.colegio.cid}` : ''}${
-                data.colegio?.local_educativo ? ` · ${data.colegio.local_educativo}` : ''
-              }. Esta acción cierra el seguimiento operativo.`
+                data.colegio?.current_sequence != null ? ` · TSS ${data.colegio.current_sequence}` : ''
+              }${data.colegio?.local_educativo ? ` · ${data.colegio.local_educativo}` : ''}. Esta acción cierra el seguimiento operativo.`
             : 'Se cerrará el seguimiento operativo de este caso.'
         }
         confirmLabel="Cerrar ticket"

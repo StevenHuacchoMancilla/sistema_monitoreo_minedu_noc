@@ -94,11 +94,23 @@ class Incident extends Model
         return $this->detection_source === self::DETECTION_MAINTENANCE;
     }
 
-    /** Sticky: PRTG UP no cierra; re-caída reutiliza el mismo caso/ticket. */
+    /**
+     * Sticky de re-caída PRTG (mismo ticket): grave / mantener en gestión / mantenimiento.
+     * Requerimiento abierto NO reutiliza ticket en re-caída (isOpenRequirement sigue vivo en su cola
+     * y applyTechnicalRecovery no lo manda a Pendiente de cierre).
+     */
     public function isStickyOpen(): bool
     {
         return $this->isOpenGrave()
             || $this->isOpenRequirement()
+            || $this->isKeptInManagement()
+            || $this->isOpenMaintenance();
+    }
+
+    /** Sticky que absorbe re-caídas PRTG (sin requerimiento). */
+    public function absorbsPrtgRecaida(): bool
+    {
+        return $this->isOpenGrave()
             || $this->isKeptInManagement()
             || $this->isOpenMaintenance();
     }

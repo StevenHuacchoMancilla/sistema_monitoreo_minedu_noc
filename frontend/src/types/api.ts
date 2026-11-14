@@ -119,6 +119,7 @@ export type OutageRow = {
   has_open_grave_incident?: boolean
   is_grave_incident?: boolean
   has_open_requirement?: boolean
+  open_requirement_count?: number
   is_requirement_case?: boolean
   recovered_at?: string | null
   recovery_review_status?: string | null
@@ -287,6 +288,8 @@ export type IncidentDetail = {
     active_tracking_id?: number | null
     is_grave_incident?: boolean
     is_requirement_case?: boolean
+    open_requirement_count?: number
+    has_open_requirement?: boolean
   }
   active_tracking?: {
     id: number

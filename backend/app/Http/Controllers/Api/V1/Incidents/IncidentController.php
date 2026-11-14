@@ -126,6 +126,12 @@ class IncidentController extends Controller
             })
             ->count();
 
+        $openRequirementCount = (int) Incident::query()
+            ->where('school_id', $incident->school_id)
+            ->where('is_requirement_case', true)
+            ->whereNull('requirement_closed_at')
+            ->count();
+
         return response()->json([
             'incident' => $incident,
             'estado' => [
@@ -166,6 +172,8 @@ class IncidentController extends Controller
                 'active_tracking_id' => $incident->activeTracking->first()?->id,
                 'is_grave_incident' => $incident->isOpenGrave(),
                 'is_requirement_case' => $incident->isOpenRequirement(),
+                'open_requirement_count' => $openRequirementCount,
+                'has_open_requirement' => $openRequirementCount > 0 && ! $incident->isOpenRequirement(),
             ],
             'active_tracking' => ($active = $incident->activeTracking->first())
                 ? [

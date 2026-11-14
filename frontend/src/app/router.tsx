@@ -103,7 +103,6 @@ export function AppRouter() {
                     !row.is_grave_incident &&
                     !row.has_open_grave_incident &&
                     !row.is_requirement_case &&
-                    !row.has_open_requirement &&
                     (MANAGING.has(row.followup_status ?? '') || row.followup_status === 'PENDIENTE_CIERRE')
                   }
                   durationSource="current_down"

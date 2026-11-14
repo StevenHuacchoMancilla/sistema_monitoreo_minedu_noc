@@ -166,7 +166,7 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
 
         <div className="space-y-3 p-4">
           {!schoolId ? (
-            <FormField label="Buscar colegio (CID / nombre / código)">
+            <FormField label="Buscar colegio (CID / TSS / nombre)">
               <div className="relative">
                 <Search className="pointer-events-none absolute top-2.5 left-2.5 h-4 w-4 text-slate-400" aria-hidden />
                 <Input
@@ -196,7 +196,11 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
                           onClick={() => {
                             setSelectedSchoolId(row.id)
                             setSelectedLabel(
-                              [row.cid ? `CID ${row.cid}` : null, row.local_educativo, row.codigo_local]
+                              [
+                                row.cid ? `CID ${row.cid}` : null,
+                                row.n != null ? `TSS ${row.n}` : null,
+                                row.local_educativo,
+                              ]
                                 .filter(Boolean)
                                 .join(' · '),
                             )
@@ -204,7 +208,13 @@ export function RegisterLinkOutageModal({ open, onClose, onCreated, schoolId, sc
                         >
                           <span className="font-medium">{row.local_educativo ?? '—'}</span>
                           <span className="mt-0.5 block text-[11px] text-slate-500">
-                            {row.cid ? `CID ${row.cid}` : 'Sin CID'} · {row.codigo_local ?? '—'}
+                            {[
+                              row.cid ? `CID ${row.cid}` : 'Sin CID',
+                              row.n != null ? `TSS ${row.n}` : null,
+                              row.codigo_local,
+                            ]
+                              .filter(Boolean)
+                              .join(' · ')}
                           </span>
                         </button>
                       </li>

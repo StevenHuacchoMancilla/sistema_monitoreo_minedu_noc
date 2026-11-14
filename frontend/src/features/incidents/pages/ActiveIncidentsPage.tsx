@@ -731,28 +731,48 @@ function OutageTableRow({
             >
               En incidencia
             </Badge>
-          ) : row.has_open_requirement || row.is_requirement_case ? (
+          ) : row.is_requirement_case ? (
             <Badge
               tone="info"
-              title="Este colegio tiene un requerimiento abierto. Si se restablece y vuelve a caer, mantiene la etiqueta."
+              title="Este ticket es un requerimiento abierto (cola Requerimientos)."
               className="!text-[10px] !font-medium"
             >
               En requerimiento
             </Badge>
-          ) : row.kept_in_management || (row.reopened_from_management && row.recovery_review_status === 'CONTINUE_MONITORING') ? (
-            <Badge
-              tone="cyan"
-              title="Mantenido en gestión: mismo ticket hasta cierre manual, aunque haya levantamientos o re-caídas."
-              className="!text-[10px] !font-medium"
-            >
-              Mantenido en gestión
-            </Badge>
-          ) : row.is_intermittent_watch ? (
-            <Badge tone="warning" className="!text-[10px] !font-medium" title="Sin ticket: solo vigilancia del Ping en advertencia">
-              Sin ticket
-            </Badge>
           ) : (
-            <FollowupBadge status={row.followup_status} />
+            <>
+              {(row.open_requirement_count ?? 0) > 0 || row.has_open_requirement ? (
+                <Badge
+                  tone="info"
+                  title="Informativo: el colegio tiene requerimiento(s) abierto(s) en otra cola. Esta caída es un ticket nuevo aparte."
+                  className="!text-[10px] !font-medium"
+                >
+                  {(row.open_requirement_count ?? 0) === 1
+                    ? 'Tiene 1 requerimiento'
+                    : `Tiene ${row.open_requirement_count ?? 1} requerimientos`}
+                </Badge>
+              ) : null}
+              {row.kept_in_management ||
+              (row.reopened_from_management && row.recovery_review_status === 'CONTINUE_MONITORING') ? (
+                <Badge
+                  tone="cyan"
+                  title="Mantenido en gestión: mismo ticket hasta cierre manual, aunque haya levantamientos o re-caídas."
+                  className="!text-[10px] !font-medium"
+                >
+                  Mantenido en gestión
+                </Badge>
+              ) : row.is_intermittent_watch ? (
+                <Badge
+                  tone="warning"
+                  className="!text-[10px] !font-medium"
+                  title="Sin ticket: solo vigilancia del Ping en advertencia"
+                >
+                  Sin ticket
+                </Badge>
+              ) : (
+                <FollowupBadge status={row.followup_status} />
+              )}
+            </>
           )}
         </div>
       </td>

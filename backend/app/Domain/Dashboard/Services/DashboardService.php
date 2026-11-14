@@ -679,7 +679,8 @@ class DashboardService
                 ->map(function (Collection $group) {
                     return $group->sortByDesc(function (Incident $incident): int {
                         $score = 0;
-                        if ($incident->isStickyOpen()) {
+                        // Requerimiento no absorbe la caída visible: preferir grave/mant/gestión.
+                        if ($incident->absorbsPrtgRecaida()) {
                             $score += 1000;
                         }
                         if ($incident->isKeptInManagement()) {
@@ -716,13 +717,13 @@ class DashboardService
             ->unique()
             ->flip();
 
-        $requirementSchoolIds = Incident::query()
+        $requirementCountsBySchool = Incident::query()
             ->whereIn('school_id', $schoolIds)
             ->where('is_requirement_case', true)
             ->whereNull('requirement_closed_at')
-            ->pluck('school_id')
-            ->unique()
-            ->flip();
+            ->selectRaw('school_id, COUNT(*) as total')
+            ->groupBy('school_id')
+            ->pluck('total', 'school_id');
 
         // Hora real en que el Ping pasó de parcial a caído (para etiqueta Reciente).
         $escalatedAtByIncident = \App\Models\IncidentUpdate::query()
@@ -733,7 +734,7 @@ class DashboardService
             ->unique('incident_id')
             ->keyBy('incident_id');
 
-        $rows = $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds, $requirementSchoolIds, $escalatedAtByIncident) {
+        $rows = $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds, $requirementCountsBySchool, $escalatedAtByIncident) {
             $school = $incident->school;
             $assignment = $incident->networkAssignment;
             $sensor = $incident->sensor;
@@ -789,8 +790,10 @@ class DashboardService
                 'has_open_grave_incident' => $graveSchoolIds->has($incident->school_id)
                     || $incident->isOpenGrave(),
                 'is_grave_incident' => $incident->isOpenGrave(),
-                'has_open_requirement' => $requirementSchoolIds->has($incident->school_id)
-                    || $incident->isOpenRequirement(),
+                'open_requirement_count' => (int) ($requirementCountsBySchool[$incident->school_id] ?? 0),
+                // Informativo en caídas nuevas: el colegio tiene requerimiento(s) en otra cola.
+                'has_open_requirement' => ((int) ($requirementCountsBySchool[$incident->school_id] ?? 0)) > 0
+                    && ! $incident->isOpenRequirement(),
                 'is_requirement_case' => $incident->isOpenRequirement(),
                 'tracking' => $tracking ? [
                     'id' => $tracking->id,

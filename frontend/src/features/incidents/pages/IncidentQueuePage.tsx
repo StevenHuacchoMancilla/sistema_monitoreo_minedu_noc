@@ -85,7 +85,7 @@ const META: Record<
   requerimientos: {
     title: 'Requerimientos',
     description:
-      'Casos etiquetados como Requerimiento. Si el colegio se restablece y vuelve a caer, reaparece con la misma etiqueta salvo que cambies el resultado de gestión.',
+      'Casos especiales (p. ej. cambio de contraseña) que quedan en esta cola hasta cierre manual. Una caída PRTG nueva genera otro ticket aparte; en Caídas totales verás el aviso «Tiene N requerimientos».',
     fetcher: () => endpoints.incidentsRequerimientos() as Promise<{ data: QueueRow[] }>,
   },
   'enlace-parcial': {

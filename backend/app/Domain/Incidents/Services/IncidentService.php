@@ -97,6 +97,9 @@ class IncidentService
         ?CarbonInterface $downSince = null,
         ?Closure $onAnomaly = null,
     ): Incident {
+        // Solo aparca requerimiento si ya hubo recuperación/re-caída sticky (no caídas antiguas continuas).
+        $this->parkRequirementRecaidas($assignment->id);
+
         // Enlace parcial (MANUAL_PARTIAL) no cuenta como caída activa PRTG: permanece abierto
         // hasta cierre manual y no bloquea ni se convierte en la caída total.
         $active = Incident::query()
@@ -109,8 +112,10 @@ class IncidentService
             })
             ->first();
 
-        // Sticky primero: si hay "mantener en gestión" / incidencia / requerimiento / mantenimiento,
+        // Sticky primero: si hay "mantener en gestión" / incidencia grave / mantenimiento,
         // no debe nacer una caída pendiente de cero (ni quedar una huérfana sin etiqueta).
+        // Requerimiento NO absorbe re-caída: si ya recuperó y volvió a caer, arriba se aparcó
+        // y abajo nace ticket nuevo. Caídas antiguas continuas (sin recuperación) se dejan.
         $openSticky = $this->findOpenSticky($assignment->id, $active?->id);
 
         if ($openSticky !== null && $openSticky->recovered_at !== null) {
@@ -128,6 +133,7 @@ class IncidentService
             && $openSticky !== null
             && $active->id !== $openSticky->id
             && $openSticky->isKeptInManagement()
+            && ! $openSticky->isOpenRequirement()
         ) {
             $this->closeOrphanDuplicateFall($active, $openSticky);
 
@@ -154,7 +160,7 @@ class IncidentService
             return $active->fresh() ?? $active;
         }
 
-        if ($openSticky !== null) {
+        if ($openSticky !== null && ! $openSticky->isOpenRequirement()) {
             return $this->reopenStickyCase($openSticky, $sensor, $downSince, $onAnomaly);
         }
 
@@ -186,6 +192,17 @@ class IncidentService
             ? 'Hora de apertura = reloj del sistema al detectar.'
             : 'Hora de apertura = lastcheck − downtimesince PRTG (igual Apps Script).';
 
+        $openReqCount = (int) Incident::query()
+            ->where('school_id', $assignment->school_id)
+            ->where('is_requirement_case', true)
+            ->whereNull('requirement_closed_at')
+            ->where('id', '!=', $incident->id)
+            ->count();
+        $reqNote = $openReqCount > 0
+            ? ' Este colegio tiene '.$openReqCount.' requerimiento'.($openReqCount === 1 ? '' : 's')
+                .' abierto'.($openReqCount === 1 ? '' : 's').' (cola aparte; no se reutiliza ese ticket).'
+            : '';
+
         IncidentUpdate::query()->create([
             'incident_id' => $incident->id,
             'type' => 'SYSTEM',
@@ -194,7 +211,7 @@ class IncidentService
             'observation' => ($sensor->normalized_status === MonitoringStatus::Parcial
                 ? 'Incidencia creada por Ping en ADVERTENCIA (parcial / intermitente).'
                 : 'Incidencia creada por transición a CAÍDO (Ping).')
-                .' Clasificación: NUEVA CAÍDA. '.$clockNote,
+                .' Clasificación: NUEVA CAÍDA. '.$clockNote.$reqNote,
             'created_at' => now(),
         ]);
 
@@ -220,7 +237,7 @@ class IncidentService
     }
 
     /**
-     * Reabre un caso sticky (Incidencia, Requerimiento o Mantenimiento): mismo caso y ticket TGS.
+     * Reabre un caso sticky (Incidencia grave, mantener en gestión o Mantenimiento): mismo caso y ticket TGS.
      *
      * @param  ?Closure(string, string, array<string, mixed>): void  $onAnomaly
      */
@@ -247,13 +264,11 @@ class IncidentService
             || $incident->recovery_review_status === RecoveryReviewStatus::ContinueMonitoring;
         $label = $incident->isOpenMaintenance()
             ? 'Re-caída con mantenimiento abierto: se reutiliza el mismo caso (sin nueva caída).'
-            : ($incident->isOpenRequirement()
-                ? 'Re-caída con requerimiento abierto: se reutiliza el mismo caso y ticket (etiqueta En requerimiento).'
-                : ($incident->isOpenGrave()
-                    ? 'Re-caída con incidencia abierta: se reutiliza el mismo caso y ticket (etiqueta En incidencia).'
-                    : ($wasKeptManaging
-                        ? 'Re-caída con caso mantenido en gestión: se reutiliza el mismo caso y ticket.'
-                        : 'Re-caída sticky: se reutiliza el mismo caso y ticket.')));
+            : ($incident->isOpenGrave()
+                ? 'Re-caída con incidencia abierta: se reutiliza el mismo caso y ticket (etiqueta En incidencia).'
+                : ($wasKeptManaging
+                    ? 'Re-caída con caso mantenido en gestión: se reutiliza el mismo caso y ticket.'
+                    : 'Re-caída sticky: se reutiliza el mismo caso y ticket.'));
 
         // Mantener CONTINUE_MONITORING al re-caer: si se borra, al recuperar deja de ser sticky
         // y la siguiente caída nace como Pendiente de gestión (caso 487 / TSS).
@@ -293,7 +308,66 @@ class IncidentService
     }
 
     /**
-     * Caso sticky abierto del assignment (incidencia / requerimiento / mantener en gestión / mantenimiento).
+     * Aparca solo requerimientos que ya recuperaron en PRTG y se volvieron a pegar por sticky viejo.
+     * Las caídas antiguas marcadas como requerimiento (sin recuperación intermedia) se dejan quietas.
+     */
+    private function parkRequirementRecaidas(int $assignmentId): void
+    {
+        $rows = Incident::query()
+            ->where('network_assignment_id', $assignmentId)
+            ->where('is_requirement_case', true)
+            ->whereNull('requirement_closed_at')
+            ->whereNull('recovered_at')
+            ->get();
+
+        foreach ($rows as $requirement) {
+            if (! $this->requirementHadRecoveryOrStickyRecaida($requirement)) {
+                continue;
+            }
+
+            $before = $requirement->followup_status?->value;
+            $at = now();
+            $requirement->forceFill([
+                'recovered_at' => OperationalTime::toStorage($at),
+                'prtg_up_at' => OperationalTime::toStorage($at),
+                'current_status' => MonitoringStatus::Operativo->value,
+            ])->save();
+
+            IncidentUpdate::query()->create([
+                'incident_id' => $requirement->id,
+                'type' => 'SYSTEM',
+                'status_before' => $before,
+                'status_after' => $before,
+                'observation' => 'Requerimiento aparcado tras re-caída: sigue en cola Requerimientos; la caída PRTG actual se gestiona en un ticket nuevo.',
+                'created_at' => now(),
+            ]);
+        }
+    }
+
+    /**
+     * ¿Hubo recuperación PRTG o re-caída sticky sobre este requerimiento?
+     * Si no, es una caída continua marcada como requerimiento: no partir.
+     */
+    private function requirementHadRecoveryOrStickyRecaida(Incident $requirement): bool
+    {
+        $since = $requirement->requirement_opened_at ?? $requirement->started_at;
+        $query = IncidentUpdate::query()->where('incident_id', $requirement->id);
+        if ($since !== null) {
+            $query->where('created_at', '>=', $since);
+        }
+
+        return $query
+            ->where(function ($q) {
+                $q->where('observation', 'like', '%Re-caída con requerimiento%')
+                    ->orWhere('observation', 'like', '%PRTG reportó recuperación%')
+                    ->orWhere('observation', 'like', '%Recuperación técnica%');
+            })
+            ->exists();
+    }
+
+    /**
+     * Caso sticky abierto del assignment (incidencia grave / mantener en gestión / mantenimiento).
+     * Requerimiento queda fuera: no reutiliza ticket; la nueva caída PRTG nace aparte.
      */
     private function findOpenSticky(int $assignmentId, ?int $excludeIncidentId = null): ?Incident
     {
@@ -305,8 +379,6 @@ class IncidentService
             ->where(function ($q) {
                 $q->where(function ($g) {
                     $g->where('is_grave_incident', true)->whereNull('grave_closed_at');
-                })->orWhere(function ($r) {
-                    $r->where('is_requirement_case', true)->whereNull('requirement_closed_at');
                 })->orWhere(function ($k) {
                     // CONTINUE_MONITORING con o sin recovered_at (re-caído sticky).
                     $k->where('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value)
