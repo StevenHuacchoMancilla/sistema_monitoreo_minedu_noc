@@ -1,5 +1,5 @@
-import { AppProviders } from './providers'
-import { AppRouter } from './router'
+import { AppProviders } from './proveedores'
+import { AppRouter } from './enrutador'
 
 /**
  * Sync PRTG solo manual (botón PRTG). El live-sync automático congelaba

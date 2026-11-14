@@ -1,4 +1,4 @@
-import { apiDelete, apiGet, apiPost, apiPut, apiUploadFormData, API_URL } from './client'
+import { apiDelete, apiGet, apiPost, apiPut, apiUploadFormData, API_URL } from './clienteHttp'
 import type {
   Concentration,
   ConcentrationZone,
@@ -9,20 +9,20 @@ import type {
   OutageRow,
   SchoolDetail,
 } from '../types/api'
-import type { PrtgDashboard } from '../features/dashboard-prtg/types/prtgDashboard'
+import type { PrtgDashboard } from '../features/dashboard-prtg/types/dashboardPrtg'
 import type {
   ClosingPreviewResponse,
   ManagementPayload,
   OperationalReportResponse,
-} from '../features/reports/types/operationalReport'
-import type { GeneralReportResponse } from '../features/reports/types/generalReport'
+} from '../features/reports/types/reporteOperativo'
+import type { GeneralReportResponse } from '../features/reports/types/reporteGeneral'
 import type { TicketeraPayload, TicketeraTimeline } from '../features/ticketera/types/ticketera'
 import type {
   ContactPayload,
   NetworkAssignmentPayload,
   SchoolGeneralPayload,
   SchoolListResponse,
-} from '../features/schools/types/school'
+} from '../features/schools/types/colegio'
 
 function toQuery(params: Record<string, string | undefined | null>): string {
   const q = new URLSearchParams()
@@ -197,7 +197,7 @@ export const endpoints = {
       observation?: string
     },
   ) => apiPost<IncidentDetail>(`/incidents/${id}/recovery-review`, body),
-  operationalReport: (params: Record<string, string | undefined | null> = {}) =>
+  reporteOperativo: (params: Record<string, string | undefined | null> = {}) =>
     apiGet<OperationalReportResponse>(`/reports/operational${toQuery(params)}`),
   updateListaEstado: (incidentId: number, lista_estado: string | null) =>
     apiPut<{
@@ -210,7 +210,7 @@ export const endpoints = {
     apiPut<{ incident_id: number; detalle: string | null }>(`/incidents/${incidentId}/lista-detalle`, {
       detalle,
     }),
-  generalReport: (params: Record<string, string | undefined | null> = {}) =>
+  reporteGeneral: (params: Record<string, string | undefined | null> = {}) =>
     apiGet<GeneralReportResponse>(`/reports/general${toQuery(params)}`),
   closingPreview: () => apiGet<ClosingPreviewResponse>('/reports/closing-preview'),
   mineduReport: () =>
