@@ -34,8 +34,12 @@ export function PaginaInicioSesion() {
       navigate(dest, { replace: true })
     } catch (err) {
       if (err instanceof ApiError) {
-        const body = err.body as { errors?: { email?: string[] }; message?: string } | null
-        setError(body?.errors?.email?.[0] ?? body?.message ?? err.message)
+        if (err.status === 502 || err.status === 503 || err.status === 504) {
+          setError('El API no responde (502). Verifica que Laravel esté en el puerto 8000.')
+        } else {
+          const body = err.body as { errors?: { email?: string[] }; message?: string } | null
+          setError(body?.errors?.email?.[0] ?? body?.message ?? err.message)
+        }
       } else {
         setError(err instanceof Error ? err.message : 'No se pudo iniciar sesión')
       }

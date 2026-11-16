@@ -21,6 +21,16 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->statefulApi();
 
+        // SPA: no hay route('login') en Laravel. Sin esto, un 401 de API revienta con
+        // "Route [login] not defined" (500) y el front interpreta fallo grave / te saca.
+        $middleware->redirectGuestsTo(function (Request $request) {
+            if ($request->is('api/*') || $request->expectsJson()) {
+                return null;
+            }
+
+            return '/login';
+        });
+
         $middleware->alias([
             'active' => EnsureUserIsActive::class,
             'role' => EnsureUserHasRole::class,

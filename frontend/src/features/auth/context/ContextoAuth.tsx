@@ -28,11 +28,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const res = await apiGet<{ data: AuthUser }>('/me')
       setUser(res.data)
     } catch (error) {
+      // Solo cerrar sesión si el backend niega auth. Un 502/500 no debe botarte.
       if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
         setUser(null)
-        return
       }
-      setUser(null)
     }
   }, [])
 
@@ -43,8 +42,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         const res = await apiGet<{ data: AuthUser }>('/me')
         if (!cancelled) setUser(res.data)
-      } catch {
-        if (!cancelled) setUser(null)
+      } catch (error) {
+        if (!cancelled) {
+          if (error instanceof ApiError && (error.status === 401 || error.status === 403)) {
+            setUser(null)
+          } else if (!(error instanceof ApiError) || error.status >= 500 || error.status === 0) {
+            // API caída / 502: quedamos sin user para mostrar login, pero el mensaje
+            // de login mostrará el error real al intentar entrar.
+            setUser(null)
+          } else {
+            setUser(null)
+          }
+        }
       } finally {
         if (!cancelled) setLoading(false)
       }
