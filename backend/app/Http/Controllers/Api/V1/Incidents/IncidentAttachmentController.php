@@ -36,6 +36,11 @@ class IncidentAttachmentController extends Controller
 
     public function store(Request $request, Incident $incident): JsonResponse
     {
+        $uploadError = $this->phpUploadErrorMessage($request);
+        if ($uploadError !== null) {
+            throw ValidationException::withMessages(['file' => $uploadError]);
+        }
+
         $request->validate([
             'file' => ['required', 'file', 'max:5120'],
         ]);
@@ -88,5 +93,32 @@ class IncidentAttachmentController extends Controller
         $attachment->delete();
 
         return response()->json(['ok' => true]);
+    }
+
+    /**
+     * PHP descarta el archivo antes de Laravel si supera upload_max_filesize.
+     * Sin este chequeo el front solo ve "Archivo requerido".
+     */
+    private function phpUploadErrorMessage(Request $request): ?string
+    {
+        $file = $request->file('file');
+        if ($file !== null && $file->isValid()) {
+            return null;
+        }
+
+        $err = UPLOAD_ERR_NO_FILE;
+        if ($file !== null) {
+            $err = $file->getError();
+        } elseif (isset($_FILES['file']['error']) && is_numeric($_FILES['file']['error'])) {
+            $err = (int) $_FILES['file']['error'];
+        }
+
+        return match ($err) {
+            UPLOAD_ERR_INI_SIZE, UPLOAD_ERR_FORM_SIZE => 'La imagen supera el límite del servidor (máx. 5 MB). Comprime la foto e intenta de nuevo.',
+            UPLOAD_ERR_PARTIAL => 'La subida se interrumpió. Intenta de nuevo.',
+            UPLOAD_ERR_NO_FILE => null,
+            UPLOAD_ERR_NO_TMP_DIR, UPLOAD_ERR_CANT_WRITE, UPLOAD_ERR_EXTENSION => 'No se pudo guardar la imagen en el servidor.',
+            default => null,
+        };
     }
 }
