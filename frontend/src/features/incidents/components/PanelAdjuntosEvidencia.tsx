@@ -1,9 +1,22 @@
-import { useRef, useState } from 'react'
+import { useId, useRef, useState } from 'react'
 import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { ImagePlus, Trash2 } from 'lucide-react'
+import { ApiError } from '../../../api/clienteHttp'
 import { endpoints } from '../../../api/endpoints'
 import { Boton } from '../../../components/ui/Boton'
 import type { IncidentAttachment, IncidentDetail } from '../../../types/api'
+
+function uploadErrorMessage(err: unknown, fileName: string): string {
+  if (err instanceof ApiError) {
+    if (err.status === 419) return `${fileName}: sesión expirada (CSRF). Recarga la página e intenta de nuevo.`
+    if (err.status === 403) return `${fileName}: sin permiso para subir evidencias.`
+    if (err.status === 413) return `${fileName}: archivo demasiado grande.`
+    if (err.status === 502 || err.status === 503) return `${fileName}: el API no responde (${err.status}).`
+    return `${fileName}: ${err.message}`
+  }
+  if (err instanceof Error) return `${fileName}: ${err.message}`
+  return `${fileName}: error al subir`
+}
 
 export function PanelAdjuntosEvidencia({
   incidentId,
@@ -15,9 +28,20 @@ export function PanelAdjuntosEvidencia({
   readOnly: boolean
 }) {
   const client = useQueryClient()
+  const inputId = useId()
   const inputRef = useRef<HTMLInputElement>(null)
   const [error, setError] = useState<string | null>(null)
   const [progress, setProgress] = useState<string | null>(null)
+  /** Lista local para que la UI muestre la foto al instante aunque el refetch tarde. */
+  const [localExtra, setLocalExtra] = useState<IncidentAttachment[]>([])
+
+  const visible = (() => {
+    const byId = new Map<number, IncidentAttachment>()
+    for (const item of [...localExtra, ...attachments]) {
+      byId.set(item.id, item)
+    }
+    return Array.from(byId.values()).sort((a, b) => b.id - a.id)
+  })()
 
   const upload = useMutation({
     mutationFn: async (files: File[]) => {
@@ -28,10 +52,13 @@ export function PanelAdjuntosEvidencia({
         setProgress(`Subiendo ${i + 1} de ${files.length}…`)
         try {
           const res = await endpoints.uploadAttachment(incidentId, file)
+          if (!res?.data?.id) {
+            failures.push(`${file.name}: respuesta inválida del servidor`)
+            continue
+          }
           uploaded.push(res.data)
         } catch (err) {
-          const reason = err instanceof Error ? err.message : 'Error al subir'
-          failures.push(`${file.name}: ${reason}`)
+          failures.push(uploadErrorMessage(err, file.name))
         }
       }
       return { uploaded, failures }
@@ -39,6 +66,7 @@ export function PanelAdjuntosEvidencia({
     onSuccess: async ({ uploaded, failures }) => {
       setProgress(null)
       if (uploaded.length > 0) {
+        setLocalExtra((prev) => [...uploaded, ...prev])
         client.setQueryData<IncidentDetail>(['incidents', incidentId], (prev) => {
           if (!prev) return prev
           return { ...prev, attachments: [...uploaded, ...(prev.attachments ?? [])] }
@@ -65,6 +93,7 @@ export function PanelAdjuntosEvidencia({
     mutationFn: (attachmentId: number) => endpoints.deleteAttachment(incidentId, attachmentId),
     onSuccess: async (_res, attachmentId) => {
       setError(null)
+      setLocalExtra((prev) => prev.filter((a) => a.id !== attachmentId))
       client.setQueryData<IncidentDetail>(['incidents', incidentId], (prev) => {
         if (!prev) return prev
         return {
@@ -76,6 +105,13 @@ export function PanelAdjuntosEvidencia({
     },
     onError: (err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo eliminar.'),
   })
+
+  const onPick = (list: FileList | null) => {
+    if (!list || list.length === 0) return
+    const files = Array.from(list)
+    setError(null)
+    upload.mutate(files)
+  }
 
   return (
     <section className="rounded-xl border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-900">
@@ -92,18 +128,16 @@ export function PanelAdjuntosEvidencia({
         {!readOnly ? (
           <>
             <input
+              id={inputId}
               ref={inputRef}
               type="file"
-              accept="image/jpeg,image/png,image/webp,image/gif"
+              accept="image/jpeg,image/png,image/webp,image/gif,.jpg,.jpeg,.png,.webp,.gif"
               multiple
-              className="hidden"
+              className="sr-only"
               onChange={(event) => {
                 const list = event.target.files
                 event.target.value = ''
-                if (!list || list.length === 0) return
-                const files = Array.from(list)
-                setError(null)
-                upload.mutate(files)
+                onPick(list)
               }}
             />
             <Boton
@@ -111,7 +145,9 @@ export function PanelAdjuntosEvidencia({
               size="sm"
               variant="secondary"
               loading={upload.isPending}
+              disabled={upload.isPending}
               onClick={() => inputRef.current?.click()}
+              aria-controls={inputId}
             >
               {upload.isPending ? progress ?? 'Subiendo…' : 'Subir imágenes'}
             </Boton>
@@ -119,13 +155,17 @@ export function PanelAdjuntosEvidencia({
         ) : null}
       </div>
 
-      {error ? <p className="mb-2 text-sm text-red-600">{error}</p> : null}
+      {error ? (
+        <p role="alert" className="mb-2 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/40 dark:text-red-300">
+          {error}
+        </p>
+      ) : null}
 
-      {attachments.length === 0 ? (
+      {visible.length === 0 ? (
         <p className="text-[13px] text-slate-500">Sin evidencias cargadas.</p>
       ) : (
         <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-          {attachments.map((item) => (
+          {visible.map((item) => (
             <li
               key={item.id}
               className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"

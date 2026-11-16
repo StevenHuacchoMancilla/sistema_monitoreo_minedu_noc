@@ -23,6 +23,11 @@ export default defineConfig({
         timeout: 60_000,
         proxyTimeout: 60_000,
       },
+      // Evidencias subidas (storage:link) visibles desde el SPA en :5173 / LAN
+      '/storage': {
+        target: 'http://127.0.0.1:8000',
+        changeOrigin: true,
+      },
     },
   },
 })

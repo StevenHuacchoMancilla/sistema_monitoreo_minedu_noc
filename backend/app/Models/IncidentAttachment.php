@@ -4,7 +4,6 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
-use Illuminate\Support\Facades\Storage;
 
 class IncidentAttachment extends Model
 {
@@ -36,7 +35,9 @@ class IncidentAttachment extends Model
 
     public function url(): string
     {
-        return Storage::disk('public')->url($this->path);
+        // Ruta relativa: el SPA (Vite :5173 / LAN) la sirve vía proxy /storage → :8000.
+        // Evita URLs http://localhost:8000/... que fallan desde otra IP o puerto.
+        return '/storage/'.ltrim((string) $this->path, '/');
     }
 
     public function toApi(): array

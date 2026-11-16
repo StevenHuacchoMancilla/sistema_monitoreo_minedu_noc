@@ -174,7 +174,7 @@ export const endpoints = {
     apiGet<{ data: IncidentAttachment[] }>(`/incidents/${id}/attachments`),
   uploadAttachment: (id: number, file: File) => {
     const form = new FormData()
-    form.append('file', file)
+    form.append('file', file, file.name || 'evidencia.jpg')
     return apiUploadFormData<{ data: IncidentAttachment }>(`/incidents/${id}/attachments`, form)
   },
   deleteAttachment: (id: number, attachmentId: number) =>
