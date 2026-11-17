@@ -35,6 +35,7 @@ class IncidentCaseFileService
             'sensor:id,prtg_sensor_id,network_assignment_id,name,device_name,normalized_status,status_text,last_check',
             'managements.author:'.self::USER_COLUMNS,
             'updates.user:'.self::USER_COLUMNS,
+            'attachments' => fn ($q) => $q->with('user:'.self::USER_COLUMNS)->orderByDesc('id'),
             'fieldDispatches' => fn ($q) => $q->orderByDesc('id'),
             'fieldDispatches.creator:'.self::USER_COLUMNS,
             'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
@@ -149,6 +150,10 @@ class IncidentCaseFileService
                 ->all(),
             'participants' => $this->participants($timeline),
             'timeline' => $timeline,
+            'attachments' => $incident->attachments
+                ->map(fn (\App\Models\IncidentAttachment $a) => $a->toApi())
+                ->values()
+                ->all(),
         ];
     }
 

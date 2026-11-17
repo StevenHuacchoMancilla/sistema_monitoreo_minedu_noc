@@ -904,6 +904,12 @@ class IncidentController extends Controller
                 if ($incident->recovered_at === null) {
                     $incident->recovered_at = now();
                 }
+                if ($incident->isOpenGrave()) {
+                    $incident->grave_closed_at = now();
+                }
+                if ($incident->isOpenRequirement()) {
+                    $incident->requirement_closed_at = now();
+                }
             }
             $incident->save();
         }
@@ -1061,10 +1067,13 @@ class IncidentController extends Controller
         return response()->json(['data' => $rows]);
     }
 
-    /** Casos graves abiertos. */
+    /** Casos graves abiertos o cerrados (`status=open|closed`). */
     public function graves(Request $request): JsonResponse
     {
-        $rows = Incident::query()
+        $status = strtolower((string) $request->query('status', 'open'));
+        $closed = in_array($status, ['closed', 'cerrado', 'cerrados'], true);
+
+        $query = Incident::query()
             ->with([
                 'school',
                 'networkAssignment',
@@ -1072,9 +1081,16 @@ class IncidentController extends Controller
                 'serviceTicket',
                 'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
             ])
-            ->where('is_grave_incident', true)
-            ->whereNull('grave_closed_at')
-            ->orderByDesc('grave_opened_at')
+            ->withCount('attachments')
+            ->where('is_grave_incident', true);
+
+        if ($closed) {
+            $query->whereNotNull('grave_closed_at')->orderByDesc('grave_closed_at');
+        } else {
+            $query->whereNull('grave_closed_at')->orderByDesc('grave_opened_at');
+        }
+
+        $rows = $query
             ->limit(500)
             ->get()
             ->map(fn (Incident $i) => $this->queueRow($i));
@@ -1221,6 +1237,38 @@ class IncidentController extends Controller
         return response()->json($this->show($closed->fresh() ?? $closed)->getData(true));
     }
 
+    /**
+     * Elimina un requerimiento erróneo (p. ej. duplicado). No aplica a caídas normales.
+     */
+    public function destroyRequirement(Request $request, Incident $incident): JsonResponse
+    {
+        if (! $incident->is_requirement_case) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'incident' => 'Solo se pueden eliminar casos marcados como requerimiento.',
+            ]);
+        }
+
+        \Illuminate\Support\Facades\DB::transaction(function () use ($incident): void {
+            $incident->loadMissing(['serviceTicket', 'attachments', 'trackingRecords']);
+
+            foreach ($incident->attachments as $attachment) {
+                if ($attachment->path && \Illuminate\Support\Facades\Storage::disk('public')->exists($attachment->path)) {
+                    \Illuminate\Support\Facades\Storage::disk('public')->delete($attachment->path);
+                }
+            }
+
+            foreach ($incident->trackingRecords as $tracking) {
+                $tracking->updates()->delete();
+                $tracking->delete();
+            }
+
+            $incident->serviceTicket?->delete();
+            $incident->delete();
+        });
+
+        return response()->json(['ok' => true, 'deleted_incident_id' => $incident->id]);
+    }
+
     /** Cierre operativo unificado: Tracking (si existe) + incidencia CERRADO. */
     public function closeTicket(Request $request, Incident $incident): JsonResponse
     {
@@ -1280,6 +1328,8 @@ class IncidentController extends Controller
             'current_down_started_at' => $downClock?->toIso8601String(),
             'is_grave_incident' => $incident->isOpenGrave(),
             'grave_opened_at' => $incident->grave_opened_at?->toIso8601String(),
+            'grave_closed_at' => $incident->grave_closed_at?->toIso8601String(),
+            'attachments_count' => (int) ($incident->attachments_count ?? 0),
             'is_requirement_case' => $incident->isOpenRequirement(),
             'requirement_opened_at' => $incident->requirement_opened_at?->toIso8601String(),
             'estado_prtg' => $incident->current_status,
@@ -1378,6 +1428,11 @@ class IncidentController extends Controller
                 $incident->forceFill(['grave_closed_at' => now()])->save();
             }
             if (! $incident->isOpenRequirement()) {
+                if ($incident->otherOpenRequirementForSchool() !== null) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'minedu_reason' => 'Ya hay un requerimiento abierto para este colegio. Ciérralo o elimínalo en Requerimientos antes de crear otro.',
+                    ]);
+                }
                 $incident->forceFill([
                     'is_requirement_case' => true,
                     'requirement_opened_at' => now(),

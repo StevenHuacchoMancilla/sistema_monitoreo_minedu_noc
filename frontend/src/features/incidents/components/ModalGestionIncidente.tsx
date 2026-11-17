@@ -1298,6 +1298,12 @@ function HistoryTab({
 
   return (
     <div className="space-y-4">
+      <PanelAdjuntosEvidencia
+        incidentId={incidentId}
+        attachments={data.attachments ?? []}
+        readOnly
+      />
+
       <Panel
         title="Línea de tiempo"
         icon={<History className="h-4 w-4 text-slate-500" aria-hidden />}

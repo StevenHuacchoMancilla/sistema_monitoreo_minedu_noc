@@ -19,6 +19,7 @@ use App\Models\SchoolContact;
 use App\Models\User;
 use App\Services\AuditLogger;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\ValidationException;
 use InvalidArgumentException;
 
 class IncidentManagementService
@@ -316,6 +317,7 @@ class IncidentManagementService
                 $notes[] = 'Salió de Incidencias';
             }
             if (! $incident->isOpenRequirement()) {
+                $this->assertUniqueOpenRequirement($incident);
                 $incident->forceFill([
                     'is_requirement_case' => true,
                     'requirement_opened_at' => $incident->requirement_opened_at ?? now(),
@@ -372,5 +374,17 @@ class IncidentManagementService
         ])->save();
 
         return true;
+    }
+
+    private function assertUniqueOpenRequirement(Incident $incident): void
+    {
+        $other = $incident->otherOpenRequirementForSchool();
+        if ($other === null) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'minedu_reason' => 'Ya hay un requerimiento abierto para este colegio. Ciérralo o elimínalo en Requerimientos antes de crear otro.',
+        ]);
     }
 }

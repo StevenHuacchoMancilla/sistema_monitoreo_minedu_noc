@@ -71,6 +71,26 @@ class Incident extends Model
     }
 
     /**
+     * Otro requerimiento abierto del mismo colegio (excluye $this).
+     * Un colegio solo debe tener un requerimiento abierto a la vez.
+     */
+    public function otherOpenRequirementForSchool(): ?self
+    {
+        if ($this->school_id === null) {
+            return null;
+        }
+
+        return static::query()
+            ->where('school_id', $this->school_id)
+            ->where('is_requirement_case', true)
+            ->whereNull('requirement_closed_at')
+            ->when($this->id, fn ($q) => $q->where('id', '!=', $this->id))
+            ->orderBy('requirement_opened_at')
+            ->orderBy('id')
+            ->first();
+    }
+
+    /**
      * Mantenimiento abierto (correctivo/preventivo): ticket is_maintenance ABIERTO
      * o detection_source MAINTENANCE sin cierre.
      */

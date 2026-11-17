@@ -295,6 +295,15 @@ export type IncidentCaseFile = {
     last_at: string | null
   }>
   timeline: CaseTimelineEvent[]
+  attachments?: Array<{
+    id: number
+    original_name: string
+    mime: string | null
+    size: number
+    url: string
+    uploaded_by: string | null
+    created_at: string | null
+  }>
 }
 
 export type SchoolHistoryIncidentsResponse = {

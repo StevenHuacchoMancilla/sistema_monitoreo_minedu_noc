@@ -1,7 +1,7 @@
-import { useMemo, useState } from 'react'
-import { Link, useNavigate } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleX, Eye, History, ImageDown, SquarePen, Ticket } from 'lucide-react'
+import { CircleX, Eye, FileText, History, ImageDown, Images, SquarePen, Ticket, Trash2 } from 'lucide-react'
 import { DisenoApp } from '../../../layouts/DisenoApp'
 import { EncabezadoPagina } from '../../../components/ui/EncabezadoPagina'
 import { SectionCard } from '../../../components/ui/Tarjeta'
@@ -26,9 +26,12 @@ import { FollowupBadge } from '../../../components/monitoring/InsigniasEstado'
 import { Insignia } from '../../../components/ui/InsigniaSuave'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/ContextoAuth'
+import { incidentCaseFilePath } from '../../history/api/apiHistorial'
 import { ModalGestionIncidente } from '../components/ModalGestionIncidente'
 import { ModalGenerarTicket } from '../components/ModalGenerarTicket'
 import { downloadTicketImageFromIncidentId } from '../lib/imagenTicket'
+
+type GravesTab = 'open' | 'closed'
 
 function matchesCidOrTss(row: { cid?: string | null; tss?: number | string | null }, raw: string): boolean {
   const needle = raw.trim().toLowerCase()
@@ -59,6 +62,8 @@ type QueueRow = {
   started_at?: string | null
   recovered_at?: string | null
   grave_opened_at?: string | null
+  grave_closed_at?: string | null
+  attachments_count?: number | null
   requirement_opened_at?: string | null
   responsible_area?: string | null
   ticket_code?: string | null
@@ -68,7 +73,11 @@ type QueueRow = {
 
 const META: Record<
   QueueKind,
-  { title: string; description: string; fetcher: () => Promise<{ data: QueueRow[] }> }
+  {
+    title: string
+    description: string
+    fetcher: (opts?: { gravesTab?: GravesTab }) => Promise<{ data: QueueRow[] }>
+  }
 > = {
   'pendiente-cierre': {
     title: 'Pendiente de cierre',
@@ -80,7 +89,10 @@ const META: Record<
     title: 'Incidencias',
     description:
       'Casos marcados como incidencia. Si el colegio cae otra vez aparece en Caídas totales con la etiqueta «En incidencia».',
-    fetcher: () => endpoints.incidentsGraves() as Promise<{ data: QueueRow[] }>,
+    fetcher: ({ gravesTab } = {}) =>
+      endpoints.incidentsGraves({ status: gravesTab === 'closed' ? 'closed' : 'open' }) as Promise<{
+        data: QueueRow[]
+      }>,
   },
   requerimientos: {
     title: 'Requerimientos',
@@ -106,6 +118,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
   const client = useQueryClient()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
   const [manageId, setManageId] = useState<number | null>(null)
   const [ticketRow, setTicketRow] = useState<QueueRow | null>(null)
   const [pngBusyId, setPngBusyId] = useState<number | null>(null)
@@ -116,12 +129,29 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   const [keeping, setKeeping] = useState(false)
   const [closeQueueRow, setCloseQueueRow] = useState<QueueRow | null>(null)
   const [closingQueue, setClosingQueue] = useState(false)
+  const [deleteReqRow, setDeleteReqRow] = useState<QueueRow | null>(null)
+  const [deletingReq, setDeletingReq] = useState(false)
 
   const [search, setSearch] = useState('')
+  const [gravesTab, setGravesTab] = useState<GravesTab>(() =>
+    kind === 'graves' && searchParams.get('tab') === 'cerradas' ? 'closed' : 'open',
+  )
+  const showingClosedGraves = kind === 'graves' && gravesTab === 'closed'
+
+  useEffect(() => {
+    if (kind !== 'graves') return
+    const next = gravesTab === 'closed' ? 'cerradas' : null
+    const current = searchParams.get('tab')
+    if (next && current !== next) {
+      setSearchParams({ tab: next }, { replace: true })
+    } else if (!next && current) {
+      setSearchParams({}, { replace: true })
+    }
+  }, [kind, gravesTab, searchParams, setSearchParams])
 
   const query = useQuery({
-    queryKey: ['incidents', 'queue', kind],
-    queryFn: meta.fetcher,
+    queryKey: ['incidents', 'queue', kind, kind === 'graves' ? gravesTab : 'default'],
+    queryFn: () => meta.fetcher({ gravesTab }),
     refetchInterval: 60_000,
     staleTime: 30_000,
     refetchIntervalInBackground: false,
@@ -139,13 +169,22 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
     void client.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' })
   }
 
-  const markedLabel = kind === 'graves' || kind === 'requerimientos' ? 'Marcada' : 'Recuperada'
+  const markedLabel = showingClosedGraves
+    ? 'Cerrada'
+    : kind === 'graves' || kind === 'requerimientos'
+      ? 'Marcada'
+      : 'Recuperada'
+
+  const pageTitle = showingClosedGraves ? 'Incidencias cerradas' : meta.title
+  const pageDescription = showingClosedGraves
+    ? 'Registro de incidencias ya cerradas. Abre el expediente para ver gestiones y las fotos de evidencia.'
+    : meta.description
 
   return (
     <DisenoApp>
       <EncabezadoPagina
-        title={meta.title}
-        description={meta.description}
+        title={pageTitle}
+        description={pageDescription}
         actions={
           <div className="flex flex-wrap items-center gap-2">
             {kind === 'pendiente-cierre' ? (
@@ -159,6 +198,39 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
           </div>
         }
       />
+
+      {kind === 'graves' ? (
+        <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-900">
+          <button
+            type="button"
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+              gravesTab === 'open'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-white/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+            }`}
+            onClick={() => {
+              setGravesTab('open')
+              setSearch('')
+            }}
+          >
+            Incidencias
+          </button>
+          <button
+            type="button"
+            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
+              gravesTab === 'closed'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'text-slate-600 hover:bg-white/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'
+            }`}
+            onClick={() => {
+              setGravesTab('closed')
+              setSearch('')
+            }}
+          >
+            Incidencias cerradas
+          </button>
+        </div>
+      ) : null}
 
       <div className="mb-4">
         <TarjetaFiltro>
@@ -178,7 +250,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
         action={
           rows.length > 0 ? (
             <span className="text-[11px] font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
-              {meta.title}
+              {pageTitle}
             </span>
           ) : null
         }
@@ -193,7 +265,9 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             description={
               kind === 'pendiente-cierre'
                 ? 'No hay tickets pendientes de cierre. El seguimiento activo está en En gestión.'
-                : 'No hay elementos en esta cola.'
+                : showingClosedGraves
+                  ? 'Aún no hay incidencias cerradas en el registro.'
+                  : 'No hay elementos en esta cola.'
             }
           />
         ) : null}
@@ -223,8 +297,10 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                     .filter(Boolean)
                     .join(' · ')
                   const hasTicket = Boolean(row.has_ticket || row.ticket_code)
-                  const markedAt =
-                    kind === 'graves'
+                  const attachmentsCount = Number(row.attachments_count ?? 0)
+                  const markedAt = showingClosedGraves
+                    ? row.grave_closed_at ?? row.grave_opened_at ?? null
+                    : kind === 'graves'
                       ? row.grave_opened_at ?? null
                       : kind === 'requerimientos'
                         ? row.requirement_opened_at ?? null
@@ -268,6 +344,17 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           ) : (
                             <FollowupBadge status={row.followup_status} />
                           )}
+                          {attachmentsCount > 0 ? (
+                            <Insignia
+                              tone="info"
+                              title={`${attachmentsCount} evidencia${attachmentsCount === 1 ? '' : 's'} con foto`}
+                            >
+                              <span className="inline-flex items-center gap-1">
+                                <Images className="h-3 w-3" aria-hidden />
+                                {attachmentsCount}
+                              </span>
+                            </Insignia>
+                          ) : null}
                         </div>
                       </td>
                       <td className={`${tdDateClassName} !align-top`}>
@@ -309,17 +396,31 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           ) : (
                             <>
                               <BotonIcono
-                                label={canManage ? 'Gestionar' : 'Ver detalle'}
+                                label={
+                                  showingClosedGraves
+                                    ? 'Ver detalle'
+                                    : canManage
+                                      ? 'Gestionar'
+                                      : 'Ver detalle'
+                                }
                                 onClick={() => setManageId(row.incident_id)}
                                 className="!size-8 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
                               >
-                                {canManage ? (
-                                  <SquarePen className="h-4 w-4" aria-hidden />
-                                ) : (
+                                {showingClosedGraves || !canManage ? (
                                   <Eye className="h-4 w-4" aria-hidden />
+                                ) : (
+                                  <SquarePen className="h-4 w-4" aria-hidden />
                                 )}
                               </BotonIcono>
-                              {canManage ? (
+                              <Link
+                                to={incidentCaseFilePath(row.incident_id)}
+                                className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-violet-700 hover:bg-violet-50 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:outline-none dark:text-violet-300 dark:hover:bg-violet-950/40"
+                                title="Expediente (gestiones y fotos)"
+                                aria-label="Expediente (gestiones y fotos)"
+                              >
+                                <FileText className="h-4 w-4" aria-hidden />
+                              </Link>
+                              {canManage && !showingClosedGraves ? (
                                 <BotonIcono
                                   label={hasTicket ? 'Ticket / evento' : 'Generar ticket'}
                                   onClick={() => setTicketRow(row)}
@@ -348,13 +449,22 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                                   <ImageDown className="h-4 w-4" aria-hidden />
                                 </BotonIcono>
                               ) : null}
-                              {canManage ? (
+                              {canManage && !showingClosedGraves ? (
                                 <BotonIcono
                                   label={kind === 'graves' ? 'Cerrar incidencia' : 'Cerrar requerimiento'}
                                   onClick={() => setCloseQueueRow(row)}
                                   className="!size-8 text-red-600 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none dark:text-red-400"
                                 >
                                   <CircleX className="h-4 w-4" aria-hidden />
+                                </BotonIcono>
+                              ) : null}
+                              {canManage && kind === 'requerimientos' ? (
+                                <BotonIcono
+                                  label="Eliminar requerimiento"
+                                  onClick={() => setDeleteReqRow(row)}
+                                  className="!size-8 text-rose-700 focus-visible:ring-2 focus-visible:ring-rose-500 focus-visible:outline-none dark:text-rose-400"
+                                >
+                                  <Trash2 className="h-4 w-4" aria-hidden />
                                 </BotonIcono>
                               ) : null}
                               {row.school_id ? (
@@ -383,8 +493,8 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
       {manageId !== null ? (
         <ModalGestionIncidente
           incidentId={manageId}
-          initialTab={canManage ? 'management' : 'summary'}
-          readOnly={!canManage}
+          initialTab={showingClosedGraves ? 'history' : canManage ? 'management' : 'summary'}
+          readOnly={!canManage || showingClosedGraves}
           onClose={() => {
             setManageId(null)
             refresh()
@@ -511,6 +621,9 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             .then(() => {
               setCloseQueueRow(null)
               refresh()
+              if (kind === 'graves') {
+                setGravesTab('closed')
+              }
             })
             .catch((err: unknown) => {
               setActionError(
@@ -522,6 +635,42 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
               )
             })
             .finally(() => setClosingQueue(false))
+        }}
+      />
+
+      <DialogoConfirmar
+        open={deleteReqRow !== null}
+        title="Eliminar requerimiento"
+        description={
+          deleteReqRow
+            ? `Se eliminará el requerimiento${deleteReqRow.cid ? ` CID ${deleteReqRow.cid}` : ''}${
+                deleteReqRow.tss != null ? ` · TSS ${deleteReqRow.tss}` : ''
+              }${
+                deleteReqRow.local_educativo ? ` · ${deleteReqRow.local_educativo}` : ''
+              }. Úsalo para quitar duplicados o altas por error. Esta acción no se puede deshacer.`
+            : undefined
+        }
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        tone="danger"
+        loading={deletingReq}
+        onClose={() => {
+          if (!deletingReq) setDeleteReqRow(null)
+        }}
+        onConfirm={() => {
+          if (!deleteReqRow) return
+          setDeletingReq(true)
+          setActionError(null)
+          void endpoints
+            .deleteIncidentRequirement(deleteReqRow.incident_id)
+            .then(() => {
+              setDeleteReqRow(null)
+              refresh()
+            })
+            .catch((err: unknown) => {
+              setActionError(err instanceof Error ? err.message : 'No se pudo eliminar el requerimiento.')
+            })
+            .finally(() => setDeletingReq(false))
         }}
       />
     </DisenoApp>

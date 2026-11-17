@@ -9,6 +9,7 @@ import {
   Clock3,
   FileText,
   History,
+  ImagePlus,
   Lock,
   MessageSquare,
   Phone,
@@ -205,6 +206,7 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
       <div className="grid min-w-0 gap-5 xl:grid-cols-[minmax(0,1fr)_22rem]">
         <div className="min-w-0 space-y-5">
           <CaseSummary data={data} />
+          <CaseAttachments attachments={data.attachments ?? []} />
           <CaseTimeline events={data.timeline} />
         </div>
 
@@ -268,6 +270,48 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
         </aside>
       </div>
     </>
+  )
+}
+
+function CaseAttachments({
+  attachments,
+}: {
+  attachments: NonNullable<IncidentCaseFile['attachments']>
+}) {
+  return (
+    <Panel title="Evidencias (fotos)" icon={<ImagePlus className="h-4 w-4" />}>
+      {attachments.length === 0 ? (
+        <p className="text-[13px] text-slate-500">No se subieron imágenes en este caso.</p>
+      ) : (
+        <ul className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {attachments.map((item) => (
+            <li
+              key={item.id}
+              className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700"
+            >
+              <a href={item.url} target="_blank" rel="noreferrer" className="block bg-slate-50 dark:bg-slate-950">
+                <img
+                  src={item.url}
+                  alt={item.original_name}
+                  className="h-36 w-full object-cover"
+                  loading="lazy"
+                />
+              </a>
+              <div className="px-2.5 py-2">
+                <p className="truncate text-[12px] font-medium text-slate-800 dark:text-slate-100" title={item.original_name}>
+                  {item.original_name}
+                </p>
+                <p className="text-[11px] text-slate-500">
+                  {item.uploaded_by ?? 'Usuario'}
+                  {item.size ? ` · ${(item.size / 1024).toFixed(0)} KB` : ''}
+                  {item.created_at ? ` · ${formatDateTime(item.created_at)}` : ''}
+                </p>
+              </div>
+            </li>
+          ))}
+        </ul>
+      )}
+    </Panel>
   )
 }
 

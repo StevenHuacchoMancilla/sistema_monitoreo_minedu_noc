@@ -246,7 +246,10 @@ export const endpoints = {
   syncPrtg: () => apiPost<Record<string, unknown>>('/sync/prtg', undefined, { timeoutMs: 30_000 }),
   incidentsPendienteCierre: () =>
     apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/pendiente-cierre'),
-  incidentsGraves: () => apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/graves'),
+  incidentsGraves: (params?: { status?: 'open' | 'closed' }) =>
+    apiGet<{ data: Array<Record<string, unknown>> }>(
+      `/incidents/queues/graves${params?.status && params.status !== 'open' ? `?status=${params.status}` : ''}`,
+    ),
   incidentsRequerimientos: () =>
     apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/requerimientos'),
   incidentsEnlaceParcial: () =>
@@ -257,6 +260,8 @@ export const endpoints = {
     apiPost(`/incidents/${id}/close-grave`, { observation }),
   closeIncidentRequirement: (id: number, observation?: string) =>
     apiPost(`/incidents/${id}/close-requirement`, { observation }),
+  deleteIncidentRequirement: (id: number) =>
+    apiDelete<{ ok: boolean; deleted_incident_id: number }>(`/incidents/${id}/requirement`),
   keepIncidentManaging: (id: number, observation?: string) =>
     apiPost(`/incidents/${id}/keep-managing`, { observation }),
   closeIncidentTicket: (id: number, observation?: string) =>

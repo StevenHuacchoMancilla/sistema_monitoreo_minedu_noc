@@ -61,6 +61,13 @@ class IncidentOperativeCloseService
                 $payload['recovered_at'] = now();
                 $payload['current_status'] = MonitoringStatus::Operativo->value;
             }
+            // Si era incidencia/requerimiento sticky, el cierre operativo también lo saca de esa cola.
+            if ($locked->isOpenGrave()) {
+                $payload['grave_closed_at'] = now();
+            }
+            if ($locked->isOpenRequirement()) {
+                $payload['requirement_closed_at'] = now();
+            }
             $locked->fill($payload);
             $locked->last_contact_at = now();
             $locked->save();

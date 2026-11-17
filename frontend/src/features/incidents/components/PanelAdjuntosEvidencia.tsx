@@ -106,9 +106,8 @@ export function PanelAdjuntosEvidencia({
     onError: (err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo eliminar.'),
   })
 
-  const onPick = (list: FileList | null) => {
-    if (!list || list.length === 0) return
-    const files = Array.from(list)
+  const onPick = (files: File[]) => {
+    if (files.length === 0) return
     setError(null)
     upload.mutate(files)
   }
@@ -135,9 +134,11 @@ export function PanelAdjuntosEvidencia({
               multiple
               className="sr-only"
               onChange={(event) => {
-                const list = event.target.files
+                // FileList es live: si se limpia value antes de copiar, length queda 0
+                // y la subida sale en silencio (Chrome/Edge en Windows).
+                const files = event.target.files ? Array.from(event.target.files) : []
                 event.target.value = ''
-                onPick(list)
+                onPick(files)
               }}
             />
             <Boton
