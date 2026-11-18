@@ -86,11 +86,13 @@ function inManagement(row: OutageRow): boolean {
 const RECENT_DOWN_MINUTES = 30
 
 /**
- * Reciente = Ping CAÍDO hace menos de 30 min.
- * Si venía de parcial/intermitente, se mira la hora en que pasó a caído (no el inicio del amarillo).
+ * Reciente = Ping CAÍDO hace menos de 30 min (caída nueva para el NOC).
+ * Si venía de parcial, se mira la hora en que pasó a caído (no el inicio del amarillo).
+ * Si el caso ya está en gestión, un flap parcial→caído no vuelve a marcar «Reciente».
  */
 function isRecentFullDown(row: OutageRow, nowMs: number): boolean {
   if (row.estado_prtg !== 'CAIDO') return false
+  if (inManagement(row)) return false
   const escalatedSeconds = elapsedSeconds(row.escalated_at, nowMs)
   if (escalatedSeconds !== null) {
     return escalatedSeconds < RECENT_DOWN_MINUTES * 60
@@ -674,8 +676,8 @@ function OutageTableRow({
                 className="!text-[10px]"
                 title={
                   row.escalated_at
-                    ? 'Pasó de parcial a caído hace menos de 30 minutos'
-                    : 'Caído hace menos de 30 minutos'
+                    ? 'Pasó de parcial a caído hace menos de 30 minutos (aún sin gestión)'
+                    : 'Caído hace menos de 30 minutos (aún sin gestión)'
                 }
               >
                 Reciente

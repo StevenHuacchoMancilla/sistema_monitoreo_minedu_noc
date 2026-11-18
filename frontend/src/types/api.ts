@@ -369,6 +369,17 @@ export type IncidentDetail = {
     status: string
     es_actual: boolean
   }>
+  /** Motivo de la caída anterior del mismo CID (solo la última). */
+  ultima_caida_motivo?: {
+    incident_id: number
+    started_at: string | null
+    recovered_at: string | null
+    root_cause_code: string | null
+    root_cause_label: string | null
+    comentario: string | null
+    operador: string | null
+    gestionado_at: string | null
+  } | null
   ticket?: {
     id: number
     incident_id: number | null
@@ -417,6 +428,7 @@ export type IncidentDetail = {
     cause: string | null
     root_cause_group_code?: string | null
     root_cause_code?: string | null
+    root_cause_label?: string | null
     minedu_reason?: 'CAIDA_ENLACE' | 'CAIDA_ENERGIA' | 'REQUERIMIENTO' | 'QUEJA' | null
     minedu_reason_label?: string | null
     /** ESTADO de Lista para reporte (Averias, Energia, …). */

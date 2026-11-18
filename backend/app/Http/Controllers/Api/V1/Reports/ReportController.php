@@ -8,7 +8,6 @@ use App\Domain\Reports\Services\InternetUsageReportService;
 use App\Domain\Reports\Services\ListaLleeDayService;
 use App\Domain\Reports\Services\MineduAttendanceReportService;
 use App\Domain\Reports\Services\OperationalReportService;
-use App\Enums\FollowupStatus;
 use App\Enums\ListaLleeEstado;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
@@ -79,7 +78,8 @@ class ReportController extends Controller
             // Uno o varios: "CAIDA_ENLACE,QUEJA" o minedu[]=...
             'minedu' => ['nullable'],
             'estado' => ['nullable', 'string', Rule::in(['ACTIVO', 'RECUPERADO', 'ABIERTOS', 'CERRADOS'])],
-            'seguimiento' => ['nullable', 'string', Rule::in(FollowupStatus::values())],
+            // Filtro «Seguimiento» = estado de LISTA DE LLEE (Averias, Descartes en curso, …).
+            'seguimiento' => ['nullable', 'string', Rule::in(ListaLleeEstado::values())],
             'tecnologia' => ['nullable', 'string', 'max:32'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],

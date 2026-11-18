@@ -63,6 +63,12 @@ class OperationalReportService
                 return $rank;
             }
 
+            $byPrtg = ListaLleeEstadoResolver::prtgSortRank($a['estado_prtg'] ?? null)
+                <=> ListaLleeEstadoResolver::prtgSortRank($b['estado_prtg'] ?? null);
+            if ($byPrtg !== 0) {
+                return $byPrtg;
+            }
+
             $caida = strcmp((string) ($a['caida'] ?? ''), (string) ($b['caida'] ?? ''));
             if ($caida !== 0) {
                 return $caida;
@@ -140,11 +146,15 @@ class OperationalReportService
             ])
             ->when($activeOnly, function (Builder $q) {
                 $q->where(function (Builder $inner) {
-                    // Amarillo: caída todavía activa. Rojo: incidencia grave abierta aunque PRTG ya subió.
+                    // Amarillo: caída activa.
+                    // Sticky: Averías / Requerimientos / Mantenimiento abiertos aunque PRTG ya subió.
                     $inner->whereNull('recovered_at')
                         ->orWhere('recovery_review_status', RecoveryReviewStatus::ContinueMonitoring->value)
                         ->orWhere(function (Builder $grave) {
                             $grave->where('is_grave_incident', true)->whereNull('grave_closed_at');
+                        })
+                        ->orWhere(function (Builder $req) {
+                            $req->where('is_requirement_case', true)->whereNull('requirement_closed_at');
                         });
                 });
             })

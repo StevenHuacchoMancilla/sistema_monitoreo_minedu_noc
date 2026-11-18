@@ -41,6 +41,20 @@ final class ListaLleeEstadoResolver
         return self::prtgStatus($incident) === MonitoringStatus::Operativo ? '✔' : '✖';
     }
 
+    /**
+     * Dentro de cada ESTADO de lista: caídos PRTG primero, operativos al final.
+     */
+    public static function prtgSortRank(mixed $mark): int
+    {
+        $raw = trim((string) ($mark ?? ''));
+
+        return match ($raw) {
+            '✖', 'x', 'X' => 0,
+            '✔' => 1,
+            default => 2,
+        };
+    }
+
     public static function prtgStatus(Incident $incident): ?MonitoringStatus
     {
         $raw = $incident->sensor?->normalized_status

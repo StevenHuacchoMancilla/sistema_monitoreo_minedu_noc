@@ -329,15 +329,23 @@ export function ModalGestionIncidente({
       })
     },
     onSuccess: async (data) => {
-      const becameIncident = Boolean(data?.estado?.is_grave_incident)
-      const becameRequirement = Boolean(data?.estado?.is_requirement_case)
-      const leftPendiente =
-        (becameIncident && (mineduReason === 'CAIDA_ENLACE' || mineduReason === 'QUEJA')) ||
-        (becameRequirement && mineduReason === 'REQUERIMIENTO')
+      // Solo cerrar al pasar por primera vez a Incidencias/Requerimientos.
+      // Si ya era incidencia, un comentario no debe cerrar el panel.
+      const prev = client.getQueryData<IncidentDetail>(['incidents', incidentId])
+      const wasIncident = Boolean(prev?.estado?.is_grave_incident)
+      const wasRequirement = Boolean(prev?.estado?.is_requirement_case)
+      const isIncident = Boolean(data?.estado?.is_grave_incident)
+      const isRequirement = Boolean(data?.estado?.is_requirement_case)
+      const newlyIncident =
+        isIncident &&
+        !wasIncident &&
+        (mineduReason === 'CAIDA_ENLACE' || mineduReason === 'QUEJA')
+      const newlyRequirement = isRequirement && !wasRequirement && mineduReason === 'REQUERIMIENTO'
+      const shouldCloseAfterClassify = newlyIncident || newlyRequirement
       setSavedMsg(
-        becameIncident && (mineduReason === 'CAIDA_ENLACE' || mineduReason === 'QUEJA')
+        newlyIncident
           ? 'Gestión registrada · pasó a Incidencias'
-          : becameRequirement && mineduReason === 'REQUERIMIENTO'
+          : newlyRequirement
             ? 'Gestión registrada · pasó a Requerimientos'
             : hasPriorManagements
               ? classificationChanged && !followupNote
@@ -360,7 +368,7 @@ export function ModalGestionIncidente({
       await invalidateOps()
       await client.invalidateQueries({ queryKey: ['incidents', 'queue'], refetchType: 'active' })
       await client.invalidateQueries({ queryKey: ['reports', 'operational'], refetchType: 'active' })
-      if (leftPendiente) {
+      if (shouldCloseAfterClassify) {
         window.setTimeout(() => {
           setSavedMsg(null)
           onClose()
@@ -1295,6 +1303,7 @@ function HistoryTab({
   const events = useMemo(() => data.timeline ?? [], [data.timeline])
   const previous = data.historial.filter((h) => !h.es_actual).slice(0, 12)
   const totalPrev = Math.max(0, data.antecedentes.incidencias_registradas - 1)
+  const lastMotivo = data.ultima_caida_motivo ?? null
 
   return (
     <div className="space-y-4">
@@ -1303,6 +1312,64 @@ function HistoryTab({
         attachments={data.attachments ?? []}
         readOnly
       />
+
+      <Panel
+        title="Último motivo (caída anterior)"
+        icon={<Radio className="h-4 w-4 text-slate-500" aria-hidden />}
+        action={
+          lastMotivo ? (
+            <Link
+              to={incidentCaseFilePath(lastMotivo.incident_id)}
+              onClick={onNavigate}
+              className="text-[12px] font-semibold text-blue-700 hover:underline dark:text-blue-300"
+            >
+              Ver expediente
+            </Link>
+          ) : null
+        }
+      >
+        {!lastMotivo ? (
+          <p className="text-[13px] text-slate-500 dark:text-slate-400">
+            No hay caída anterior en este CID para tomar como referencia.
+          </p>
+        ) : (
+          <div className="space-y-2.5">
+            <p className="text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+              Referencia de la caída previa
+              {lastMotivo.started_at ? ` · ${formatDateTime(lastMotivo.started_at)}` : ''}
+              {lastMotivo.recovered_at ? ` → ${formatDateTime(lastMotivo.recovered_at)}` : ''}.
+            </p>
+            <dl className="grid gap-2 sm:grid-cols-2">
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950/60">
+                <dt className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+                  Código causa raíz
+                </dt>
+                <dd className="mt-0.5 text-[13px] font-semibold text-slate-900 tabular-nums dark:text-slate-100">
+                  {lastMotivo.root_cause_code || '—'}
+                </dd>
+              </div>
+              <div className="rounded-lg border border-slate-200 bg-white px-3 py-2 dark:border-slate-700 dark:bg-slate-950/60 sm:col-span-1">
+                <dt className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+                  Descripción causa raíz
+                </dt>
+                <dd className="mt-0.5 text-[13px] font-medium text-slate-800 dark:text-slate-200">
+                  {lastMotivo.root_cause_label || '—'}
+                </dd>
+              </div>
+            </dl>
+            <div className="rounded-lg border border-slate-200 bg-slate-50/80 px-3 py-2.5 dark:border-slate-700 dark:bg-slate-950/50">
+              <p className="text-[10px] font-semibold tracking-wide text-slate-500 uppercase">
+                Comentario operador NOC
+                {lastMotivo.operador ? ` · ${lastMotivo.operador}` : ''}
+                {lastMotivo.gestionado_at ? ` · ${formatDateTime(lastMotivo.gestionado_at)}` : ''}
+              </p>
+              <p className="mt-1 text-[13px] leading-snug whitespace-pre-wrap text-slate-800 dark:text-slate-200">
+                {lastMotivo.comentario || 'Sin comentario registrado en la caída anterior.'}
+              </p>
+            </div>
+          </div>
+        )}
+      </Panel>
 
       <Panel
         title="Línea de tiempo"

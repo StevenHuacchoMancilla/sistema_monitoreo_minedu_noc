@@ -294,6 +294,7 @@ class IncidentManagementService
                 $notes[] = 'Salió de Requerimientos';
             }
             if (! $incident->isOpenGrave()) {
+                $this->assertUniqueOpenGrave($incident);
                 $incident->forceFill([
                     'is_grave_incident' => true,
                     'grave_opened_at' => $incident->grave_opened_at ?? now(),
@@ -385,6 +386,18 @@ class IncidentManagementService
 
         throw ValidationException::withMessages([
             'minedu_reason' => 'Ya hay un requerimiento abierto para este colegio. Ciérralo o elimínalo en Requerimientos antes de crear otro.',
+        ]);
+    }
+
+    private function assertUniqueOpenGrave(Incident $incident): void
+    {
+        $other = $incident->otherOpenGraveForSchool();
+        if ($other === null) {
+            return;
+        }
+
+        throw ValidationException::withMessages([
+            'minedu_reason' => 'Ya hay una incidencia abierta para este colegio. Continúa esa en Incidencias; no marques otro ticket del mismo colegio.',
         ]);
     }
 }

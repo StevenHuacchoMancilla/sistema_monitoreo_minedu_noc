@@ -601,48 +601,93 @@ class IncidentHistoryService
     private function applyHistoryCategoryFilter(Builder $query, string $category): void
     {
         $maintenanceRoot = ServiceTicket::MAINTENANCE_ROOT_CAUSE;
-        $isMaintenanceSql = function (Builder $q) use ($maintenanceRoot): void {
-            $q->whereHas('serviceTicket', fn (Builder $t) => $t->where('is_maintenance', true))
-                ->orWhereRaw('UPPER(TRIM(COALESCE(root_cause_code, \'\'))) = ?', [$maintenanceRoot])
-                ->orWhere('detection_source', Incident::DETECTION_PREVENTIVE);
+
+        // Evitar whereNot(A OR col_nullable): en SQL, NOT (false OR NULL) = NULL y oculta filas.
+        $whereMaintenance = function (Builder $q) use ($maintenanceRoot): void {
+            $q->where(function (Builder $inner) use ($maintenanceRoot): void {
+                $inner->whereHas('serviceTicket', fn (Builder $t) => $t->where('is_maintenance', true))
+                    ->orWhereRaw('UPPER(TRIM(COALESCE(root_cause_code, \'\'))) = ?', [$maintenanceRoot])
+                    ->orWhere('detection_source', Incident::DETECTION_PREVENTIVE);
+            });
         };
 
-        $isEnlaceParcialSql = function (Builder $q): void {
+        $whereNotMaintenance = function (Builder $q) use ($maintenanceRoot): void {
+            $q->whereDoesntHave('serviceTicket', fn (Builder $t) => $t->where('is_maintenance', true))
+                ->whereRaw('UPPER(TRIM(COALESCE(root_cause_code, \'\'))) <> ?', [$maintenanceRoot])
+                ->where(function (Builder $inner): void {
+                    $inner->whereNull('detection_source')
+                        ->orWhere('detection_source', '!=', Incident::DETECTION_PREVENTIVE);
+                });
+        };
+
+        $whereEnlaceParcial = function (Builder $q): void {
             $q->where('detection_source', Incident::DETECTION_MANUAL_PARTIAL);
         };
 
-        $isRequirementSql = function (Builder $q): void {
-            $q->where('is_requirement_case', true)
-                ->orWhere('minedu_reason', MineduReason::Requerimiento->value);
+        $whereNotEnlaceParcial = function (Builder $q): void {
+            $q->where(function (Builder $inner): void {
+                $inner->whereNull('detection_source')
+                    ->orWhere('detection_source', '!=', Incident::DETECTION_MANUAL_PARTIAL);
+            });
         };
 
-        $isAveriaSql = function (Builder $q): void {
-            $q->where('is_grave_incident', true)
-                ->orWhereIn('minedu_reason', [
-                    MineduReason::Queja->value,
-                    MineduReason::CaidaEnlace->value,
-                ]);
+        $whereRequirement = function (Builder $q): void {
+            $q->where(function (Builder $inner): void {
+                $inner->where('is_requirement_case', true)
+                    ->orWhere('minedu_reason', MineduReason::Requerimiento->value);
+            });
+        };
+
+        $whereNotRequirement = function (Builder $q): void {
+            $q->where(function (Builder $inner): void {
+                $inner->where('is_requirement_case', false)->orWhereNull('is_requirement_case');
+            })->where(function (Builder $inner): void {
+                $inner->whereNull('minedu_reason')
+                    ->orWhere('minedu_reason', '!=', MineduReason::Requerimiento->value);
+            });
+        };
+
+        $whereAveria = function (Builder $q): void {
+            $q->where(function (Builder $inner): void {
+                $inner->where('is_grave_incident', true)
+                    ->orWhereIn('minedu_reason', [
+                        MineduReason::Queja->value,
+                        MineduReason::CaidaEnlace->value,
+                    ]);
+            });
+        };
+
+        $whereNotAveria = function (Builder $q): void {
+            $q->where(function (Builder $inner): void {
+                $inner->where('is_grave_incident', false)->orWhereNull('is_grave_incident');
+            })->where(function (Builder $inner): void {
+                $inner->whereNull('minedu_reason')
+                    ->orWhereNotIn('minedu_reason', [
+                        MineduReason::Queja->value,
+                        MineduReason::CaidaEnlace->value,
+                    ]);
+            });
         };
 
         match ($category) {
-            'mantenimientos' => $query->where($isMaintenanceSql),
+            'mantenimientos' => $query->where($whereMaintenance),
             'enlace_parcial' => $query
-                ->where($isEnlaceParcialSql)
-                ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql)),
+                ->where($whereEnlaceParcial)
+                ->where($whereNotMaintenance),
             'requerimientos' => $query
-                ->where($isRequirementSql)
-                ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql))
-                ->whereNot(fn (Builder $q) => $q->where($isEnlaceParcialSql)),
+                ->where($whereRequirement)
+                ->where($whereNotMaintenance)
+                ->where($whereNotEnlaceParcial),
             'averias' => $query
-                ->where($isAveriaSql)
-                ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql))
-                ->whereNot(fn (Builder $q) => $q->where($isEnlaceParcialSql))
-                ->whereNot(fn (Builder $q) => $q->where($isRequirementSql)),
+                ->where($whereAveria)
+                ->where($whereNotMaintenance)
+                ->where($whereNotEnlaceParcial)
+                ->where($whereNotRequirement),
             default => $query
-                ->whereNot(fn (Builder $q) => $q->where($isMaintenanceSql))
-                ->whereNot(fn (Builder $q) => $q->where($isEnlaceParcialSql))
-                ->whereNot(fn (Builder $q) => $q->where($isRequirementSql))
-                ->whereNot(fn (Builder $q) => $q->where($isAveriaSql)),
+                ->where($whereNotMaintenance)
+                ->where($whereNotEnlaceParcial)
+                ->where($whereNotRequirement)
+                ->where($whereNotAveria),
         };
     }
 }

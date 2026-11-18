@@ -210,16 +210,30 @@ export function PaginaReporteOperativo() {
     : [day]
   const isToday = report.data?.is_today ?? day === limaToday()
 
-  const sortListaRows = <T extends { lista_estado?: string | null; caida?: string | null; cid?: string | null }>(
+  const sortListaRows = <
+    T extends {
+      lista_estado?: string | null
+      estado_prtg?: string | null
+      caida?: string | null
+      cid?: string | null
+    },
+  >(
     rows: T[],
   ): T[] => {
     const rank = (value: string | null | undefined) => {
       const idx = LISTA_ESTADO_OPTIONS.indexOf(value as ListaLleeEstado)
       return idx >= 0 ? idx : LISTA_ESTADO_OPTIONS.length
     }
+    const prtgRank = (mark: string | null | undefined) => {
+      if (mark === '✖' || mark === 'x' || mark === 'X') return 0
+      if (mark === '✔') return 1
+      return 2
+    }
     return [...rows].sort((a, b) => {
       const byEstado = rank(a.lista_estado) - rank(b.lista_estado)
       if (byEstado !== 0) return byEstado
+      const byPrtg = prtgRank(a.estado_prtg) - prtgRank(b.estado_prtg)
+      if (byPrtg !== 0) return byPrtg
       const byCaida = String(a.caida ?? '').localeCompare(String(b.caida ?? ''))
       if (byCaida !== 0) return byCaida
       return String(a.cid ?? '').localeCompare(String(b.cid ?? ''))
@@ -273,7 +287,7 @@ export function PaginaReporteOperativo() {
         <EncabezadoPagina
           icon={<FileSpreadsheet className="h-5 w-5" />}
           title="Lista para reporte"
-          description="Lista de LLEE por día. ESTADO y DETALLE los completa el operador; Activo/Restablecido no salen al Excel. Días anteriores = historial."
+          description="Lista de LLEE por día. ESTADO y DETALLE los completa el operador. El informe final solo lleva caídos PRTG (Averías sí incluye activos). Días anteriores = historial."
           breadcrumb={
             <p className="text-xs font-medium text-slate-500">
               NOC Loreto <span className="text-slate-300">/</span> Lista para reporte
@@ -281,8 +295,17 @@ export function PaginaReporteOperativo() {
           }
           actions={
             <>
-              <Boton type="button" onClick={() => void report.refetch()}>
-                <RefreshCw className="h-4 w-4" />
+              <Boton
+                type="button"
+                loading={report.isFetching}
+                onClick={() => {
+                  void Promise.all([
+                    report.refetch(),
+                    client.invalidateQueries({ queryKey: ['reports', 'closing-preview'] }),
+                  ])
+                }}
+              >
+                <RefreshCw className={`h-4 w-4 ${report.isFetching ? 'animate-spin' : ''}`} />
                 Refrescar
               </Boton>
               <Boton type="button" variant="primary" onClick={() => setShowClosing((v) => !v)}>
@@ -517,8 +540,18 @@ export function PaginaReporteOperativo() {
                       <option value="50">50</option>
                       <option value="100">100</option>
                     </Select>
-                    <Boton type="button" size="sm" onClick={() => void report.refetch()}>
-                      <RefreshCw className="h-3.5 w-3.5" />
+                    <Boton
+                      type="button"
+                      size="sm"
+                      loading={report.isFetching}
+                      onClick={() => {
+                        void Promise.all([
+                          report.refetch(),
+                          client.invalidateQueries({ queryKey: ['reports', 'closing-preview'] }),
+                        ])
+                      }}
+                    >
+                      <RefreshCw className={`h-3.5 w-3.5 ${report.isFetching ? 'animate-spin' : ''}`} />
                       Refrescar
                     </Boton>
                   </div>

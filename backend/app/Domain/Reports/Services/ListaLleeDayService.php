@@ -169,6 +169,12 @@ class ListaLleeDayService
                 return $rank;
             }
 
+            $byPrtg = ListaLleeEstadoResolver::prtgSortRank($a['estado_prtg'] ?? null)
+                <=> ListaLleeEstadoResolver::prtgSortRank($b['estado_prtg'] ?? null);
+            if ($byPrtg !== 0) {
+                return $byPrtg;
+            }
+
             $caida = strcmp((string) ($a['caida'] ?? ''), (string) ($b['caida'] ?? ''));
             if ($caida !== 0) {
                 return $caida;
@@ -200,7 +206,11 @@ class ListaLleeDayService
         ];
     }
 
-    /** Filas exportables: sin Activo ni Restablecido. */
+    /**
+     * Filas del informe final / Excel:
+     * - Sin Activo ni Restablecido.
+     * - Solo caídos en PRTG (✖), excepto Averías (incluye ✔ y ✖).
+     */
     public function exportRowsForDate(?string $date = null): array
     {
         $date ??= $this->todayDate();
@@ -212,8 +222,24 @@ class ListaLleeDayService
 
         return array_values(array_filter(
             $payload['rows'],
-            fn (array $row) => ! in_array((string) ($row['lista_estado'] ?? ''), $skip, true)
+            function (array $row) use ($skip): bool {
+                $estado = (string) ($row['lista_estado'] ?? '');
+                if ($estado === '' || in_array($estado, $skip, true)) {
+                    return false;
+                }
+                if ($estado === ListaLleeEstado::Averias->value) {
+                    return true;
+                }
+
+                return ($row['estado_prtg'] ?? '') !== '✔';
+            }
         ));
+    }
+
+    /** Activo = caída normal / pendiente de cierre ya cerrada (PRTG arriba). */
+    public function markActivo(Incident $incident): void
+    {
+        $this->setEstado($incident, ListaLleeEstado::Activo);
     }
 
     public function setEstado(Incident $incident, ListaLleeEstado $estado): void
@@ -378,18 +404,20 @@ class ListaLleeDayService
             ->get()
             ->keyBy('incident_id');
 
+        $activeIds = [];
         foreach ($incidents as $incident) {
+            $activeIds[] = (int) $incident->id;
+
             /** @var ListaLleeDayRow $row */
             $row = $existing->get($incident->id) ?? new ListaLleeDayRow([
                 'lista_llee_day_id' => $day->id,
                 'incident_id' => $incident->id,
             ]);
 
-            $estado = $row->lista_estado instanceof ListaLleeEstado
-                ? $row->lista_estado
-                : ($incident->lista_llee_estado instanceof ListaLleeEstado
-                    ? $incident->lista_llee_estado
-                    : null);
+            // Prioridad: opción desde gestión / incidente. Manual del día solo si aún no hay estado.
+            $estado = $incident->lista_llee_estado instanceof ListaLleeEstado
+                ? $incident->lista_llee_estado
+                : ($row->lista_estado instanceof ListaLleeEstado ? $row->lista_estado : null);
 
             if ($incident->isOpenGrave() && ($estado === null || $estado === ListaLleeEstado::DescartesEnCurso)) {
                 $estado = ListaLleeEstado::Averias;
@@ -412,7 +440,99 @@ class ListaLleeDayService
             $row->save();
         }
 
+        // Filas recuperadas del día: refrescar PRTG + ESTADO desde el incidente (Refrescar).
+        $this->refreshStaleDayRows($day, $activeIds);
+
+        // Si ya hay caída activa del CID, no dejar la recuperada tapando el ESTADO de gestión.
+        $this->pruneRecoveredRowsWhenActiveExists($day, $activeIds);
         $this->dedupeDayRowsByCid($day);
+    }
+
+    /**
+     * Actualiza filas del día que no entraron en el sync de activos (p. ej. recuperadas),
+     * para que Refrescar mueva ESTADO/PRTG según la gestión del incidente.
+     *
+     * @param  list<int>  $activeIncidentIds
+     */
+    private function refreshStaleDayRows(ListaLleeDay $day, array $activeIncidentIds): void
+    {
+        $rows = ListaLleeDayRow::query()
+            ->where('lista_llee_day_id', $day->id)
+            ->when($activeIncidentIds !== [], fn ($q) => $q->whereNotIn('incident_id', $activeIncidentIds))
+            ->with([
+                'incident.school',
+                'incident.networkAssignment',
+                'incident.sensor',
+                'incident.managements' => fn ($q) => $q->orderByDesc('id'),
+            ])
+            ->get();
+
+        foreach ($rows as $row) {
+            $incident = $row->incident;
+            if ($incident === null) {
+                continue;
+            }
+
+            $estado = $incident->lista_llee_estado instanceof ListaLleeEstado
+                ? $incident->lista_llee_estado
+                : ($row->lista_estado instanceof ListaLleeEstado ? $row->lista_estado : null);
+
+            $keepDetalle = $row->detalle;
+            $this->fillRowFromIncident($row, $incident, $estado);
+            $row->detalle = $keepDetalle;
+            $row->lista_estado = $estado;
+            $row->save();
+        }
+    }
+
+    /**
+     * Quita filas recuperadas del día cuando ya existe otra caída activa del mismo CID.
+     * Evita que un "Descartes…" viejo tape el ESTADO puesto en gestión de la nueva caída.
+     *
+     * @param  list<int>  $activeIncidentIds
+     */
+    private function pruneRecoveredRowsWhenActiveExists(ListaLleeDay $day, array $activeIncidentIds): void
+    {
+        if ($activeIncidentIds === []) {
+            return;
+        }
+
+        $activeCids = ListaLleeDayRow::query()
+            ->where('lista_llee_day_id', $day->id)
+            ->whereIn('incident_id', $activeIncidentIds)
+            ->whereNotNull('cid')
+            ->where('cid', '!=', '')
+            ->pluck('cid')
+            ->map(fn ($cid) => (string) $cid)
+            ->unique()
+            ->values()
+            ->all();
+
+        if ($activeCids === []) {
+            return;
+        }
+
+        $candidates = ListaLleeDayRow::query()
+            ->where('lista_llee_day_id', $day->id)
+            ->whereIn('cid', $activeCids)
+            ->whereNotIn('incident_id', $activeIncidentIds)
+            ->with('incident')
+            ->get();
+
+        foreach ($candidates as $row) {
+            $incident = $row->incident;
+            if ($incident === null) {
+                $row->delete();
+                continue;
+            }
+            if ($incident->recovered_at === null) {
+                continue;
+            }
+            if ($incident->isOpenGrave() || $incident->isOpenRequirement() || $incident->isOpenMaintenance()) {
+                continue;
+            }
+            $row->delete();
+        }
     }
 
     /**
@@ -435,36 +555,46 @@ class ListaLleeDayService
                 continue;
             }
 
-            $sorted = $group->sortByDesc(function (ListaLleeDayRow $row): int {
-                $incident = $row->incident;
-                $score = 0;
-                if ($incident !== null) {
-                    if ($incident->isOpenGrave()) {
-                        $score += 1000;
+            $sorted = $group->sort(function (ListaLleeDayRow $a, ListaLleeDayRow $b): int {
+                $score = function (ListaLleeDayRow $row): array {
+                    $incident = $row->incident;
+                    $points = 0;
+                    $started = 0;
+                    if ($incident !== null) {
+                        // Sticky abierto (aunque PRTG ya subió) gana a una caída paralela del CID.
+                        if ($incident->isOpenGrave()) {
+                            $points += 10000;
+                        }
+                        if ($incident->isOpenRequirement()) {
+                            $points += 9000;
+                        }
+                        if ($incident->isOpenMaintenance()) {
+                            $points += 8000;
+                        }
+                        // Caída aún abierta gana a una recuperada no-sticky del mismo CID.
+                        if ($incident->recovered_at === null) {
+                            $points += 5000;
+                        }
+                        if ($incident->followup_status !== FollowupStatus::Cerrado) {
+                            $points += 200;
+                        }
+                        $started = $incident->started_at?->getTimestamp() ?? 0;
                     }
-                    if ($incident->isOpenRequirement()) {
-                        $score += 900;
+                    if (filled($row->root_cause_code)) {
+                        $points += 50;
                     }
-                    if ($incident->isOpenMaintenance()) {
-                        $score += 800;
+                    if (filled($row->detalle)) {
+                        $points += 20;
                     }
-                    if ($incident->followup_status !== FollowupStatus::Cerrado) {
-                        $score += 200;
+                    if ($row->lista_estado === ListaLleeEstado::Averias
+                        || $row->lista_estado === ListaLleeEstado::Averias->value) {
+                        $points += 10;
                     }
-                }
-                if (filled($row->root_cause_code)) {
-                    $score += 50;
-                }
-                if (filled($row->detalle)) {
-                    $score += 20;
-                }
-                if ($row->lista_estado === ListaLleeEstado::Averias
-                    || $row->lista_estado === ListaLleeEstado::Averias->value) {
-                    $score += 10;
-                }
 
-                // Ante empate, conservar la fila más antigua (primera marcada).
-                return ($score * 1_000_000) - (int) $row->id;
+                    return [$points, $started, (int) $row->id];
+                };
+
+                return $score($b) <=> $score($a);
             })->values();
 
             $keepId = (int) $sorted->first()->id;

@@ -7,7 +7,7 @@ use App\Domain\Incidents\Support\OutageDuration;
 use App\Domain\Incidents\Support\RootCauseLegend;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Domain\Ticketera\Services\ServiceTicketService;
-use App\Enums\FollowupStatus;
+use App\Enums\ListaLleeEstado;
 use App\Enums\ManagementClassification;
 use App\Enums\MineduReason;
 use App\Enums\TrackingStatus;
@@ -328,7 +328,7 @@ class GeneralReportService
         }
 
         if (! empty($filters['seguimiento'])) {
-            $query->where('followup_status', (string) $filters['seguimiento']);
+            $query->where('lista_llee_estado', (string) $filters['seguimiento']);
         }
 
         if (! empty($filters['tecnologia'])) {
@@ -360,9 +360,9 @@ class GeneralReportService
             ? $incident->management_classification
             : ManagementClassification::tryFrom((string) ($incident->management_classification ?? ''));
 
-        $followup = $incident->followup_status instanceof FollowupStatus
-            ? $incident->followup_status
-            : FollowupStatus::tryFrom((string) ($incident->followup_status ?? ''));
+        $listaEstado = $incident->lista_llee_estado instanceof ListaLleeEstado
+            ? $incident->lista_llee_estado
+            : ListaLleeEstado::tryFrom((string) ($incident->getAttributes()['lista_llee_estado'] ?? ''));
 
         $minedu = $incident->minedu_reason instanceof MineduReason
             ? $incident->minedu_reason
@@ -439,7 +439,7 @@ class GeneralReportService
             // meta UI (no columnas Excel)
             'local_educativo' => $ticket?->school_name ?: ($school?->local_educativo ?: '—'),
             'activa' => $activa,
-            'seguimiento' => $followup?->label() ?? (string) ($incident->followup_status ?? '—'),
+            'seguimiento' => $listaEstado?->value ?? '—',
             'clasificacion' => $classification?->label() ?? '—',
             'tracking_id' => $tracking?->id,
         ];

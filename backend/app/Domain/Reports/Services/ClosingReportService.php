@@ -26,7 +26,7 @@ class ClosingReportService
         return [
             'total' => count($rows),
             'rows' => $rows,
-            'note' => 'Lista de LLEE del día · sin Activo ni Restablecido · DETALLE manual.',
+            'note' => 'Lista de LLEE del día · solo caídos PRTG (Averías incluye activos) · sin Activo/Restablecido.',
             'columns' => OperationalReportService::officialColumns(),
         ];
     }

@@ -227,6 +227,7 @@ class DashboardService
             ->whereNotNull('recovered_at')
             ->whereRaw('NOT (COALESCE(is_grave_incident, false) = true AND grave_closed_at IS NULL)')
             ->whereRaw('NOT (COALESCE(is_requirement_case, false) = true AND requirement_closed_at IS NULL)')
+            ->withoutSchoolOpenGraveConflict()
             ->where(function ($q) {
                 $q->where(function ($d) {
                     $d->whereNull('detection_source')

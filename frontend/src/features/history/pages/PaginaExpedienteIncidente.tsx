@@ -35,7 +35,6 @@ import {
 } from '../../../components/monitoring/InsigniasEstado'
 import { formatDate, formatDateTime, formatTime } from '../../../lib/fechaHora'
 import type { StatusTone } from '../../../lib/tokensUi'
-import { PanelRevisionRecuperacion } from '../../recoveries/components/PanelRevisionRecuperacion'
 import { fetchIncidentCaseFile } from '../api/apiHistorial'
 import type { CaseTimelineEvent, CaseTimelineGroup, IncidentCaseFile } from '../types/historial'
 
@@ -256,17 +255,6 @@ function CaseFileContent({ data }: { data: IncidentCaseFile }) {
               <Field label="Última lectura" value={formatDateTime(prtg.last_check)} wide truncate={false} />
             </dl>
           </Panel>
-
-          {incident.recovered_at ? (
-            <PanelRevisionRecuperacion
-              incidentId={incident.id}
-              requiresReview={recovery.requires_review}
-              recoveredWhileManaging={recovery.recovered_while_managing}
-              reviewStatus={recovery.review_status}
-              reviewLabel={recovery.review_label}
-              reviewedAt={recovery.reviewed_at}
-            />
-          ) : null}
         </aside>
       </div>
     </>

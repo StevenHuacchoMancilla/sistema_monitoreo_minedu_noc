@@ -60,6 +60,7 @@ type QueueRow = {
   followup_status?: string | null
   gestion_lista?: boolean
   started_at?: string | null
+  current_down_started_at?: string | null
   recovered_at?: string | null
   grave_opened_at?: string | null
   grave_closed_at?: string | null
@@ -287,6 +288,11 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                   <th className={thClassName}>Local</th>
                   <th className={thClassName}>Ubicación</th>
                   <th className={thClassName}>Estado</th>
+                  {kind === 'pendiente-cierre' ? (
+                    <th className={thClassName} title="Inicio de la caída">
+                      Caída
+                    </th>
+                  ) : null}
                   <th className={thClassName}>{markedLabel}</th>
                   <th className={`${thClassName} text-right`}>Acción</th>
                 </tr>
@@ -357,6 +363,13 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           ) : null}
                         </div>
                       </td>
+                      {kind === 'pendiente-cierre' ? (
+                        <td className={`${tdDateClassName} !align-top`}>
+                          <IsoDateTimeCell
+                            value={row.current_down_started_at ?? row.started_at ?? null}
+                          />
+                        </td>
+                      ) : null}
                       <td className={`${tdDateClassName} !align-top`}>
                         <IsoDateTimeCell value={markedAt} />
                       </td>

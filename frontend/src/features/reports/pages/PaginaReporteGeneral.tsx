@@ -27,7 +27,6 @@ import { API_URL, ApiError } from '../../../api/clienteHttp'
 import { todayLimaKey, shiftDateKey } from '../../../lib/fechaHora'
 import { usePermisos } from '../../auth/hooks/usePermisos'
 import { P } from '../../auth/permisos'
-import { FOLLOWUP_LABELS } from '../../../components/ui/Insignia'
 import type {
   GeneralReportColumn,
   GeneralReportEstado,
@@ -36,10 +35,9 @@ import type {
   GeneralReportRow,
 } from '../types/reporteGeneral'
 import { GENERAL_MINEDU_OPTIONS } from '../types/reporteGeneral'
+import { LISTA_ESTADO_OPTIONS } from '../types/reporteOperativo'
 
 const PER_PAGE_OPTIONS = [25, 50, 100] as const
-
-const FOLLOWUP_OPTIONS = Object.entries(FOLLOWUP_LABELS).map(([value, label]) => ({ value, label }))
 
 /** Columnas densas en tabla (detalle completo va al panel). */
 const HIDDEN_IN_TABLE = new Set(['detalle', 'detalle_evento', 'cuando_usarlo'])
@@ -385,19 +383,9 @@ export function PaginaReporteGeneral() {
           <FormField label="Seguimiento">
             <Select value={seguimiento} onChange={(e) => setSeguimiento(e.target.value)}>
               <option value="">Todos</option>
-              <option value="PENDIENTE_CONTACTO">Pendiente de gestión</option>
-              <option value="EN_GESTION">En gestión</option>
-              <option value="EN_ESPERA">En espera</option>
-              <option value="PENDIENTE_CIERRE">Pendiente de cierre</option>
-              <option value="CERRADO">Cerrado</option>
-              {FOLLOWUP_OPTIONS.filter(
-                (opt) =>
-                  !['PENDIENTE_CONTACTO', 'EN_GESTION', 'EN_ESPERA', 'PENDIENTE_CIERRE', 'CERRADO'].includes(
-                    opt.value,
-                  ),
-              ).map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
+              {LISTA_ESTADO_OPTIONS.map((estado) => (
+                <option key={estado} value={estado}>
+                  {estado}
                 </option>
               ))}
             </Select>

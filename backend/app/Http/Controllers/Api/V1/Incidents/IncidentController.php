@@ -95,6 +95,32 @@ class IncidentController extends Controller
         $activeForCid = (clone $historyQuery)->falls()->whereNull('recovered_at')->count();
         $reincidente = $totalForCid > 1;
 
+        // Última caída previa del CID: causa raíz + comentario NOC (referencia rápida en Historial).
+        $previousOutage = $history->first(fn (Incident $row) => (int) $row->id !== (int) $incident->id);
+        $ultimaCaidaMotivo = null;
+        if ($previousOutage !== null) {
+            $previousOutage->load([
+                'managements' => fn ($q) => $q->with('author:id,name')->orderByDesc('id')->limit(10),
+            ]);
+            $lastComment = $previousOutage->managements->first(
+                fn ($m) => filled($m->detail) || filled($m->observation)
+            ) ?? $previousOutage->managements->first();
+            $comentario = trim((string) ($lastComment?->detail ?: $lastComment?->observation ?: $previousOutage->detail_text ?: ''));
+            $ultimaCaidaMotivo = [
+                'incident_id' => $previousOutage->id,
+                'started_at' => $previousOutage->started_at?->toIso8601String(),
+                'recovered_at' => $previousOutage->recovered_at?->toIso8601String(),
+                'root_cause_code' => $previousOutage->root_cause_code,
+                'root_cause_label' => \App\Domain\Incidents\Support\RootCauseLegend::display(
+                    $previousOutage->root_cause_code,
+                    $previousOutage->cause,
+                ),
+                'comentario' => $comentario !== '' ? $comentario : null,
+                'operador' => $lastComment?->author?->name,
+                'gestionado_at' => $lastComment?->created_at?->toIso8601String(),
+            ];
+        }
+
         $school = $incident->school;
         $assignment = $incident->networkAssignment;
         $sensor = $incident->sensor;
@@ -247,6 +273,7 @@ class IncidentController extends Controller
                 'status' => $row->recovered_at ? 'RECUPERADA' : 'ACTIVA',
                 'es_actual' => $row->id === $incident->id,
             ])->values()->all(),
+            'ultima_caida_motivo' => $ultimaCaidaMotivo,
             'gestion' => [
                 'followup_status' => $incident->followup_status?->value,
                 'management_classification' => $this->managementDisplayClassification(
@@ -1050,6 +1077,9 @@ class IncidentController extends Controller
             // Ya clasificados a Incidencias / Requerimientos / Mantenimiento no deben aparecer aquí.
             ->whereRaw('NOT (COALESCE(is_grave_incident, false) = true AND grave_closed_at IS NULL)')
             ->whereRaw('NOT (COALESCE(is_requirement_case, false) = true AND requirement_closed_at IS NULL)')
+            // Si el colegio ya tiene otra incidencia abierta, no mostrar tickets viejos aquí
+            // (evita remarcar y duplicar TSS en Incidencias).
+            ->withoutSchoolOpenGraveConflict()
             ->where(function ($q) {
                 $q->where(function ($d) {
                     $d->whereNull('detection_source')
@@ -1148,6 +1178,12 @@ class IncidentController extends Controller
 
         if ($incident->isOpenGrave()) {
             return response()->json($this->show($incident)->getData(true));
+        }
+
+        if ($incident->otherOpenGraveForSchool() !== null) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'incident' => 'Ya hay una incidencia abierta para este colegio. Continúa esa en Incidencias; no marques otro ticket del mismo colegio.',
+            ]);
         }
 
         $before = $incident->followup_status?->value;
@@ -1283,10 +1319,14 @@ class IncidentController extends Controller
             $userId,
         );
         $this->serviceTickets->close($result['incident'], $request->user()?->name);
-        // Restablecido en Lista LLEE solo al cerrar desde Incidencias (closeGrave),
-        // no al cerrar caídas normales / Pendiente de cierre solo porque PRTG subió.
+        // Caída normal / Pendiente de cierre → Activo en Lista LLEE.
+        // Restablecido solo al cerrar desde Incidencias (closeGrave).
+        $closed = $result['incident']->fresh() ?? $result['incident'];
+        if (! $closed->isOpenGrave()) {
+            $this->listaDays->markActivo($closed);
+        }
 
-        return response()->json($this->show($result['incident']->fresh() ?? $result['incident'])->getData(true));
+        return response()->json($this->show($closed->fresh() ?? $closed)->getData(true));
     }
 
     /**
@@ -1414,6 +1454,11 @@ class IncidentController extends Controller
                 $incident->forceFill(['requirement_closed_at' => now()])->save();
             }
             if (! $incident->isOpenGrave()) {
+                if ($incident->otherOpenGraveForSchool() !== null) {
+                    throw \Illuminate\Validation\ValidationException::withMessages([
+                        'minedu_reason' => 'Ya hay una incidencia abierta para este colegio. Continúa esa en Incidencias; no marques otro ticket del mismo colegio.',
+                    ]);
+                }
                 $incident->forceFill([
                     'is_grave_incident' => true,
                     'grave_opened_at' => now(),

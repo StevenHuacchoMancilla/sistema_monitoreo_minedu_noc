@@ -91,6 +91,44 @@ class Incident extends Model
     }
 
     /**
+     * Otra incidencia (grave) abierta del mismo colegio (excluye $this).
+     */
+    public function otherOpenGraveForSchool(): ?self
+    {
+        if ($this->school_id === null) {
+            return null;
+        }
+
+        return static::query()
+            ->where('school_id', $this->school_id)
+            ->where('is_grave_incident', true)
+            ->whereNull('grave_closed_at')
+            ->when($this->id, fn ($q) => $q->where('id', '!=', $this->id))
+            ->orderBy('grave_opened_at')
+            ->orderBy('id')
+            ->first();
+    }
+
+    /**
+     * Scope: ocultar tickets de Pendiente de cierre si el colegio ya tiene otra incidencia abierta.
+     * Evita remarcar como incidencia un ticket viejo recuperado (duplicados TSS).
+     *
+     * @param  \Illuminate\Database\Eloquent\Builder<\App\Models\Incident>  $query
+     * @return \Illuminate\Database\Eloquent\Builder<\App\Models\Incident>
+     */
+    public function scopeWithoutSchoolOpenGraveConflict($query)
+    {
+        return $query->whereNotExists(function ($q) {
+            $q->selectRaw('1')
+                ->from('incidents as open_graves')
+                ->whereColumn('open_graves.school_id', 'incidents.school_id')
+                ->where('open_graves.is_grave_incident', true)
+                ->whereNull('open_graves.grave_closed_at')
+                ->whereColumn('open_graves.id', '!=', 'incidents.id');
+        });
+    }
+
+    /**
      * Mantenimiento abierto (correctivo/preventivo): ticket is_maintenance ABIERTO
      * o detection_source MAINTENANCE sin cierre.
      */
