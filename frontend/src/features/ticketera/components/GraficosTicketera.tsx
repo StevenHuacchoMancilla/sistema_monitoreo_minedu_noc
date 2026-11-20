@@ -12,7 +12,7 @@ import {
 } from 'recharts'
 import { SectionCard } from '../../../components/ui/Tarjeta'
 import type { FilterField, GroupBar, Interval, PreparedRow } from '../lib/modelo'
-import { dailyPoints, grouped, motiveSlices } from '../lib/modelo'
+import { dailyPoints, grouped, reasonSlices } from '../lib/modelo'
 import type { TicketeraFilters } from '../types/ticketera'
 
 const tooltipStyle = {
@@ -76,8 +76,9 @@ export function GraficosTicketera({
   onFilter: (field: FilterField, value: string) => void
 }) {
   const points = dailyPoints(intervals, rows, filters.criterion, now)
-  const motives = motiveSlices(rows)
+  const motives = reasonSlices(rows).filter((slice) => slice.count > 0)
   const total = rows.length
+  const selectedReason = filters.minedu
 
   return (
     <div className="space-y-4">
@@ -103,35 +104,60 @@ export function GraficosTicketera({
           <p className="mt-2 text-xs text-slate-500">Selecciona un punto para ver solo ese día.</p>
         </SectionCard>
 
-        <SectionCard title="Distribución por motivo">
-          <div className="grid items-center gap-3 sm:grid-cols-2">
-            <div className="h-64">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie data={motives} dataKey="count" nameKey="label" innerRadius={58} outerRadius={84} paddingAngle={2}>
-                    {motives.map((slice) => (
-                      <Cell key={slice.label} fill={slice.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip contentStyle={tooltipStyle} />
-                </PieChart>
-              </ResponsiveContainer>
+        <SectionCard title="Distribución por razón (MINEDU)">
+          {motives.length ? (
+            <div className="grid items-center gap-3 sm:grid-cols-2">
+              <div className="h-64">
+                <ResponsiveContainer width="100%" height="100%">
+                  <PieChart>
+                    <Pie
+                      data={motives}
+                      dataKey="count"
+                      nameKey="label"
+                      outerRadius={100}
+                      stroke="transparent"
+                      onClick={(entry) => {
+                        const key = (entry as { key?: string }).key
+                        if (!key) return
+                        onFilter('minedu', selectedReason === key ? '' : key)
+                      }}
+                    >
+                      {motives.map((slice) => (
+                        <Cell key={slice.key} fill={slice.color} cursor="pointer" />
+                      ))}
+                    </Pie>
+                    <Tooltip contentStyle={tooltipStyle} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+              <ul className="max-h-64 space-y-1 overflow-y-auto">
+                {motives.map((slice) => {
+                  const active = selectedReason === slice.key
+                  return (
+                    <li key={slice.key}>
+                      <button
+                        type="button"
+                        onClick={() => onFilter('minedu', active ? '' : slice.key)}
+                        className={`flex w-full items-center gap-2 rounded-lg px-2 py-1.5 text-left text-xs ${active ? 'bg-indigo-50 ring-1 ring-indigo-400 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800'}`}
+                      >
+                        <span className="h-2.5 w-2.5 shrink-0 rounded-sm" style={{ background: slice.color }} />
+                        <span className="min-w-0 flex-1 font-semibold text-slate-700 dark:text-slate-200">{slice.label}</span>
+                        <span className="text-right font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                          {slice.count.toLocaleString('es-PE')}
+                          <span className="block text-[10px] font-medium text-slate-500">
+                            {total ? ((slice.count / total) * 100).toFixed(1) : '0.0'}%
+                          </span>
+                        </span>
+                      </button>
+                    </li>
+                  )
+                })}
+              </ul>
             </div>
-            <ul className="space-y-3">
-              {motives.map((slice) => (
-                <li key={slice.label} className="flex items-center gap-2 text-xs text-slate-600 dark:text-slate-300">
-                  <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: slice.color }} />
-                  <span className="min-w-0 flex-1">{slice.label}</span>
-                  <span className="text-right font-bold tabular-nums text-slate-900 dark:text-slate-100">
-                    {slice.count.toLocaleString('es-PE')}
-                    <span className="block text-[10px] font-medium text-slate-500">
-                      {total ? ((slice.count / total) * 100).toFixed(1) : '0.0'}%
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
+          ) : (
+            <p className="py-8 text-center text-sm text-slate-500">No hay incidencias con estos filtros.</p>
+          )}
+          <p className="mt-2 text-xs text-slate-500">Pulsa una razón para filtrar. Pulsa de nuevo para quitar el filtro.</p>
         </SectionCard>
       </div>
 
@@ -144,9 +170,14 @@ export function GraficosTicketera({
         </SectionCard>
       </div>
 
-      <SectionCard title="Clasificación MINEDU" action={<span className="text-xs text-slate-500">{total.toLocaleString('es-PE')} incidencias</span>}>
-        <Bars groups={grouped(rows, 'minedu')} onPick={(key) => onFilter('minedu', key)} />
-      </SectionCard>
+      <div className="grid gap-4 lg:grid-cols-2">
+        <SectionCard title="Razones MINEDU" action={<span className="text-xs text-slate-500">{total.toLocaleString('es-PE')} incidencias</span>}>
+          <Bars groups={grouped(rows, 'minedu')} onPick={(key) => onFilter('minedu', filters.minedu === key ? '' : key)} />
+        </SectionCard>
+        <SectionCard title="Códigos de la razón filtrada">
+          <Bars groups={grouped(rows, 'codigo')} onPick={(key) => onFilter('codigo', filters.codigo === key ? '' : key)} />
+        </SectionCard>
+      </div>
     </div>
   )
 }

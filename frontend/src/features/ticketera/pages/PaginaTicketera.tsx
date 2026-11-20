@@ -18,6 +18,8 @@ import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/Est
 import { formatDateTime24 } from '../../../lib/fechaHora'
 import { GraficosTicketera } from '../components/GraficosTicketera'
 import { LineasTiempoColegio } from '../components/LineasTiempoColegio'
+import { PanelCuadre } from '../components/PanelCuadre'
+import { PanelSla } from '../components/PanelSla'
 import {
   FILTER_LABELS,
   defaultFilters,
@@ -48,6 +50,26 @@ function StatusPill({ status }: { status: TicketeraStatus }) {
     </span>
   )
 }
+
+function clock(seconds: number | null) {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return '—'
+  const total = Math.round(seconds)
+  const hours = Math.floor(total / 3600)
+  const minutes = Math.floor((total % 3600) / 60)
+  const secs = total % 60
+  return `${hours}:${String(minutes).padStart(2, '0')}:${String(secs).padStart(2, '0')}`
+}
+
+const SUMMARY_CARDS = [
+  { key: 'total', label: 'Incidencias', hint: 'Una fila es una incidencia', className: 'from-[#3459ce] to-[#5270f4]' },
+  { key: 'cids', label: 'CIDs afectados', hint: 'Colegios distintos', className: 'from-[#7041c7] to-[#9662dd]' },
+  { key: 'open', label: 'Abiertos', hint: 'Sin cierre confirmado', className: 'from-[#bb6b11] to-[#e5a02b]' },
+  { key: 'closed', label: 'Cerrados', hint: 'Cierre válido', className: 'from-[#09816e] to-[#21b397]' },
+  { key: 'queja', label: 'Quejas', hint: 'Razón MINEDU: Queja', className: 'from-[#ae3d76] to-[#e45c9e]' },
+  { key: 'caida', label: 'Caídas de enlace', hint: 'Razón MINEDU: Caída de Enlace', className: 'from-[#be7024] to-[#f5a83c]' },
+  { key: 'req', label: 'Requerimientos', hint: 'Incluye el texto de la hoja', className: 'from-[#197e9c] to-[#16b1c6]' },
+  { key: 'missing', label: 'Sin razón', hint: 'Vacío o sin clasificar', className: 'from-[#516176] to-[#7384a0]' },
+] as const
 
 function downloadCsv(rows: PreparedRow[], from: string, to: string) {
   const header = ['Fila', 'Ticket', 'Tipo', 'CID', 'TSS', 'Local', 'Provincia', 'Distrito', 'Código', 'Grupo', 'MINEDU', 'Apertura', 'Restablecimiento', 'Cierre', 'Situación', 'Causa', 'Detalle', 'Detalle de evento']
@@ -124,6 +146,10 @@ export function PaginaTicketera() {
   }, [query.data, filters])
 
   const stats = useMemo(() => (prepared ? kpis(prepared.rows) : null), [prepared])
+  const rankingBase = useMemo(() => {
+    if (!query.data || !filters) return []
+    return prepare(query.data.rows, { ...filters, minedu: '' }, query.data.now).rows
+  }, [query.data, filters])
 
   const ranking = useMemo(() => {
     if (!prepared) return []
@@ -300,20 +326,32 @@ export function PaginaTicketera() {
           </p>
           {prepared.error ? <ErrorState message={prepared.error} /> : null}
 
-          <GrillaMetricas dense>
-            <TarjetaMetrica icon={<Ticket />} label="Incidencias" value={stats.total} description="Una fila es una incidencia" />
-            <TarjetaMetrica icon={<Ticket />} label="CIDs afectados" value={stats.cids} description="CIDs distintos" tone="info" />
-            <TarjetaMetrica icon={<Ticket />} label="Abiertos" value={stats.open} description="Sin cierre" tone="warning" />
-            <TarjetaMetrica icon={<Ticket />} label="Cerrados" value={stats.closed} description={stats.review ? `${stats.review} por revisar` : 'Fechas consistentes'} tone="success" />
-            <TarjetaMetrica icon={<Ticket />} label="Energía · G4" value={stats.energy} description={stats.total ? `${((stats.energy / stats.total) * 100).toFixed(1)}% del total` : '0%'} />
-            <TarjetaMetrica icon={<Ticket />} label="Desconexiones · CR45" value={stats.disconnect} description={stats.total ? `${((stats.disconnect / stats.total) * 100).toFixed(1)}% del total` : '0%'} tone="danger" />
-          </GrillaMetricas>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            {SUMMARY_CARDS.map((card) => (
+              <article
+                key={card.key}
+                className={`relative min-h-[108px] overflow-hidden rounded-2xl bg-gradient-to-br ${card.className} px-4 py-4 text-white shadow-sm`}
+              >
+                <span className="block text-xs font-semibold text-white/90">{card.label}</span>
+                <strong className="mt-2 block text-3xl font-semibold tabular-nums leading-none">
+                  {stats[card.key].toLocaleString('es-PE')}
+                </strong>
+                <small className="mt-2 block text-[11px] text-white/85">
+                  {card.key === 'closed' && stats.review
+                    ? `${stats.review.toLocaleString('es-PE')} por revisar`
+                    : card.hint}
+                </small>
+              </article>
+            ))}
+          </div>
 
-          <div className="flex w-fit gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
             {(
               [
                 ['summary', 'Resumen'],
+                ['caidos', 'Resumen de caídos'],
                 ['tickets', 'Tickets'],
+                ['sla', 'SLA · Anexo 30'],
                 ['quality', 'Calidad de datos'],
               ] as const
             ).map(([id, label]) => (
@@ -457,6 +495,18 @@ export function PaginaTicketera() {
             </div>
           ) : null}
 
+          {view === 'caidos' ? <PanelCuadre rows={prepared.rows} now={query.data.now} /> : null}
+
+          {view === 'sla' ? (
+            <PanelSla
+              allRows={query.data.rows}
+              visibleRows={prepared.rows}
+              rankingRows={rankingBase}
+              now={query.data.now}
+              topMinedu={filters.minedu}
+            />
+          ) : null}
+
           {view === 'tickets' ? (
             <SectionCard
               title="Detalle de incidencias"
@@ -472,7 +522,7 @@ export function PaginaTicketera() {
                 <table className={tableClassName}>
                   <thead className={theadClassName}>
                     <tr>
-                      {['Fila', 'Ticket', 'Tipo', 'TSS / ubicación', 'Código', 'Apertura', 'Restablecimiento', 'Cierre', 'Situación', 'Detalle de evento'].map((label) => (
+                      {['Fila', 'Ticket', 'Tipo', 'TSS / ubicación', 'Código', 'Razón', 'Apertura', 'Restablecimiento', 'Cierre', 'Situación', 'Duración', 'En el periodo', 'SLA', 'Detalle de evento'].map((label) => (
                         <th key={label} className={thClassName}>{label}</th>
                       ))}
                     </tr>
@@ -500,14 +550,18 @@ export function PaginaTicketera() {
                           {row.codigo || '—'}
                           <span className="block truncate text-[11px] text-slate-500">{row.grupo || 'Sin grupo'}</span>
                         </td>
+                        <td className={cell}>{row.minedu || '—'}</td>
                         <td className={`${cell} whitespace-nowrap`}>{row.open_text || '—'}</td>
                         <td className={`${cell} whitespace-nowrap`}>{row.restored_text || '—'}</td>
                         <td className={`${cell} whitespace-nowrap`}>{row.close_text || '—'}</td>
                         <td className={cell}><StatusPill status={row.status} /></td>
+                        <td className={`${cell} whitespace-nowrap tabular-nums`}>{clock(row.totalSeconds)}</td>
+                        <td className={`${cell} whitespace-nowrap tabular-nums`}>{clock(row.periodSeconds)}</td>
+                        <td className={`${cell} whitespace-nowrap tabular-nums`}>{clock(row.sla_seconds)}</td>
                         <td className={`${cell} max-w-[18rem] whitespace-pre-line`}>{row.event_detail || '—'}</td>
                       </tr>
                     )) : (
-                      <tr><td className={cell} colSpan={10}>Sin tickets para estos filtros.</td></tr>
+                      <tr><td className={cell} colSpan={14}>Sin tickets para estos filtros.</td></tr>
                     )}
                   </tbody>
                 </table>

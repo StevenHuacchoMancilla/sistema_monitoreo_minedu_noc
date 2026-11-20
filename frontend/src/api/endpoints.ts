@@ -17,6 +17,7 @@ import type {
 } from '../features/reports/types/reporteOperativo'
 import type { GeneralReportResponse } from '../features/reports/types/reporteGeneral'
 import type { TicketeraPayload, TicketeraTimeline } from '../features/ticketera/types/ticketera'
+import type { ExcelGoogleComparacion } from '../features/excel-google/types'
 import type {
   ContactPayload,
   NetworkAssignmentPayload,
@@ -290,6 +291,20 @@ export const endpoints = {
       data: Array<{ name: string; province: string; assignment_count: number }>
       meta: { source: string; province: string | null; count: number }
     }>(`/prtg/locations/districts${toQuery({ province })}`),
+  excelGoogleComparar: (params: {
+    desde: number
+    periodo: 'hoy' | 'desde' | 'rango'
+    desde_hora?: string
+    hasta_hora?: string
+  }) =>
+    apiGet<ExcelGoogleComparacion>(
+      `/excel-google/comparar${toQuery({
+        desde: String(params.desde),
+        periodo: params.periodo,
+        desde_hora: params.desde_hora,
+        hasta_hora: params.hasta_hora,
+      })}`,
+    ),
   prtgLocationTree: () =>
     apiGet<{
       data: Array<{

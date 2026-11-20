@@ -3,6 +3,7 @@
 use App\Domain\Auth\PermissionCatalog;
 use App\Http\Controllers\Api\V1\Auth\AuthController;
 use App\Http\Controllers\Api\V1\Dashboard\DashboardController;
+use App\Http\Controllers\Api\V1\ExcelGoogle\ExcelGoogleController;
 use App\Http\Controllers\Api\V1\Dashboard\PrtgDashboardController;
 use App\Http\Controllers\Api\V1\History\SchoolHistoryController;
 use App\Http\Controllers\Api\V1\Incidents\IncidentAttachmentController;
@@ -86,6 +87,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/notifications/restorations', [OperationalNotificationController::class, 'restorations']);
         Route::get('/notifications/outages', [OperationalNotificationController::class, 'outages']);
         Route::get('/notifications/live', [OperationalNotificationController::class, 'live']);
+        Route::get('/excel-google/comparar', [ExcelGoogleController::class, 'comparar']);
         Route::get('/incidents/{incident}', [IncidentController::class, 'show']);
         Route::get('/incidents/{incident}/attachments', [IncidentAttachmentController::class, 'index']);
         Route::get('/assignments/{assignment}/prtg-sensors', [PrtgSensorController::class, 'byAssignment']);

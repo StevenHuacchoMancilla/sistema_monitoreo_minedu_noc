@@ -1338,7 +1338,17 @@ class IncidentController extends Controller
         $assignment = $incident->networkAssignment;
         $tracking = $incident->trackingRecords->first();
         $location = PrtgOperationalLocation::apiFields($assignment, $school);
+        $upClock = $incident->prtg_up_at ?? $incident->recovered_at;
         $downClock = $incident->prtg_down_started_at ?? $incident->started_at;
+        if (
+            $downClock !== null
+            && $upClock !== null
+            && $downClock->greaterThan($upClock)
+            && $incident->started_at !== null
+            && $incident->started_at->lessThanOrEqualTo($upClock)
+        ) {
+            $downClock = $incident->started_at;
+        }
 
         $managementsCount = (int) ($incident->managements_count
             ?? $incident->managements()->count());
@@ -1362,10 +1372,12 @@ class IncidentController extends Controller
             'tecnologia' => $assignment?->tecnologia_acceso,
             'followup_status' => $incident->followup_status?->value,
             'gestion_lista' => $gestionLista,
+            'root_cause_code' => $incident->root_cause_code,
             'managements_count' => $managementsCount,
             'started_at' => $incident->started_at?->toIso8601String(),
             'recovered_at' => $incident->recovered_at?->toIso8601String(),
             'current_down_started_at' => $downClock?->toIso8601String(),
+            'recuperada_en' => $upClock?->toIso8601String(),
             'is_grave_incident' => $incident->isOpenGrave(),
             'grave_opened_at' => $incident->grave_opened_at?->toIso8601String(),
             'grave_closed_at' => $incident->grave_closed_at?->toIso8601String(),

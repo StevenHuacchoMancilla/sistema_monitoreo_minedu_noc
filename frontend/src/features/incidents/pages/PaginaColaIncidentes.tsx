@@ -59,9 +59,11 @@ type QueueRow = {
   tecnologia?: string | null
   followup_status?: string | null
   gestion_lista?: boolean
+  root_cause_code?: string | null
   started_at?: string | null
   current_down_started_at?: string | null
   recovered_at?: string | null
+  recuperada_en?: string | null
   grave_opened_at?: string | null
   grave_closed_at?: string | null
   attachments_count?: number | null
@@ -110,6 +112,8 @@ const META: Record<
 }
 
 const queueTd = `${tdClassName} !align-top`
+const idTd =
+  'whitespace-nowrap px-2.5 py-2 !align-top text-[13px] leading-snug text-slate-700 dark:text-slate-300'
 const actionTd =
   'sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 !align-top text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60'
 
@@ -121,6 +125,10 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [manageId, setManageId] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkIds, setBulkIds] = useState<number[] | null>(null)
+  const [bulkCloseOpen, setBulkCloseOpen] = useState(false)
+  const [bulkClosing, setBulkClosing] = useState(false)
   const [ticketRow, setTicketRow] = useState<QueueRow | null>(null)
   const [pngBusyId, setPngBusyId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -138,6 +146,12 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
     kind === 'graves' && searchParams.get('tab') === 'cerradas' ? 'closed' : 'open',
   )
   const showingClosedGraves = kind === 'graves' && gravesTab === 'closed'
+
+  useEffect(() => {
+    setSelectedIds(new Set())
+    setBulkIds(null)
+    setBulkCloseOpen(false)
+  }, [kind])
 
   useEffect(() => {
     if (kind !== 'graves') return
@@ -164,6 +178,11 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
     () => allRows.filter((row) => matchesCidOrTss(row, search)),
     [allRows, search],
   )
+  const canSelectMany = kind === 'pendiente-cierre' && canManage
+  const visibleIds = rows.map((row) => row.incident_id)
+  const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id))
+  const selectedRows = allRows.filter((row) => selectedIds.has(row.incident_id))
+  const selectedWithGestion = selectedRows.filter((row) => row.gestion_lista).length
 
   const refresh = () => {
     void client.invalidateQueries({ queryKey: ['incidents', 'queue', kind], refetchType: 'active' })
@@ -278,13 +297,94 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
 
         {actionError ? <p className="mb-3 text-sm text-red-600">{actionError}</p> : null}
 
+        {canSelectMany && rows.length > 0 ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-medium text-slate-600 dark:text-slate-300">
+              {selectedIds.size} seleccionados
+            </span>
+            <Boton
+              type="button"
+              variant="primary"
+              size="sm"
+              disabled={selectedIds.size === 0}
+              onClick={() => {
+                const ids = selectedRows.map((row) => row.incident_id)
+                if (ids.length === 1) {
+                  setManageId(ids[0])
+                  return
+                }
+                setBulkIds(ids)
+              }}
+            >
+              Gestionar selección
+            </Boton>
+            <Boton
+              type="button"
+              variant="danger"
+              size="sm"
+              disabled={selectedIds.size === 0 || bulkClosing}
+              onClick={() => setBulkCloseOpen(true)}
+            >
+              Cerrar selección
+            </Boton>
+            {selectedIds.size > 0 ? (
+              <Boton type="button" variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                Limpiar
+              </Boton>
+            ) : null}
+          </div>
+        ) : null}
+
         {rows.length > 0 ? (
           <DataTableContainer>
-            <table className={tableClassName}>
+            <table
+              className={`${tableClassName}${kind === 'pendiente-cierre' ? ' table-fixed' : ''}`}
+              style={kind === 'pendiente-cierre' ? { minWidth: canSelectMany ? 1180 : 1080 } : undefined}
+            >
+              {kind === 'pendiente-cierre' ? (
+                <colgroup>
+                  {canSelectMany ? <col className="w-10" /> : null}
+                  <col className="w-[7.5rem]" />
+                  <col className="w-[4.25rem]" />
+                  <col className="w-[5rem]" />
+                  <col />
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[7.5rem]" />
+                  <col className="w-[6.75rem]" />
+                  <col className="w-[6.75rem]" />
+                  <col className="w-[17rem]" />
+                </colgroup>
+              ) : null}
               <thead className={theadClassName}>
                 <tr>
+                  {canSelectMany ? (
+                    <th className={thClassName}>
+                      <input
+                        type="checkbox"
+                        className="h-4 w-4 rounded border-slate-300"
+                        checked={allVisibleSelected}
+                        onChange={() => {
+                          setSelectedIds((prev) => {
+                            const next = new Set(prev)
+                            if (allVisibleSelected) {
+                              visibleIds.forEach((id) => next.delete(id))
+                            } else {
+                              visibleIds.forEach((id) => next.add(id))
+                            }
+                            return next
+                          })
+                        }}
+                        aria-label="Seleccionar los tickets visibles"
+                      />
+                    </th>
+                  ) : null}
                   <th className={thClassName}>CID</th>
                   <th className={thClassName}>TSS</th>
+                  {kind === 'pendiente-cierre' ? (
+                    <th className={thClassName} title="Código con el que se registró la gestión">
+                      Código
+                    </th>
+                  ) : null}
                   <th className={thClassName}>Local</th>
                   <th className={thClassName}>Ubicación</th>
                   <th className={thClassName}>Estado</th>
@@ -310,14 +410,39 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                       ? row.grave_opened_at ?? null
                       : kind === 'requerimientos'
                         ? row.requirement_opened_at ?? null
-                        : row.recovered_at ?? null
+                        : kind === 'pendiente-cierre'
+                          ? row.recuperada_en ?? row.recovered_at ?? null
+                          : row.recovered_at ?? null
 
                   return (
                     <tr key={row.incident_id} className={`${trClassName} group`}>
-                      <td className={`${queueTd} font-medium tabular-nums`}>{row.cid ?? '—'}</td>
-                      <td className={`${queueTd} font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
+                      {canSelectMany ? (
+                        <td className={idTd}>
+                          <input
+                            type="checkbox"
+                            className="h-4 w-4 rounded border-slate-300"
+                            checked={selectedIds.has(row.incident_id)}
+                            onChange={() => {
+                              setSelectedIds((prev) => {
+                                const next = new Set(prev)
+                                if (next.has(row.incident_id)) next.delete(row.incident_id)
+                                else next.add(row.incident_id)
+                                return next
+                              })
+                            }}
+                            aria-label={`Seleccionar CID ${row.cid ?? row.incident_id}`}
+                          />
+                        </td>
+                      ) : null}
+                      <td className={`${idTd} font-medium tabular-nums`}>{row.cid ?? '—'}</td>
+                      <td className={`${idTd} font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
                         {row.tss ?? '—'}
                       </td>
+                      {kind === 'pendiente-cierre' ? (
+                        <td className={`${idTd} font-mono font-semibold text-slate-900 dark:text-slate-100`}>
+                          {row.root_cause_code?.trim() || '—'}
+                        </td>
+                      ) : null}
                       <td className={queueTd}>
                         <Truncate
                           title={row.local_educativo}
@@ -503,7 +628,21 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
         ) : null}
       </SectionCard>
 
-      {manageId !== null ? (
+      {bulkIds !== null && bulkIds.length > 1 ? (
+        <ModalGestionIncidente
+          incidentId={bulkIds[0]}
+          bulkIncidentIds={bulkIds}
+          initialTab="management"
+          readOnly={!canManage}
+          onClose={() => {
+            setBulkIds(null)
+            refresh()
+          }}
+          onApplied={() => setSelectedIds(new Set())}
+        />
+      ) : null}
+
+      {manageId !== null && bulkIds === null ? (
         <ModalGestionIncidente
           incidentId={manageId}
           initialTab={showingClosedGraves ? 'history' : canManage ? 'management' : 'summary'}
@@ -563,6 +702,53 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
               setActionError(err instanceof Error ? err.message : 'No se pudo cerrar el ticket.')
             })
             .finally(() => setClosing(false))
+        }}
+      />
+
+      <DialogoConfirmar
+        open={bulkCloseOpen}
+        title="Cerrar selección"
+        description={
+          selectedRows.length > 0
+            ? `Se cerrarán ${selectedRows.length} ticket${selectedRows.length === 1 ? '' : 's'} y salen de Pendiente de cierre. ${selectedWithGestion} ya tienen gestión${
+                selectedRows.length - selectedWithGestion > 0
+                  ? `; ${selectedRows.length - selectedWithGestion} todavía no.`
+                  : '.'
+              }`
+            : undefined
+        }
+        confirmLabel={`Cerrar ${selectedRows.length || ''}`.trim()}
+        cancelLabel="Cancelar"
+        tone="danger"
+        loading={bulkClosing}
+        onClose={() => {
+          if (!bulkClosing) setBulkCloseOpen(false)
+        }}
+        onConfirm={() => {
+          const ids = selectedRows.map((row) => row.incident_id)
+          if (ids.length === 0) return
+          setBulkClosing(true)
+          setActionError(null)
+          void (async () => {
+            let done = 0
+            try {
+              for (const id of ids) {
+                await endpoints.closeIncidentTicket(id)
+                done += 1
+              }
+              setBulkCloseOpen(false)
+              setSelectedIds(new Set())
+              refresh()
+            } catch (err: unknown) {
+              const message = err instanceof Error ? err.message : 'No se pudo cerrar el ticket.'
+              setActionError(
+                done > 0 ? `Se cerraron ${done} de ${ids.length}. Falló el siguiente: ${message}` : message,
+              )
+              refresh()
+            } finally {
+              setBulkClosing(false)
+            }
+          })()
         }}
       />
 

@@ -172,6 +172,8 @@ export function PaginaCaidasActivas({
   const [toDate, setToDate] = useState('')
   const [duration, setDuration] = useState<DurationBucket>('')
   const [manageId, setManageId] = useState<number | null>(null)
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [bulkIds, setBulkIds] = useState<number[] | null>(null)
   const [ticketRow, setTicketRow] = useState<OutageRow | null>(null)
   const [pngBusyId, setPngBusyId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -194,6 +196,7 @@ export function PaginaCaidasActivas({
     setToDate('')
     setDuration('')
     setPage(1)
+    setSelectedIds(new Set())
     setProvincia(searchParams.get('provincia') ?? '')
     setDistrito(searchParams.get('distrito') ?? '')
   }, [title, presetFollowup])
@@ -274,6 +277,11 @@ export function PaginaCaidasActivas({
   const lastPage = Math.max(1, Math.ceil(rows.length / perPage))
   const currentPage = Math.min(page, lastPage)
   const pageRows = rows.slice((currentPage - 1) * perPage, currentPage * perPage)
+  const canSelectMany = title === 'Pendientes de gestión' && canManage
+  const pageSelectableIds = pageRows
+    .map((row) => row.incident_id)
+    .filter((id): id is number => id != null)
+  const allPageSelected = pageSelectableIds.length > 0 && pageSelectableIds.every((id) => selectedIds.has(id))
 
   const hasFilters = Boolean(
     search || followup || reopenedScope || managementScope || provincia || distrito || tecnologia || fromDate || toDate || duration,
@@ -481,11 +489,34 @@ export function PaginaCaidasActivas({
 
         {actionError ? <p className="mb-3 text-sm text-red-600">{actionError}</p> : null}
 
+        {canSelectMany && rows.length > 0 ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-medium text-slate-600 dark:text-slate-300">
+              {selectedIds.size} seleccionados
+            </span>
+            <Boton
+              type="button"
+              variant="primary"
+              size="sm"
+              disabled={selectedIds.size === 0}
+              onClick={() => setBulkIds([...selectedIds])}
+            >
+              Gestionar selección
+            </Boton>
+            {selectedIds.size > 0 ? (
+              <Boton type="button" variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
+                Limpiar
+              </Boton>
+            ) : null}
+          </div>
+        ) : null}
+
         {rows.length > 0 ? (
           <>
             <DataTableContainer className={outages.isPlaceholderData ? 'opacity-70 transition-opacity' : ''}>
-              <table className={`${tableClassName} table-fixed`} style={{ minWidth: 1180 }}>
+              <table className={`${tableClassName} table-fixed`} style={{ minWidth: canSelectMany ? 1220 : 1180 }}>
                 <colgroup>
+                  {canSelectMany ? <col className="w-10" /> : null}
                   <col className="w-[5.5rem]" />
                   <col className="w-[4.75rem]" />
                   <col className="w-[14rem]" />
@@ -499,6 +530,27 @@ export function PaginaCaidasActivas({
                 </colgroup>
                 <thead className={theadClassName}>
                   <tr>
+                    {canSelectMany ? (
+                      <th className={thClassName}>
+                        <input
+                          type="checkbox"
+                          className="h-4 w-4 rounded border-slate-300"
+                          checked={allPageSelected}
+                          onChange={() => {
+                            setSelectedIds((prev) => {
+                              const next = new Set(prev)
+                              if (allPageSelected) {
+                                pageSelectableIds.forEach((id) => next.delete(id))
+                              } else {
+                                pageSelectableIds.forEach((id) => next.add(id))
+                              }
+                              return next
+                            })
+                          }}
+                          aria-label="Seleccionar las caídas de esta página"
+                        />
+                      </th>
+                    ) : null}
                     <th className={thClassName}>Estado</th>
                     <th className={thClassName}>CID</th>
                     <th className={thClassName}>Local</th>
@@ -536,6 +588,16 @@ export function PaginaCaidasActivas({
                       durationSource={durationSource}
                       durationCaption={durationCaption}
                       showManagementTag={showManagementTag}
+                      showSelect={canSelectMany}
+                      selected={row.incident_id != null && selectedIds.has(row.incident_id)}
+                      onToggleSelect={(id) => {
+                        setSelectedIds((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(id)) next.delete(id)
+                          else next.add(id)
+                          return next
+                        })
+                      }}
                       showGenerateTicket={source === 'managing'}
                       pngBusy={row.incident_id != null && pngBusyId === row.incident_id}
                       onManage={setManageId}
@@ -569,7 +631,22 @@ export function PaginaCaidasActivas({
         ) : null}
       </SectionCard>
 
-      {manageId !== null ? (
+      {bulkIds !== null && bulkIds.length > 0 ? (
+        <ModalGestionIncidente
+          incidentId={bulkIds[0]}
+          bulkIncidentIds={bulkIds.length > 1 ? bulkIds : undefined}
+          initialTab={canManage ? 'management' : 'summary'}
+          readOnly={!canManage}
+          onClose={() => {
+            setBulkIds(null)
+            refresh()
+            void client.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' })
+          }}
+          onApplied={() => setSelectedIds(new Set())}
+        />
+      ) : null}
+
+      {manageId !== null && bulkIds === null ? (
         <ModalGestionIncidente
           incidentId={manageId}
           initialTab={canManage ? 'management' : 'summary'}
@@ -625,6 +702,9 @@ function OutageTableRow({
   canManage,
   durationSource,
   durationCaption,
+  showSelect = false,
+  selected = false,
+  onToggleSelect,
   showGenerateTicket = false,
   pngBusy = false,
   onManage,
@@ -637,6 +717,9 @@ function OutageTableRow({
   durationSource: 'incident' | 'current_down'
   durationCaption: string
   showManagementTag?: boolean
+  showSelect?: boolean
+  selected?: boolean
+  onToggleSelect?: (incidentId: number) => void
   showGenerateTicket?: boolean
   pngBusy?: boolean
   onManage: (id: number) => void
@@ -661,6 +744,19 @@ function OutageTableRow({
             : ''
       }`}
     >
+      {showSelect ? (
+        <td className={outageTd}>
+          {row.incident_id != null ? (
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300"
+              checked={selected}
+              onChange={() => onToggleSelect?.(row.incident_id as number)}
+              aria-label={`Seleccionar CID ${row.cid ?? row.incident_id}`}
+            />
+          ) : null}
+        </td>
+      ) : null}
       <td className={outageTd}>
         <div className="flex min-w-0 flex-col items-start gap-1">
           <div className="flex flex-wrap items-center gap-1">

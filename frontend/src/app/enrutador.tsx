@@ -24,6 +24,7 @@ import { PaginaReporteGeneral } from '../features/reports/pages/PaginaReporteGen
 import { PaginaReporteMinedu } from '../features/reports/pages/PaginaReporteMinedu'
 import { PaginaReporteUsoInternet } from '../features/reports/pages/PaginaReporteUsoInternet'
 import { PaginaTicketera } from '../features/ticketera/pages/PaginaTicketera'
+import { PaginaExcelGoogle } from '../features/excel-google/pages/PaginaExcelGoogle'
 import { PaginaInicioSesion } from '../features/auth/pages/PaginaInicioSesion'
 import { PaginaPerfil } from '../features/auth/pages/PaginaPerfil'
 import { RequiereAuth } from '../features/auth/components/RequiereAuth'
@@ -146,6 +147,7 @@ export function AppRouter() {
           <Route element={<RequierePermiso permission={P.incidentsView} />}>
             <Route path="/notifications" element={<PaginaNotificaciones />} />
             <Route path="/outages" element={<PaginaFeedCaidas />} />
+            <Route path="/reports/excel-google" element={<PaginaExcelGoogle />} />
           </Route>
 
           <Route element={<RequierePermiso permission={P.historyView} />}>

@@ -205,6 +205,15 @@ export function isEnergy(row: TicketeraRow): boolean {
   return /^G4(?:\D|$)/i.test(row.grupo.trim())
 }
 
+export function mineduBucket(row: TicketeraRow): 'queja' | 'caida' | 'req' | 'empty' | 'other' {
+  const value = fold(row.minedu)
+  if (!value || value === 'NINGUNO') return 'empty'
+  if (value === 'QUEJA') return 'queja'
+  if (value === 'CAIDADEENLACE' || value === 'AVERIA') return 'caida'
+  if (value === 'REQUERIMIENTO' || value === 'REQUERIMEINTO') return 'req'
+  return 'other'
+}
+
 export function kpis(rows: PreparedRow[]) {
   const cids = new Set<string>()
   let open = 0
@@ -212,6 +221,10 @@ export function kpis(rows: PreparedRow[]) {
   let review = 0
   let energy = 0
   let disconnect = 0
+  let queja = 0
+  let caida = 0
+  let req = 0
+  let missing = 0
   for (const row of rows) {
     if (row.cid.trim() && fold(row.cid) !== 'NINGUNO' && !row.cid.startsWith('#')) cids.add(row.cid.trim())
     if (row.status === 'ABIERTO') open += 1
@@ -219,8 +232,25 @@ export function kpis(rows: PreparedRow[]) {
     if (row.status === 'REVISAR') review += 1
     if (isEnergy(row)) energy += 1
     if (fold(row.codigo) === 'CR45') disconnect += 1
+    const bucket = mineduBucket(row)
+    if (bucket === 'queja') queja += 1
+    else if (bucket === 'caida') caida += 1
+    else if (bucket === 'req') req += 1
+    else if (bucket === 'empty') missing += 1
   }
-  return { total: rows.length, cids: cids.size, open, closed, review, energy, disconnect }
+  return {
+    total: rows.length,
+    cids: cids.size,
+    open,
+    closed,
+    review,
+    energy,
+    disconnect,
+    queja,
+    caida,
+    req,
+    missing,
+  }
 }
 
 export function dailyPoints(intervals: Interval[], rows: PreparedRow[], criterion: TicketeraFilters['criterion'], nowIso: string) {
@@ -238,20 +268,15 @@ export function dailyPoints(intervals: Interval[], rows: PreparedRow[], criterio
   }))
 }
 
-export function motiveSlices(rows: PreparedRow[]) {
-  const slices = [
-    { label: 'Energía · G4', color: '#4963ee', count: 0 },
-    { label: 'Desconexiones · CR45', color: '#13a9bb', count: 0 },
-    { label: 'Otros grupos', color: '#ed9929', count: 0 },
-    { label: 'Sin grupo de causa', color: '#94a3b8', count: 0 },
-  ]
-  for (const row of rows) {
-    if (isEnergy(row)) slices[0].count += 1
-    else if (fold(row.codigo) === 'CR45') slices[1].count += 1
-    else if (classify(row, 'grupo') === EMPTY) slices[3].count += 1
-    else slices[2].count += 1
-  }
-  return slices
+const REASON_COLORS = ['#5b78ff', '#16b7c4', '#f5a33b', '#9971ec', '#e963a7', '#24bd94', '#f4c34a', '#468ddd', '#ef795f']
+
+export function reasonSlices(rows: PreparedRow[]) {
+  return grouped(rows, 'minedu').map((group, index) => ({
+    key: group.key,
+    label: group.label,
+    count: group.count,
+    color: REASON_COLORS[index % REASON_COLORS.length],
+  }))
 }
 
 export function grouped(rows: PreparedRow[], field: FilterField): GroupBar[] {

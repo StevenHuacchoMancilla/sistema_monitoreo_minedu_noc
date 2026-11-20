@@ -137,12 +137,19 @@ export function ModalGestionIncidente({
   onClose,
   initialTab = 'summary',
   readOnly = false,
+  bulkIncidentIds,
+  onApplied,
 }: {
   incidentId: number
   onClose: () => void
   initialTab?: TabKey
   readOnly?: boolean
+  /** Misma gestión para varias caídas. El ticket sigue siendo uno por colegio. */
+  bulkIncidentIds?: number[]
+  onApplied?: () => void
 }) {
+  const bulkIds = (bulkIncidentIds ?? []).filter((id, index, all) => id > 0 && all.indexOf(id) === index)
+  const isBulk = bulkIds.length > 1
   const client = useQueryClient()
   const titleId = useId()
   const closeRef = useRef<HTMLButtonElement>(null)
@@ -175,6 +182,10 @@ export function ModalGestionIncidente({
   // Si ya hay gestiones, el detalle queda vacío para escribir comentarios nuevos (hilo de seguimiento).
   const hydrated = useRef(false)
   useEffect(() => {
+    if (isBulk) {
+      hydrated.current = true
+      return
+    }
     if (!detail.data || hydrated.current) return
     hydrated.current = true
     const g = detail.data.gestion
@@ -214,7 +225,7 @@ export function ModalGestionIncidente({
       causeGroup: nextGroup,
       causeCode: nextCode,
     }
-  }, [detail.data])
+  }, [detail.data, isBulk])
 
   const onCloseRef = useRef(onClose)
   useEffect(() => {
@@ -274,7 +285,7 @@ export function ModalGestionIncidente({
     },
   })
 
-  const hasPriorManagements = (detail.data?.managements?.length ?? 0) > 0
+  const hasPriorManagements = isBulk ? false : (detail.data?.managements?.length ?? 0) > 0
   const followupNote = detailText.trim()
   const classificationChanged = Boolean(
     initialClassRef.current &&
@@ -294,7 +305,7 @@ export function ModalGestionIncidente({
       )
 
   const save = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!canSaveGestion) {
         throw new Error(
           hasPriorManagements
@@ -314,21 +325,59 @@ export function ModalGestionIncidente({
                 .join(' · ')}`
             : '')
         : detailText
-      return endpoints.applyIncidentManagement(incidentId, {
+      const payload = {
         classification: null,
         scope: scope || null,
         outage_text: null,
         detail: detailPayload || null,
         observation: hasPriorManagements ? null : observation || null,
-        contact_id: viaDescartes || contactId === '' ? null : Number(contactId),
+        contact_id: isBulk || viaDescartes || contactId === '' ? null : Number(contactId),
         contact_via_descartes: viaDescartes,
         root_cause_group_code: causeGroup || null,
         root_cause_code: causeCode || null,
         cause: causeText || null,
         minedu_reason: mineduReason || null,
-      })
+      }
+      if (!isBulk) {
+        return endpoints.applyIncidentManagement(incidentId, payload)
+      }
+      const targets = bulkIds
+      let done = 0
+      for (let i = 0; i < targets.length; i += 1) {
+        const id = targets[i]
+        setSavedMsg(`Aplicando ${i + 1} de ${targets.length}…`)
+        try {
+          await endpoints.applyIncidentManagement(id, payload)
+          if (listaEstado) {
+            await endpoints.updateListaEstado(id, listaEstado)
+          }
+          done += 1
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : 'No se pudo guardar'
+          throw new Error(
+            done > 0
+              ? `Se aplicó a ${done} de ${targets.length}. Falló la siguiente: ${msg}`
+              : msg,
+          )
+        }
+      }
+      return null
     },
     onSuccess: async (data) => {
+      if (isBulk) {
+        setSavedMsg(`Gestión aplicada a ${bulkIds.length} caídas. Cada una con su ticket.`)
+        setDetailText('')
+        setObservation('')
+        await invalidateOps()
+        await client.invalidateQueries({ queryKey: ['incidents', 'queue'], refetchType: 'active' })
+        await client.invalidateQueries({ queryKey: ['reports', 'operational'], refetchType: 'active' })
+        onApplied?.()
+        window.setTimeout(() => {
+          setSavedMsg(null)
+          onClose()
+        }, 700)
+        return
+      }
       // Solo cerrar al pasar por primera vez a Incidencias/Requerimientos.
       // Si ya era incidencia, un comentario no debe cerrar el panel.
       const prev = client.getQueryData<IncidentDetail>(['incidents', incidentId])
@@ -423,7 +472,9 @@ export function ModalGestionIncidente({
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 id={titleId} className="truncate text-base font-bold text-slate-950 dark:text-slate-50">
-                {data?.ticket?.ticket_code
+                {isBulk
+                  ? `Gestión masiva · ${bulkIds.length} caídas`
+                  : data?.ticket?.ticket_code
                   ? data.ticket.ticket_code
                   : [
                       data?.colegio.cid ? `CID ${data.colegio.cid}` : null,
@@ -431,14 +482,18 @@ export function ModalGestionIncidente({
                     ]
                       .filter(Boolean)
                       .join(' · ') || `Caso #${incidentId}`}
-                {data?.colegio.local_educativo ? (
+                {!isBulk && data?.colegio.local_educativo ? (
                   <span className="font-medium text-slate-500 dark:text-slate-400"> · {data.colegio.local_educativo}</span>
                 ) : null}
-                {!data?.ticket?.ticket_code ? (
+                {!isBulk && !data?.ticket?.ticket_code ? (
                   <span className="ml-2 text-xs font-medium text-amber-700 dark:text-amber-300">· Sin ticket (se crea al gestionar)</span>
                 ) : null}
               </h2>
-              {data ? (
+              {isBulk ? (
+                <p className="mt-1 text-[13px] text-slate-600 dark:text-slate-300">
+                  La misma gestión se aplica a todas. Cada colegio conserva su propio ticket.
+                </p>
+              ) : data ? (
                 <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                   {data.ticket?.ticket_code && data.colegio.cid ? (
                     <Insignia tone="neutral" title="CID">
@@ -473,9 +528,9 @@ export function ModalGestionIncidente({
             </BotonIcono>
           </div>
 
-          {data ? <SummaryBand data={data} /> : null}
+          {!isBulk && data ? <SummaryBand data={data} /> : null}
 
-          {data?.sla ? (
+          {!isBulk && data?.sla ? (
             <ClockStopBar
               sla={data.sla}
               disabled={readOnly}
@@ -484,6 +539,7 @@ export function ModalGestionIncidente({
             />
           ) : null}
 
+          {!isBulk ? (
           <div role="tablist" aria-label="Secciones de la incidencia" className="mt-3 flex gap-1 overflow-x-auto rounded-lg bg-slate-100 p-1 dark:bg-slate-950">
             {TABS.map((t) => (
               <button
@@ -504,6 +560,7 @@ export function ModalGestionIncidente({
               </button>
             ))}
           </div>
+          ) : null}
         </header>
 
         <div
@@ -517,10 +574,19 @@ export function ModalGestionIncidente({
 
           {data && tab === 'summary' ? <SummaryTab data={data} /> : null}
 
-          {data && tab === 'management' ? (
+          {(data || isBulk) && (isBulk || tab === 'management') ? (
             <div className="space-y-4">
-              {data.estado.has_open_requirement ||
-              ((data.estado.open_requirement_count ?? 0) > 0 && !data.estado.is_requirement_case) ? (
+              {isBulk ? (
+                <div
+                  role="status"
+                  className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-[13px] text-amber-950 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-100"
+                >
+                  Se registra la misma gestión en las {bulkIds.length} caídas. El ticket de cada colegio no se
+                  comparte: cada CID conserva el suyo.
+                </div>
+              ) : null}
+              {!isBulk && data && (data.estado.has_open_requirement ||
+              ((data.estado.open_requirement_count ?? 0) > 0 && !data.estado.is_requirement_case)) ? (
                 <div
                   role="status"
                   className="rounded-lg border border-sky-200 bg-sky-50 px-3 py-2 text-[13px] text-sky-900 dark:border-sky-900 dark:bg-sky-950/40 dark:text-sky-100"
@@ -535,12 +601,14 @@ export function ModalGestionIncidente({
                   caída es un ticket aparte; el requerimiento no se reutiliza.
                 </div>
               ) : null}
+              {!isBulk && data ? (
               <ContactsPanel
                 contacts={data.contactos}
                 selectedId={contactId}
                 onSelect={(id) => setContactId(id)}
               />
-              {data.ticket ? (
+              ) : null}
+              {!isBulk && data?.ticket ? (
                 <PanelInformeVisita
                   incidentId={incidentId}
                   ticket={data.ticket}
@@ -549,7 +617,7 @@ export function ModalGestionIncidente({
                   readOnly={readOnly}
                   onSaved={() => setSavedMsg('Detalle de evento guardado')}
                 />
-              ) : !readOnly ? (
+              ) : !isBulk && !readOnly ? (
                 <Panel title="Ticket / detalle de evento">
                   <p className="text-[13px] text-slate-600 dark:text-slate-300">
                     Este caso aún no tiene código TGS. Genera el ticket para poder registrar visita técnica (Detalle de evento).
@@ -557,11 +625,13 @@ export function ModalGestionIncidente({
                   </p>
                 </Panel>
               ) : null}
+              {!isBulk && data ? (
               <PanelAdjuntosEvidencia
                 incidentId={incidentId}
                 attachments={data.attachments ?? []}
                 readOnly={readOnly}
               />
+              ) : null}
               {readOnly ? (
                 <Panel title="Gestión">
                   <p className="text-[13px] text-slate-600 dark:text-slate-300">
@@ -648,7 +718,7 @@ export function ModalGestionIncidente({
                       onChange={(e) => {
                         const next = e.target.value as '' | ListaLleeEstado
                         setListaEstado(next)
-                        saveListaEstado.mutate(next || null)
+                        if (!isBulk) saveListaEstado.mutate(next || null)
                       }}
                       aria-label="Estado de Lista para reporte"
                     >
@@ -661,7 +731,9 @@ export function ModalGestionIncidente({
                     </Select>
                   </FormField>
                   <p className="mt-1.5 text-[11px] text-slate-500">
-                    Misma columna ESTADO de Lista para reporte. Se guarda al elegir.
+                    {isBulk
+                      ? 'Se aplica a todas las caídas seleccionadas al guardar.'
+                      : 'Misma columna ESTADO de Lista para reporte. Se guarda al elegir.'}
                   </p>
                 </div>
               </Panel>
@@ -728,12 +800,19 @@ export function ModalGestionIncidente({
                       >
                         <option value="">— Sin seleccionar —</option>
                         <option value={CONTACT_VIA_DESCARTES}>{CONTACT_DESCARTES_LABEL}</option>
-                        {data.contactos.map((c, idx) => (
+                        {!isBulk
+                          ? (data?.contactos ?? []).map((c, idx) => (
                           <option key={c.id} value={c.id}>
                             {idx + 1}. {c.nombre ?? 'Sin nombre'} · {c.telefono ?? 's/n'}
                           </option>
-                        ))}
+                        ))
+                          : null}
                       </Select>
+                      {isBulk ? (
+                        <p className="mt-1.5 text-[11px] text-slate-500">
+                          En masivo solo se puede dejar vacío o “Según descartes realizados”. El contacto de un colegio no se copia a los demás.
+                        </p>
+                      ) : null}
                     </FormField>
                     <FormField
                       label="Detalle (reporte)"
@@ -774,7 +853,7 @@ export function ModalGestionIncidente({
                   </div>
                 </Panel>
               )}
-              <RecentManagements managements={data.managements ?? []} />
+              {!isBulk && data ? <RecentManagements managements={data.managements ?? []} /> : null}
                 </>
               )}
             </div>
@@ -804,7 +883,7 @@ export function ModalGestionIncidente({
           </Boton>
           {!readOnly ? (
             <>
-              {!data?.estado?.is_grave_incident ? (
+              {!isBulk && !data?.estado?.is_grave_incident ? (
                 <Boton
                   variant="secondary"
                   disabled={!data || markGrave.isPending}
@@ -815,6 +894,7 @@ export function ModalGestionIncidente({
                   Pasar a incidencia
                 </Boton>
               ) : null}
+              {!isBulk ? (
               <Boton
                 variant="secondary"
                 disabled={!data || closeTicket.isPending}
@@ -823,13 +903,16 @@ export function ModalGestionIncidente({
               >
                 Cerrar ticket
               </Boton>
+              ) : null}
               <Boton
                 variant="primary"
-                disabled={!data || !canSaveGestion}
+                disabled={(isBulk ? false : !data) || !canSaveGestion}
                 loading={save.isPending}
                 onClick={() => save.mutate()}
               >
-                {data?.estado?.followup_status === 'PENDIENTE_CIERRE' &&
+                {isBulk
+                  ? `Guardar gestión en ${bulkIds.length} caídas`
+                  : data?.estado?.followup_status === 'PENDIENTE_CIERRE' &&
                 (mineduReason === 'CAIDA_ENLACE' || mineduReason === 'QUEJA')
                   ? 'Guardar y pasar a Incidencias'
                   : data?.estado?.followup_status === 'PENDIENTE_CIERRE' &&

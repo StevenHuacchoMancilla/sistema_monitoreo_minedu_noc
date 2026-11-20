@@ -56,11 +56,10 @@ class IncidentService
                 $beforeStatus = (string) ($active->current_status instanceof MonitoringStatus
                     ? $active->current_status->value
                     : ($active->current_status ?? ''));
+                // La advertencia tiene su propio downtimesince. No pisa la caída:
+                // si se guarda, la recuperación (uptimesince) puede quedar antes del inicio.
                 $active->update([
                     'current_status' => MonitoringStatus::Parcial->value,
-                    'prtg_down_started_at' => $stateSince !== null
-                        ? OperationalTime::toStorage($stateSince)
-                        : $active->prtg_down_started_at,
                 ]);
                 // Sin notePartialToDown: es el camino inverso (caído → parcial).
                 if ($beforeStatus !== MonitoringStatus::Parcial->value) {
@@ -149,10 +148,16 @@ class IncidentService
                 'current_status' => $nextStatus,
             ];
             if ($downSince !== null) {
-                $payload['prtg_down_started_at'] = OperationalTime::toStorage($downSince);
-                // Igual Apps Script: si PRTG dice que cayó antes, corregir started_at
-                // (cubre sync apagado en madrugada / primera detección tardía).
-                $this->alignOpenStartedAt($active, $downSince, $payload, $onAnomaly);
+                $incoming = OperationalTime::toStorage($downSince);
+                $currentDown = $active->prtg_down_started_at;
+                // Solo adelantar. Un downtimesince más nuevo es un reinicio del contador
+                // (advertencia o flap), no una caída distinta.
+                if ($currentDown === null || $incoming->lessThan($currentDown)) {
+                    $payload['prtg_down_started_at'] = $incoming;
+                    // Igual Apps Script: si PRTG dice que cayó antes, corregir started_at
+                    // (cubre sync apagado en madrugada / primera detección tardía).
+                    $this->alignOpenStartedAt($active, $downSince, $payload, $onAnomaly);
+                }
             }
             $active->update($payload);
             $this->notePartialToDown($active, $beforeStatus, $nextStatus);

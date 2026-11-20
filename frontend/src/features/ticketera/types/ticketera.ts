@@ -73,7 +73,7 @@ export type TicketeraTimeline = {
   message: string | null
 }
 
-export type TicketeraView = 'summary' | 'tickets' | 'quality'
+export type TicketeraView = 'summary' | 'caidos' | 'tickets' | 'sla' | 'quality'
 
 export type TicketeraFilters = {
   from: string
