@@ -53,6 +53,14 @@ import { InsigniaDesajusteUbicacion } from '../../locations/components/InsigniaD
 import { ModalGestionIncidente } from '../components/ModalGestionIncidente'
 import { ModalRegistrarCaidaEnlace } from '../components/ModalRegistrarCaidaEnlace'
 import { ModalTicketManual } from '../components/ModalTicketManual'
+import {
+  LISTA_ESTADO_BADGE,
+  LISTA_ESTADO_OPTIONS,
+  type ListaLleeEstado,
+} from '../../reports/types/reporteOperativo'
+
+/** Valor especial: casos sin opción Lista asignada. */
+const LISTA_FILTER_NONE = '__NONE__'
 import { ModalGenerarTicket } from '../components/ModalGenerarTicket'
 import { downloadTicketImageFromIncidentId } from '../lib/imagenTicket'
 import { descargarReporteServicioPng } from '../lib/descargarReporteServicioPng'
@@ -187,6 +195,7 @@ export function PaginaCaidasActivas({
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(25)
   const [followup, setFollowup] = useState(presetFollowup ?? '')
+  const [listaEstado, setListaEstado] = useState('')
   const [reopenedScope, setReopenedScope] = useState<'' | 'only' | 'exclude'>('')
   const [managementScope, setManagementScope] = useState<'' | 'managing' | 'new'>('')
   const [provincia, setProvincia] = useState(searchParams.get('provincia') ?? '')
@@ -265,9 +274,22 @@ export function PaginaCaidasActivas({
     return counts
   }, [scoped, now, durationSource])
 
+  const isManaging = source === 'managing'
+
   const rows = useMemo(() => {
     const filtered = scoped.filter((r) => {
-      if (followup === 'EN_GESTION_GROUP' ? !MANAGING.has(r.followup_status ?? '') : followup && r.followup_status !== followup) {
+      if (isManaging) {
+        const lista = (r.lista_llee_estado ?? '').trim()
+        if (listaEstado === LISTA_FILTER_NONE) {
+          if (lista !== '') return false
+        } else if (listaEstado && lista !== listaEstado) {
+          return false
+        }
+      } else if (
+        followup === 'EN_GESTION_GROUP'
+          ? !MANAGING.has(r.followup_status ?? '')
+          : followup && r.followup_status !== followup
+      ) {
         return false
       }
       if (reopenedScope === 'only' && !r.reopened_from_management) return false
@@ -301,7 +323,22 @@ export function PaginaCaidasActivas({
       if (bTime !== aTime) return bTime - aTime
       return (b.incident_id ?? 0) - (a.incident_id ?? 0)
     })
-  }, [scoped, followup, reopenedScope, managementScope, provincia, distrito, tecnologia, fromDate, toDate, duration, now, durationSource])
+  }, [
+    scoped,
+    isManaging,
+    listaEstado,
+    followup,
+    reopenedScope,
+    managementScope,
+    provincia,
+    distrito,
+    tecnologia,
+    fromDate,
+    toDate,
+    duration,
+    now,
+    durationSource,
+  ])
 
   const lastPage = Math.max(1, Math.ceil(rows.length / perPage))
   const currentPage = Math.min(page, lastPage)
@@ -310,7 +347,6 @@ export function PaginaCaidasActivas({
   const showEnergy = title === 'Pendientes de gestión' || title === 'Caídas totales'
   const canSelectReport = title === 'Caídas totales'
   const showSelect = canSelectMany || canSelectReport
-  const isManaging = source === 'managing'
   const tableMinWidth = showSelect
     ? showEnergy
       ? 1380
@@ -330,7 +366,16 @@ export function PaginaCaidasActivas({
   const allPageSelected = pageSelectableIds.length > 0 && pageSelectableIds.every((id) => selectedIds.has(id))
 
   const hasFilters = Boolean(
-    search || followup || reopenedScope || managementScope || provincia || distrito || tecnologia || fromDate || toDate || duration,
+    search ||
+      (isManaging ? listaEstado : followup) ||
+      reopenedScope ||
+      managementScope ||
+      provincia ||
+      distrito ||
+      tecnologia ||
+      fromDate ||
+      toDate ||
+      duration,
   )
 
   const withPageReset =
@@ -343,6 +388,7 @@ export function PaginaCaidasActivas({
   const clearFilters = () => {
     setSearch('')
     setFollowup(presetFollowup ?? '')
+    setListaEstado('')
     setReopenedScope('')
     setManagementScope('')
     setProvincia('')
@@ -373,19 +419,33 @@ export function PaginaCaidasActivas({
         placeholder="CID o TSS"
         onChange={(e) => withPageReset(setSearch)(e.target.value)}
       />
-      <FormField label="Estado gestión">
-        <Select
-          value={followup}
-          disabled={title === 'Pendientes de gestión' || title === 'Pendientes de contacto' || title === 'Recaída en gestión'}
-          onChange={(e) => withPageReset(setFollowup)(e.target.value)}
-        >
-          {FOLLOWUP_FILTERS.map((f) => (
-            <option key={f.value || 'all'} value={f.value}>
-              {f.label}
-            </option>
-          ))}
-        </Select>
-      </FormField>
+      {isManaging ? (
+        <FormField label="Opción lista">
+          <Select value={listaEstado} onChange={(e) => withPageReset(setListaEstado)(e.target.value)}>
+            <option value="">Todas</option>
+            <option value={LISTA_FILTER_NONE}>Sin opción lista</option>
+            {LISTA_ESTADO_OPTIONS.map((opt) => (
+              <option key={opt} value={opt}>
+                {opt}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      ) : (
+        <FormField label="Estado gestión">
+          <Select
+            value={followup}
+            disabled={title === 'Pendientes de gestión' || title === 'Pendientes de contacto' || title === 'Recaída en gestión'}
+            onChange={(e) => withPageReset(setFollowup)(e.target.value)}
+          >
+            {FOLLOWUP_FILTERS.map((f) => (
+              <option key={f.value || 'all'} value={f.value}>
+                {f.label}
+              </option>
+            ))}
+          </Select>
+        </FormField>
+      )}
       {showReopenedFilter ? (
         <FormField label="Recaída">
           <Select
@@ -792,6 +852,7 @@ export function PaginaCaidasActivas({
                         })
                       }}
                       showGenerateTicket={source === 'managing'}
+                      showListaOption={isManaging}
                       pngBusy={row.incident_id != null && pngBusyId === row.incident_id}
                       onManage={setManageId}
                       onGenerateTicket={setTicketRow}
@@ -935,6 +996,7 @@ function OutageTableRow({
   onToggleSelect,
   onToggleReport,
   showGenerateTicket = false,
+  showListaOption = false,
   pngBusy = false,
   onManage,
   onGenerateTicket,
@@ -953,6 +1015,7 @@ function OutageTableRow({
   onToggleSelect?: (incidentId: number) => void
   onToggleReport?: (key: string) => void
   showGenerateTicket?: boolean
+  showListaOption?: boolean
   pngBusy?: boolean
   onManage: (id: number) => void
   onGenerateTicket?: (row: OutageRow) => void
@@ -1115,6 +1178,17 @@ function OutageTableRow({
               ) : (
                 <FollowupBadge status={row.followup_status} />
               )}
+              {showListaOption && row.lista_llee_estado ? (
+                <span
+                  className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                    LISTA_ESTADO_BADGE[row.lista_llee_estado as ListaLleeEstado] ??
+                    'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                  }`}
+                  title="Opción Lista (misma columna ESTADO de Lista para reporte)"
+                >
+                  {row.lista_llee_estado}
+                </span>
+              ) : null}
             </>
           )}
         </div>

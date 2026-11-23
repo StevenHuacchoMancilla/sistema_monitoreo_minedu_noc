@@ -131,6 +131,8 @@ export type OutageRow = {
     ticket: string | null
   } | null
   followup_status: string | null
+  /** Opción Lista LLEE (Energia, Averias, …) — misma columna ESTADO del reporte. */
+  lista_llee_estado?: string | null
   management_classification?: string | null
   management_classification_label?: string | null
   color_key?: string | null

@@ -803,6 +803,9 @@ class DashboardService
                     'ticket' => $tracking->report_ticket ?? $tracking->ticket,
                 ] : null,
                 'followup_status' => $incident->followup_status?->value,
+                'lista_llee_estado' => $incident->lista_llee_estado instanceof \App\Enums\ListaLleeEstado
+                    ? $incident->lista_llee_estado->value
+                    : (is_string($incident->lista_llee_estado) ? $incident->lista_llee_estado : null),
                 'management_classification' => $incident->management_classification?->value,
                 'management_classification_label' => $incident->management_classification?->label(),
                 'color_key' => $incident->management_classification?->colorKey(),
