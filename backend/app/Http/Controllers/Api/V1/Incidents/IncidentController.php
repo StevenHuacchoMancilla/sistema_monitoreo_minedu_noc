@@ -13,7 +13,6 @@ use App\Domain\Incidents\Services\IncidentManagementService;
 use App\Domain\Incidents\Services\IncidentOperativeCloseService;
 use App\Domain\Incidents\Services\IncidentService;
 use App\Domain\Incidents\Services\RecoveryReviewService;
-use App\Domain\Incidents\Services\SameHourOutageService;
 use App\Domain\Incidents\Services\SlaClockService;
 use App\Domain\Reports\Services\ListaLleeDayService;
 use App\Domain\Ticketera\Services\ServiceTicketService;
@@ -42,7 +41,6 @@ class IncidentController extends Controller
         private readonly RecoveryReviewService $recoveryReviews,
         private readonly IncidentOperativeCloseService $operativeClose,
         private readonly SlaClockService $slaClock,
-        private readonly SameHourOutageService $sameHour,
         private readonly ServiceTicketService $serviceTickets,
         private readonly ListaLleeDayService $listaDays,
     ) {}
@@ -796,41 +794,6 @@ class IncidentController extends Controller
         return $this->show($incident->fresh() ?? $incident);
     }
 
-    public function sameHour(Request $request): JsonResponse
-    {
-        $window = (int) $request->query('window', 15);
-
-        return response()->json([
-            'window_minutes' => max(5, min($window, 60)),
-            'data' => $this->sameHour->clusters($window),
-        ]);
-    }
-
-    public function applySameHour(Request $request): JsonResponse
-    {
-        $data = $request->validate([
-            'incident_ids' => ['required', 'array', 'min:2'],
-            'incident_ids.*' => ['integer'],
-            'minedu_reason' => ['required', Rule::in(MineduReason::operableValues())],
-            'detail' => ['nullable', 'string', 'max:5000'],
-        ]);
-
-        try {
-            $count = $this->sameHour->applyReason(
-                $data['incident_ids'],
-                MineduReason::from((string) $data['minedu_reason']),
-                $data['detail'] ?? null,
-            );
-        } catch (InvalidArgumentException $e) {
-            return response()->json(['message' => $e->getMessage()], 422);
-        }
-
-        return response()->json([
-            'updated' => $count,
-            'data' => $this->sameHour->clusters(15),
-        ]);
-    }
-
     public function clockStop(Request $request, Incident $incident): JsonResponse
     {
         $data = $request->validate([
@@ -1094,7 +1057,69 @@ class IncidentController extends Controller
             ->get()
             ->map(fn (Incident $i) => $this->queueRow($i));
 
-        return response()->json(['data' => $rows]);
+        return response()->json([
+            'data' => $rows,
+            'filters' => $this->pendienteCierreFilterCatalog(),
+        ]);
+    }
+
+    /**
+     * Catálogo completo para filtros de Pendiente de cierre (no depende de las filas actuales).
+     *
+     * @return array{nodos: list<string>, tecnologias: list<string>, energias: list<string>}
+     */
+    private function pendienteCierreFilterCatalog(): array
+    {
+        $nodos = NetworkAssignment::query()
+            ->where('is_active', true)
+            ->whereNotNull('nodo_pop')
+            ->where('nodo_pop', '!=', '')
+            ->distinct()
+            ->orderBy('nodo_pop')
+            ->pluck('nodo_pop')
+            ->map(fn ($v) => trim((string) $v))
+            ->filter(fn ($v) => $v !== '')
+            ->unique(fn ($v) => mb_strtoupper($v))
+            ->values()
+            ->all();
+
+        $tecnologias = NetworkAssignment::query()
+            ->where('is_active', true)
+            ->whereNotNull('tecnologia_acceso')
+            ->where('tecnologia_acceso', '!=', '')
+            ->distinct()
+            ->orderBy('tecnologia_acceso')
+            ->pluck('tecnologia_acceso')
+            ->map(fn ($v) => trim((string) $v))
+            ->filter(fn ($v) => $v !== '')
+            ->unique(fn ($v) => mb_strtoupper($v))
+            ->values()
+            ->all();
+
+        $energiasDb = School::query()
+            ->where('active', true)
+            ->whereNotNull('energy_type')
+            ->where('energy_type', '!=', '')
+            ->distinct()
+            ->orderBy('energy_type')
+            ->pluck('energy_type')
+            ->map(fn ($v) => trim((string) $v))
+            ->filter(fn ($v) => $v !== '')
+            ->values()
+            ->all();
+
+        // Siempre ofrecer los dos tipos canónicos, aunque no haya filas en la cola.
+        $energias = collect(['RED pública', 'PANEL SOLAR'])
+            ->merge($energiasDb)
+            ->unique(fn ($v) => mb_strtoupper((string) $v))
+            ->values()
+            ->all();
+
+        return [
+            'nodos' => $nodos,
+            'tecnologias' => $tecnologias,
+            'energias' => $energias,
+        ];
     }
 
     /** Casos graves abiertos o cerrados (`status=open|closed`). */

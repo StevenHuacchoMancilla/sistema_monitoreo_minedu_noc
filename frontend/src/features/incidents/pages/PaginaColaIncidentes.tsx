@@ -22,10 +22,11 @@ import {
   trClassName,
 } from '../../../components/ui/MarcoTablaDatos'
 import { TarjetaFiltro } from '../../../components/ui/TarjetaFiltro'
-import { SearchField } from '../../../components/ui/ControlesFormulario'
+import { FormField, SearchField, Select } from '../../../components/ui/ControlesFormulario'
 import { FollowupBadge } from '../../../components/monitoring/InsigniasEstado'
 import { InsigniaEnergia } from '../../../components/monitoring/InsigniaEnergia'
 import { Insignia } from '../../../components/ui/InsigniaSuave'
+import { CamposFiltroUbicacionPrtg } from '../../locations/components/CamposFiltroUbicacionPrtg'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/ContextoAuth'
 import { incidentCaseFilePath } from '../../history/api/apiHistorial'
@@ -45,6 +46,20 @@ function matchesCidOrTss(row: { cid?: string | null; tss?: number | string | nul
   if (!tss) return false
   if (digits && Number(tss) === Number(digits)) return true
   return tss.toLowerCase().includes(needle) || (digits !== '' && tss.includes(digits))
+}
+
+function energyBucket(energy?: string | null): 'RED' | 'PANEL' | 'OTHER' | 'NONE' {
+  const value = (energy ?? '').trim().toUpperCase()
+  if (!value) return 'NONE'
+  if (value.includes('PANEL') || value.includes('SOLAR')) return 'PANEL'
+  if (value.includes('RED')) return 'RED'
+  return 'OTHER'
+}
+
+function uniqueSorted(values: Array<string | null | undefined>): string[] {
+  return [...new Set(values.map((v) => (v ?? '').trim()).filter(Boolean))].sort((a, b) =>
+    a.localeCompare(b, 'es', { sensitivity: 'base' }),
+  )
 }
 
 type QueueKind = 'pendiente-cierre' | 'graves' | 'requerimientos' | 'enlace-parcial'
@@ -84,14 +99,21 @@ const META: Record<
   {
     title: string
     description: string
-    fetcher: (opts?: { gravesTab?: GravesTab }) => Promise<{ data: QueueRow[] }>
+    fetcher: (opts?: { gravesTab?: GravesTab }) => Promise<{
+      data: QueueRow[]
+      filters?: { nodos: string[]; tecnologias: string[]; energias: string[] }
+    }>
   }
 > = {
   'pendiente-cierre': {
     title: 'Pendiente de cierre',
     description:
       'Caídas recuperadas a cualquier hora (monitoreo 24h). Al elegir Caída de enlace / Queja pasan a Incidencias; Requerimiento a Requerimientos. Comentario sin resultado queda aquí («Gestión lista»). También puedes cerrar el ticket.',
-    fetcher: () => endpoints.incidentsPendienteCierre() as Promise<{ data: QueueRow[] }>,
+    fetcher: () =>
+      endpoints.incidentsPendienteCierre() as Promise<{
+        data: QueueRow[]
+        filters?: { nodos: string[]; tecnologias: string[]; energias: string[] }
+      }>,
   },
   graves: {
     title: 'Incidencias',
@@ -148,15 +170,29 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   const [deletingReq, setDeletingReq] = useState(false)
 
   const [search, setSearch] = useState('')
+  const [nodoPop, setNodoPop] = useState('')
+  const [energy, setEnergy] = useState('')
+  const [provincia, setProvincia] = useState('')
+  const [distrito, setDistrito] = useState('')
+  const [tecnologia, setTecnologia] = useState('')
+  const [estadoCola, setEstadoCola] = useState('')
   const [gravesTab, setGravesTab] = useState<GravesTab>(() =>
     kind === 'graves' && searchParams.get('tab') === 'cerradas' ? 'closed' : 'open',
   )
   const showingClosedGraves = kind === 'graves' && gravesTab === 'closed'
+  const showQueueFilters = kind === 'pendiente-cierre'
 
   useEffect(() => {
     setSelectedIds(new Set())
     setBulkIds(null)
     setBulkCloseOpen(false)
+    setSearch('')
+    setNodoPop('')
+    setEnergy('')
+    setProvincia('')
+    setDistrito('')
+    setTecnologia('')
+    setEstadoCola('')
   }, [kind])
 
   useEffect(() => {
@@ -180,10 +216,66 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   })
 
   const allRows = useMemo(() => query.data?.data ?? [], [query.data])
-  const rows = useMemo(
-    () => allRows.filter((row) => matchesCidOrTss(row, search)),
-    [allRows, search],
+  const catalogFilters = query.data?.filters
+  const nodoOptions = useMemo(
+    () => uniqueSorted([...(catalogFilters?.nodos ?? []), ...allRows.map((row) => row.nodo_pop)]),
+    [catalogFilters?.nodos, allRows],
   )
+  const tecnologiaOptions = useMemo(
+    () => uniqueSorted([...(catalogFilters?.tecnologias ?? []), ...allRows.map((row) => row.tecnologia)]),
+    [catalogFilters?.tecnologias, allRows],
+  )
+  const energyOptions = useMemo(() => {
+    const labels = uniqueSorted([
+      'RED pública',
+      'PANEL SOLAR',
+      ...(catalogFilters?.energias ?? []),
+      ...allRows.map((row) => row.energy_type),
+    ])
+    const options: Array<{ value: string; label: string }> = []
+    const seen = new Set<string>()
+    for (const label of labels) {
+      const bucket = energyBucket(label)
+      if (bucket === 'NONE' || seen.has(bucket)) continue
+      seen.add(bucket)
+      options.push({
+        value: bucket,
+        label: bucket === 'RED' ? 'Red pública' : bucket === 'PANEL' ? 'Panel solar' : label,
+      })
+    }
+    options.push({ value: 'NONE', label: 'Sin energía' })
+    return options
+  }, [catalogFilters?.energias, allRows])
+
+  const rows = useMemo(() => {
+    return allRows.filter((row) => {
+      if (!matchesCidOrTss(row, search)) return false
+      if (!showQueueFilters) return true
+      if (nodoPop && (row.nodo_pop ?? '').trim().toUpperCase() !== nodoPop.toUpperCase()) return false
+      if (energy && energyBucket(row.energy_type) !== energy) return false
+      if (provincia && (row.provincia ?? '').toUpperCase() !== provincia.toUpperCase()) return false
+      if (distrito && (row.distrito ?? '').toUpperCase() !== distrito.toUpperCase()) return false
+      if (tecnologia && (row.tecnologia ?? '').toUpperCase() !== tecnologia.toUpperCase()) return false
+      if (estadoCola === 'gestion_lista' && !row.gestion_lista) return false
+      if (estadoCola === 'pendiente' && row.gestion_lista) return false
+      return true
+    })
+  }, [allRows, search, showQueueFilters, nodoPop, energy, provincia, distrito, tecnologia, estadoCola])
+
+  const hasQueueFilters = Boolean(
+    search.trim() || nodoPop || energy || provincia || distrito || tecnologia || estadoCola,
+  )
+
+  const clearQueueFilters = () => {
+    setSearch('')
+    setNodoPop('')
+    setEnergy('')
+    setProvincia('')
+    setDistrito('')
+    setTecnologia('')
+    setEstadoCola('')
+  }
+
   const canSelectMany = kind === 'pendiente-cierre' && canManage
   const visibleIds = rows.map((row) => row.incident_id)
   const allVisibleSelected = visibleIds.length > 0 && visibleIds.every((id) => selectedIds.has(id))
@@ -259,19 +351,77 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
       ) : null}
 
       <div className="mb-4">
-        <TarjetaFiltro>
+        <TarjetaFiltro
+          actions={
+            showQueueFilters ? (
+              <Boton type="button" size="sm" variant="ghost" disabled={!hasQueueFilters} onClick={clearQueueFilters}>
+                Limpiar
+              </Boton>
+            ) : null
+          }
+        >
           <SearchField
             className="sm:col-span-2 xl:col-span-2"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             placeholder="CID o TSS"
           />
+          {showQueueFilters ? (
+            <>
+              <FormField label="Nodo / POP">
+                <Select
+                  value={nodoPop}
+                  onChange={(e) => setNodoPop(e.target.value)}
+                >
+                  <option value="">Todos</option>
+                  {nodoOptions.map((nodo) => (
+                    <option key={nodo} value={nodo}>
+                      {nodo}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              <FormField label="Tipo de energía">
+                <Select value={energy} onChange={(e) => setEnergy(e.target.value)}>
+                  <option value="">Todas</option>
+                  {energyOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              <CamposFiltroUbicacionPrtg
+                province={provincia}
+                district={distrito}
+                onProvinceChange={setProvincia}
+                onDistrictChange={setDistrito}
+              />
+              <FormField label="Tecnología">
+                <Select value={tecnologia} onChange={(e) => setTecnologia(e.target.value)}>
+                  <option value="">Todas</option>
+                  {tecnologiaOptions.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              <FormField label="Estado">
+                <Select value={estadoCola} onChange={(e) => setEstadoCola(e.target.value)}>
+                  <option value="">Todos</option>
+                  <option value="gestion_lista">Gestión lista</option>
+                  <option value="pendiente">Pendiente de cierre</option>
+                </Select>
+              </FormField>
+            </>
+          ) : null}
         </TarjetaFiltro>
       </div>
 
       <SectionCard
         title={`${rows.length} registro${rows.length === 1 ? '' : 's'}${
-          search.trim() && rows.length !== allRows.length ? ` de ${allRows.length}` : ''
+          hasQueueFilters && rows.length !== allRows.length ? ` de ${allRows.length}` : ''
         }`}
         action={
           rows.length > 0 ? (

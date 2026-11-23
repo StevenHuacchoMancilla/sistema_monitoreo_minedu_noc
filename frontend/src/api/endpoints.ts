@@ -180,10 +180,6 @@ export const endpoints = {
   },
   deleteAttachment: (id: number, attachmentId: number) =>
     apiDelete<{ ok: boolean }>(`/incidents/${id}/attachments/${attachmentId}`),
-  sameHourGroups: () =>
-    apiGet<{ window_minutes: number; data: Array<Record<string, unknown>> }>('/incidents/same-hour'),
-  applySameHour: (body: { incident_ids: number[]; minedu_reason: string; detail?: string | null }) =>
-    apiPost<{ updated: number }>('/incidents/same-hour', body),
   createManualPartial: (body: {
     school_id?: number
     network_assignment_id?: number
@@ -246,7 +242,10 @@ export const endpoints = {
     apiGet<TicketeraTimeline>(`/ticketera/timeline${toQuery({ cid, from, to })}`),
   syncPrtg: () => apiPost<Record<string, unknown>>('/sync/prtg', undefined, { timeoutMs: 30_000 }),
   incidentsPendienteCierre: () =>
-    apiGet<{ data: Array<Record<string, unknown>> }>('/incidents/queues/pendiente-cierre'),
+    apiGet<{
+      data: Array<Record<string, unknown>>
+      filters?: { nodos: string[]; tecnologias: string[]; energias: string[] }
+    }>('/incidents/queues/pendiente-cierre'),
   incidentsGraves: (params?: { status?: 'open' | 'closed' }) =>
     apiGet<{ data: Array<Record<string, unknown>> }>(
       `/incidents/queues/graves${params?.status && params.status !== 'open' ? `?status=${params.status}` : ''}`,

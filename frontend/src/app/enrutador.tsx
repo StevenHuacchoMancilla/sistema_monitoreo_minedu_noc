@@ -1,7 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { PaginaDashboardPrtg } from '../features/dashboard-prtg/pages/PaginaDashboardPrtg'
 import { PaginaCaidasActivas } from '../features/incidents/pages/PaginaCaidasActivas'
-import { PaginaCaidasMismaHora } from '../features/incidents/pages/PaginaCaidasMismaHora'
 import { PaginaColaIncidentes } from '../features/incidents/pages/PaginaColaIncidentes'
 import { PaginaMantenimiento } from '../features/incidents/pages/PaginaMantenimiento'
 import { PaginaConcentraciones } from '../features/incidents/pages/PaginaConcentraciones'
@@ -130,7 +129,6 @@ export function AppRouter() {
           </Route>
 
           <Route element={<RequierePermiso permission={P.adminView} />}>
-            <Route path="/incidents/same-hour" element={<PaginaCaidasMismaHora />} />
             <Route path="/concentrations" element={<PaginaConcentraciones />} />
             <Route path="/concentrations/zone" element={<PaginaZonaConcentracion />} />
             <Route path="/mass-outages" element={<PaginaCaidasMasivas />} />

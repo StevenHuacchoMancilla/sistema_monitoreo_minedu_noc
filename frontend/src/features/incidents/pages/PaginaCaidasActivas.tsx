@@ -27,6 +27,7 @@ import {
   trClassName,
 } from '../../../components/ui/MarcoTablaDatos'
 import { FollowupBadge, PrtgStatusBadge } from '../../../components/monitoring/InsigniasEstado'
+import { InsigniaEnergia } from '../../../components/monitoring/InsigniaEnergia'
 import { FOLLOWUP_LABELS } from '../../../components/ui/Insignia'
 import { useValorDebounce } from '../../../lib/useValorDebounce'
 import { useAhora } from '../../../lib/useAhora'
@@ -289,6 +290,7 @@ export function PaginaCaidasActivas({
   const currentPage = Math.min(page, lastPage)
   const pageRows = rows.slice((currentPage - 1) * perPage, currentPage * perPage)
   const canSelectMany = title === 'Pendientes de gestión' && canManage
+  const showEnergy = title === 'Pendientes de gestión' || title === 'Caídas totales'
   const canSelectReport = title === 'Caídas totales'
   const showSelect = canSelectMany || canSelectReport
   const pageReportKeys = pageRows.map(reportKey).filter((key): key is string => key != null)
@@ -574,7 +576,10 @@ export function PaginaCaidasActivas({
         {rows.length > 0 ? (
           <>
             <DataTableContainer className={outages.isPlaceholderData ? 'opacity-70 transition-opacity' : ''}>
-              <table className={`${tableClassName} table-fixed`} style={{ minWidth: showSelect ? 1220 : 1180 }}>
+              <table
+                className={`${tableClassName} table-fixed`}
+                style={{ minWidth: showSelect ? (showEnergy ? 1320 : 1220) : showEnergy ? 1280 : 1180 }}
+              >
                 <colgroup>
                   {showSelect ? <col className="w-10" /> : null}
                   <col className="w-[5.5rem]" />
@@ -582,6 +587,7 @@ export function PaginaCaidasActivas({
                   <col className="w-[14rem]" />
                   <col className="w-[9rem]" />
                   <col className="w-[4.5rem]" />
+                  {showEnergy ? <col className="w-[7rem]" /> : null}
                   <col className="w-[6.5rem]" />
                   <col className="w-[6.5rem]" />
                   <col className="w-[10.5rem]" />
@@ -628,6 +634,11 @@ export function PaginaCaidasActivas({
                       <span className="block">TSS</span>
                       <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">N° colegio</span>
                     </th>
+                    {showEnergy ? (
+                      <th className={thClassName} title="Fuente de energía del colegio">
+                        Tipo de energía
+                      </th>
+                    ) : null}
                     <th className={thClassName}>
                       <span className="block">{openedLabel}</span>
                       <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">fecha · hora</span>
@@ -657,6 +668,7 @@ export function PaginaCaidasActivas({
                       durationSource={durationSource}
                       durationCaption={durationCaption}
                       showManagementTag={showManagementTag}
+                      showEnergy={showEnergy}
                       showSelect={showSelect}
                       selectKey={canSelectReport ? reportKey(row) : null}
                       selected={
@@ -785,6 +797,7 @@ function OutageTableRow({
   durationSource,
   durationCaption,
   showSelect = false,
+  showEnergy = false,
   selectKey = null,
   selected = false,
   onToggleSelect,
@@ -802,6 +815,7 @@ function OutageTableRow({
   durationCaption: string
   showManagementTag?: boolean
   showSelect?: boolean
+  showEnergy?: boolean
   selectKey?: string | null
   selected?: boolean
   onToggleSelect?: (incidentId: number) => void
@@ -902,6 +916,11 @@ function OutageTableRow({
       <td className={`${outageTd} font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
         {row.tss ?? '—'}
       </td>
+      {showEnergy ? (
+        <td className={outageTd}>
+          <InsigniaEnergia energy={row.energy_type} size="sm" />
+        </td>
+      ) : null}
       <td className={`${tdDateClassName} !align-top`}>
         <IsoDateTimeCell value={clock} />
       </td>

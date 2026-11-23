@@ -82,7 +82,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/incidents/queues/enlace-parcial', [IncidentController::class, 'enlaceParcial']);
         Route::get('/incidents/lookup', [IncidentController::class, 'lookupSchool']);
         Route::get('/incidents/maintenance', [IncidentController::class, 'maintenanceIndex']);
-        Route::get('/incidents/same-hour', [IncidentController::class, 'sameHour']);
         Route::get('/notifications/operational', [OperationalNotificationController::class, 'index']);
         Route::get('/notifications/restorations', [OperationalNotificationController::class, 'restorations']);
         Route::get('/notifications/outages', [OperationalNotificationController::class, 'outages']);
@@ -155,7 +154,6 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('/incidents/manual-partial', [IncidentController::class, 'storeManualPartial']);
             Route::post('/incidents/manual', [IncidentController::class, 'storeManual']);
             Route::post('/incidents/preventive', [IncidentController::class, 'storePreventive']);
-            Route::post('/incidents/same-hour', [IncidentController::class, 'applySameHour']);
             Route::put('/incidents/{incident}', [IncidentController::class, 'update']);
             Route::post('/incidents/{incident}/managements', [IncidentController::class, 'storeManagement']);
             Route::post('/incidents/{incident}/updates', [IncidentController::class, 'addUpdate']);

@@ -7,7 +7,6 @@ import {
   Bell,
   ChevronDown,
   CircleCheck,
-  Clock,
   FileSpreadsheet,
   Sheet,
   Radio,
@@ -75,7 +74,6 @@ const SECTION_LABEL: Record<NavSection, string> = {
 const NAV: NavItem[] = [
   { section: 'operacion', to: '/dashboard/prtg', label: 'Resumen PRTG', end: true, icon: LayoutDashboard, accent: 'prtg', permission: P.dashboardPrtg },
   { section: 'operacion', to: '/incidents/total', label: 'Caídas totales', badgeKey: 'caidas_totales', tone: 'danger', icon: Layers, permission: P.incidentsView },
-  { section: 'operacion', to: '/incidents/same-hour', label: 'Misma hora', icon: Clock, permission: P.adminView },
   { section: 'operacion', to: '/incidents/pendiente-gestion', label: 'Pendientes de gestión', badgeKey: 'pendientes_contacto', tone: 'warn', icon: Phone, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/managing', label: 'En gestión', badgeKey: 'en_gestion', tone: 'info', icon: Activity, permission: P.incidentsView },
   { section: 'operacion', to: '/incidents/pendiente-cierre', label: 'Pendiente de cierre', badgeKey: 'pendiente_cierre', tone: 'warn', icon: ShieldAlert, permission: P.incidentsView },
