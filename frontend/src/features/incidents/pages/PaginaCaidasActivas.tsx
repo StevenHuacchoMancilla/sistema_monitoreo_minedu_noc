@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQueryClient } from '@tanstack/react-query'
 import { Link, useSearchParams } from 'react-router-dom'
-import { Clock3, Eye, History, Hourglass, ImageDown, Network, RefreshCw, Sparkles, SquarePen, TriangleAlert, Wrench } from 'lucide-react'
+import {
+  Activity,
+  Clock3,
+  Eye,
+  History,
+  Hourglass,
+  ImageDown,
+  ListFilter,
+  Network,
+  RefreshCw,
+  Sparkles,
+  SquarePen,
+  Ticket,
+  TriangleAlert,
+  Wrench,
+} from 'lucide-react'
 import { useAuth } from '../../auth/context/ContextoAuth'
 import { DisenoApp } from '../../../layouts/DisenoApp'
 import { EncabezadoPagina } from '../../../components/ui/EncabezadoPagina'
@@ -239,11 +254,13 @@ export function PaginaCaidasActivas({
   )
 
   const kpis = useMemo(() => {
-    const counts = { total: scoped.length, new: 0, mid: 0, long: 0, managing: 0 }
+    const counts = { total: scoped.length, new: 0, mid: 0, long: 0, managing: 0, down: 0, operativo: 0 }
     for (const row of scoped) {
       const bucket = bucketOf(elapsedSeconds(downClock(row, durationSource), now))
       if (bucket) counts[bucket]++
       if (inManagement(row)) counts.managing++
+      if (row.estado_prtg === 'CAIDO') counts.down++
+      else if (row.estado_prtg === 'OPERATIVO') counts.operativo++
     }
     return counts
   }, [scoped, now, durationSource])
@@ -293,6 +310,18 @@ export function PaginaCaidasActivas({
   const showEnergy = title === 'Pendientes de gestión' || title === 'Caídas totales'
   const canSelectReport = title === 'Caídas totales'
   const showSelect = canSelectMany || canSelectReport
+  const isManaging = source === 'managing'
+  const tableMinWidth = showSelect
+    ? showEnergy
+      ? 1380
+      : isManaging
+        ? 1280
+        : 1220
+    : showEnergy
+      ? 1320
+      : isManaging
+        ? 1240
+        : 1180
   const pageReportKeys = pageRows.map(reportKey).filter((key): key is string => key != null)
   const allReportPageSelected = pageReportKeys.length > 0 && pageReportKeys.every((key) => reportKeys.has(key))
   const pageSelectableIds = pageRows
@@ -330,6 +359,91 @@ export function PaginaCaidasActivas({
     void summary.refetch()
   }
 
+  const recordsLabel =
+    rows.length === kpis.total
+      ? `${rows.length.toLocaleString('es-PE')} registros`
+      : `${rows.length.toLocaleString('es-PE')} de ${kpis.total.toLocaleString('es-PE')}`
+
+  const filterFields = (
+    <>
+      <SearchField
+        label="Buscar"
+        className="sm:col-span-2 xl:col-span-2"
+        value={search}
+        placeholder="CID o TSS"
+        onChange={(e) => withPageReset(setSearch)(e.target.value)}
+      />
+      <FormField label="Estado gestión">
+        <Select
+          value={followup}
+          disabled={title === 'Pendientes de gestión' || title === 'Pendientes de contacto' || title === 'Recaída en gestión'}
+          onChange={(e) => withPageReset(setFollowup)(e.target.value)}
+        >
+          {FOLLOWUP_FILTERS.map((f) => (
+            <option key={f.value || 'all'} value={f.value}>
+              {f.label}
+            </option>
+          ))}
+        </Select>
+      </FormField>
+      {showReopenedFilter ? (
+        <FormField label="Recaída">
+          <Select
+            value={reopenedScope}
+            onChange={(e) => withPageReset(setReopenedScope)(e.target.value as '' | 'only' | 'exclude')}
+          >
+            <option value="">Todas</option>
+            <option value="only">Solo recaída en gestión</option>
+            <option value="exclude">Sin recaída (primera caída)</option>
+          </Select>
+        </FormField>
+      ) : null}
+      {showManagementFilter ? (
+        <FormField label="Situación">
+          <Select
+            value={managementScope}
+            onChange={(e) => withPageReset(setManagementScope)(e.target.value as '' | 'managing' | 'new')}
+          >
+            <option value="">Todas</option>
+            <option value="managing">En gestión</option>
+            <option value="new">Sin gestión</option>
+          </Select>
+        </FormField>
+      ) : null}
+      <CamposFiltroUbicacionPrtg
+        province={provincia}
+        district={distrito}
+        onProvinceChange={withPageReset(setProvincia)}
+        onDistrictChange={withPageReset(setDistrito)}
+      />
+      <FormField label="Tecnología">
+        <Select value={tecnologia} onChange={(e) => withPageReset(setTecnologia)(e.target.value)}>
+          <option value="">Todas</option>
+          {technologies.map((t) => (
+            <option key={t} value={t}>
+              {t}
+            </option>
+          ))}
+        </Select>
+      </FormField>
+      <FormField label="Caída desde">
+        <Input type="date" value={fromDate} max={toDate || undefined} onChange={(e) => withPageReset(setFromDate)(e.target.value)} />
+      </FormField>
+      <FormField label="Caída hasta">
+        <Input type="date" value={toDate} min={fromDate || undefined} onChange={(e) => withPageReset(setToDate)(e.target.value)} />
+      </FormField>
+      <FormField label="Duración">
+        <Select value={duration} onChange={(e) => withPageReset(setDuration)(e.target.value as DurationBucket)}>
+          {DURATION_FILTERS.map((d) => (
+            <option key={d.value || 'any'} value={d.value}>
+              {d.label}
+            </option>
+          ))}
+        </Select>
+      </FormField>
+    </>
+  )
+
   return (
     <DisenoApp
       bare
@@ -337,158 +451,144 @@ export function PaginaCaidasActivas({
       onRefresh={refresh}
       onSyncPrtg={() => prtg.mutate()}
     >
-      <EncabezadoPagina
-        icon={<TriangleAlert className="h-5 w-5 text-red-600 dark:text-red-400" aria-hidden />}
-        title={title}
-        badges={
-          <Insignia tone={source === 'managing' ? 'info' : 'danger'}>
-            {kpis.total.toLocaleString('es-PE')} {source === 'managing' ? (kpis.total === 1 ? 'abierto' : 'abiertos') : (kpis.total === 1 ? 'activa' : 'activas')}
-          </Insignia>
-        }
-        description={description}
-        actions={
-          <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
-            <span
-              className="text-[11px] font-medium text-slate-500 tabular-nums dark:text-slate-400"
-              title="Hora de la última sincronización PRTG finalizada"
-            >
-              Sync PRTG {lastPrtgSync ? formatTime(lastPrtgSync) : '—'}
-            </span>
-            <div className="flex flex-wrap items-center justify-end gap-1.5">
-              {canManage && title === 'Caídas totales' ? (
-                <>
-                  <Boton size="sm" variant="secondary" onClick={() => setManualOpen(true)}>
-                    Registrar ticket
-                  </Boton>
-                  <Boton size="sm" variant="secondary" onClick={() => setLinkOutageOpen(true)}>
-                    <Network className="h-3.5 w-3.5" aria-hidden />
-                    Caída de enlace
-                  </Boton>
-                </>
-              ) : null}
-              <Boton size="sm" onClick={refresh} loading={outages.isFetching} aria-label="Refrescar caídas activas">
-                {!outages.isFetching ? <RefreshCw className="h-3.5 w-3.5" aria-hidden /> : null}
-                Refrescar
+      {isManaging ? (
+        <div className="mb-5 space-y-4">
+          <section className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(59,130,246,0.10),_transparent_55%),linear-gradient(180deg,_rgba(248,250,252,0.95),_transparent_42%)] dark:bg-[radial-gradient(ellipse_at_top_right,_rgba(59,130,246,0.14),_transparent_55%),linear-gradient(180deg,_rgba(15,23,42,0.55),_transparent_45%)]"
+              aria-hidden
+            />
+            <div className="relative flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-start md:justify-between md:p-6">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
+                  Operación · seguimiento
+                </p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+                    <Activity className="h-5 w-5" aria-hidden />
+                  </span>
+                  <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl dark:text-slate-50">
+                    {title}
+                  </h1>
+                  <Insignia tone="info">
+                    {kpis.total.toLocaleString('es-PE')} {kpis.total === 1 ? 'abierto' : 'abiertos'}
+                  </Insignia>
+                </div>
+                <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-slate-600 sm:text-[14px] dark:text-slate-300">
+                  {description}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-col items-stretch gap-2 sm:items-end">
+                <span
+                  className="text-[11px] font-medium text-slate-500 tabular-nums dark:text-slate-400"
+                  title="Hora de la última sincronización PRTG finalizada"
+                >
+                  Sync PRTG {lastPrtgSync ? formatTime(lastPrtgSync) : '—'}
+                </span>
+                <Boton size="sm" onClick={refresh} loading={outages.isFetching} aria-label="Refrescar En gestión">
+                  {!outages.isFetching ? <RefreshCw className="h-3.5 w-3.5" aria-hidden /> : null}
+                  Refrescar
+                </Boton>
+              </div>
+            </div>
+          </section>
+
+          <GrillaMetricas dense>
+            <TarjetaMetrica label="Total abiertos" value={kpis.total} icon={<Activity />} tone="info" />
+            <TarjetaMetrica label={`Abiertos < ${NEW_MINUTES} min`} value={kpis.new} icon={<Sparkles />} tone="info" />
+            <TarjetaMetrica label={`${NEW_MINUTES}–${HOUR_MINUTES} min`} value={kpis.mid} icon={<Clock3 />} tone="warning" />
+            <TarjetaMetrica label="Más de 1 h" value={kpis.long} icon={<Hourglass />} tone="danger" />
+            <TarjetaMetrica label="Caídos PRTG" value={kpis.down} icon={<TriangleAlert />} tone="danger" />
+          </GrillaMetricas>
+
+          <section className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm md:p-5 dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
+                  <ListFilter className="h-4 w-4 text-slate-500" aria-hidden />
+                  Filtros
+                </h2>
+                <p className="mt-0.5 text-[12px] text-slate-500">Acota tickets abiertos por ubicación, estado o duración</p>
+              </div>
+              <Boton type="button" size="sm" variant="ghost" onClick={clearFilters} disabled={!hasFilters}>
+                Limpiar
               </Boton>
             </div>
-          </div>
-        }
-      />
-
-      <GrillaMetricas dense>
-        <TarjetaMetrica
-          label={source === 'managing' ? 'Total abiertos' : 'Total activas'}
-          value={kpis.total}
-          icon={<TriangleAlert />}
-          tone={source === 'managing' ? 'info' : 'danger'}
-        />
-        <TarjetaMetrica
-          label={source === 'managing' ? `Abiertos < ${NEW_MINUTES} min` : durationSource === 'current_down' ? `Esta caída < ${NEW_MINUTES} min` : `Nuevas < ${NEW_MINUTES} min`}
-          value={kpis.new}
-          icon={<Sparkles />}
-          tone="info"
-        />
-        <TarjetaMetrica label={`${NEW_MINUTES}–${HOUR_MINUTES} min`} value={kpis.mid} icon={<Clock3 />} tone="warning" />
-        <TarjetaMetrica label="Más de 1 h" value={kpis.long} icon={<Hourglass />} tone="danger" />
-        <TarjetaMetrica label="En gestión" value={kpis.managing} icon={<Wrench />} tone="cyan" />
-      </GrillaMetricas>
-
-      <div className="mb-4">
-        <TarjetaFiltro
-          actions={
-            <Boton type="button" size="sm" variant="ghost" onClick={clearFilters} disabled={!hasFilters}>
-              Limpiar
-            </Boton>
-          }
-        >
-          <SearchField
-            label="Buscar"
-            className="sm:col-span-2 xl:col-span-2"
-            value={search}
-            placeholder="CID o TSS"
-            onChange={(e) => withPageReset(setSearch)(e.target.value)}
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+              {filterFields}
+            </div>
+          </section>
+        </div>
+      ) : (
+        <>
+          <EncabezadoPagina
+            icon={<TriangleAlert className="h-5 w-5 text-red-600 dark:text-red-400" aria-hidden />}
+            title={title}
+            badges={
+              <Insignia tone="danger">
+                {kpis.total.toLocaleString('es-PE')} {kpis.total === 1 ? 'activa' : 'activas'}
+              </Insignia>
+            }
+            description={description}
+            actions={
+              <div className="flex w-full flex-col items-stretch gap-2 sm:w-auto sm:items-end">
+                <span
+                  className="text-[11px] font-medium text-slate-500 tabular-nums dark:text-slate-400"
+                  title="Hora de la última sincronización PRTG finalizada"
+                >
+                  Sync PRTG {lastPrtgSync ? formatTime(lastPrtgSync) : '—'}
+                </span>
+                <div className="flex flex-wrap items-center justify-end gap-1.5">
+                  {canManage && title === 'Caídas totales' ? (
+                    <>
+                      <Boton size="sm" variant="secondary" onClick={() => setManualOpen(true)}>
+                        Registrar ticket
+                      </Boton>
+                      <Boton size="sm" variant="secondary" onClick={() => setLinkOutageOpen(true)}>
+                        <Network className="h-3.5 w-3.5" aria-hidden />
+                        Caída de enlace
+                      </Boton>
+                    </>
+                  ) : null}
+                  <Boton size="sm" onClick={refresh} loading={outages.isFetching} aria-label="Refrescar caídas activas">
+                    {!outages.isFetching ? <RefreshCw className="h-3.5 w-3.5" aria-hidden /> : null}
+                    Refrescar
+                  </Boton>
+                </div>
+              </div>
+            }
           />
-          <FormField label="Estado gestión">
-            <Select
-              value={followup}
-              disabled={title === 'Pendientes de gestión' || title === 'Pendientes de contacto' || title === 'Recaída en gestión'}
-              onChange={(e) => withPageReset(setFollowup)(e.target.value)}
+
+          <GrillaMetricas dense>
+            <TarjetaMetrica label="Total activas" value={kpis.total} icon={<TriangleAlert />} tone="danger" />
+            <TarjetaMetrica
+              label={durationSource === 'current_down' ? `Esta caída < ${NEW_MINUTES} min` : `Nuevas < ${NEW_MINUTES} min`}
+              value={kpis.new}
+              icon={<Sparkles />}
+              tone="info"
+            />
+            <TarjetaMetrica label={`${NEW_MINUTES}–${HOUR_MINUTES} min`} value={kpis.mid} icon={<Clock3 />} tone="warning" />
+            <TarjetaMetrica label="Más de 1 h" value={kpis.long} icon={<Hourglass />} tone="danger" />
+            <TarjetaMetrica label="En gestión" value={kpis.managing} icon={<Wrench />} tone="cyan" />
+          </GrillaMetricas>
+
+          <div className="mb-4">
+            <TarjetaFiltro
+              actions={
+                <Boton type="button" size="sm" variant="ghost" onClick={clearFilters} disabled={!hasFilters}>
+                  Limpiar
+                </Boton>
+              }
             >
-              {FOLLOWUP_FILTERS.map((f) => (
-                <option key={f.value || 'all'} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          {showReopenedFilter ? (
-            <FormField label="Recaída">
-              <Select
-                value={reopenedScope}
-                onChange={(e) => withPageReset(setReopenedScope)(e.target.value as '' | 'only' | 'exclude')}
-              >
-                <option value="">Todas</option>
-                <option value="only">Solo recaída en gestión</option>
-                <option value="exclude">Sin recaída (primera caída)</option>
-              </Select>
-            </FormField>
-          ) : null}
-          {showManagementFilter ? (
-            <FormField label="Situación">
-              <Select
-                value={managementScope}
-                onChange={(e) => withPageReset(setManagementScope)(e.target.value as '' | 'managing' | 'new')}
-              >
-                <option value="">Todas</option>
-                <option value="managing">En gestión</option>
-                <option value="new">Sin gestión</option>
-              </Select>
-            </FormField>
-          ) : null}
-          <CamposFiltroUbicacionPrtg
-            province={provincia}
-            district={distrito}
-            onProvinceChange={withPageReset(setProvincia)}
-            onDistrictChange={withPageReset(setDistrito)}
-          />
-          <FormField label="Tecnología">
-            <Select value={tecnologia} onChange={(e) => withPageReset(setTecnologia)(e.target.value)}>
-              <option value="">Todas</option>
-              {technologies.map((t) => (
-                <option key={t} value={t}>
-                  {t}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-          <FormField label="Caída desde">
-            <Input type="date" value={fromDate} max={toDate || undefined} onChange={(e) => withPageReset(setFromDate)(e.target.value)} />
-          </FormField>
-          <FormField label="Caída hasta">
-            <Input type="date" value={toDate} min={fromDate || undefined} onChange={(e) => withPageReset(setToDate)(e.target.value)} />
-          </FormField>
-          <FormField label="Duración">
-            <Select value={duration} onChange={(e) => withPageReset(setDuration)(e.target.value as DurationBucket)}>
-              {DURATION_FILTERS.map((d) => (
-                <option key={d.value || 'any'} value={d.value}>
-                  {d.label}
-                </option>
-              ))}
-            </Select>
-          </FormField>
-        </TarjetaFiltro>
-      </div>
+              {filterFields}
+            </TarjetaFiltro>
+          </div>
+        </>
+      )}
 
-      <SectionCard
-        title={tableTitle}
-        action={
-          <span className="text-xs font-semibold text-slate-500 tabular-nums dark:text-slate-400">
-            {rows.length === kpis.total
-              ? `${rows.length.toLocaleString('es-PE')} registros`
-              : `${rows.length.toLocaleString('es-PE')} de ${kpis.total.toLocaleString('es-PE')}`}
-          </span>
-        }
-      >
+      {(() => {
+        const listBody = (
+          <>
         {outages.isLoading ? <LoadingState /> : null}
         {outages.isError ? (
           <ErrorState message={outages.error instanceof Error ? outages.error.message : 'Error'} />
@@ -575,11 +675,10 @@ export function PaginaCaidasActivas({
 
         {rows.length > 0 ? (
           <>
-            <DataTableContainer className={outages.isPlaceholderData ? 'opacity-70 transition-opacity' : ''}>
-              <table
-                className={`${tableClassName} table-fixed`}
-                style={{ minWidth: showSelect ? (showEnergy ? 1320 : 1220) : showEnergy ? 1280 : 1180 }}
-              >
+            <DataTableContainer
+              className={`${outages.isPlaceholderData ? 'opacity-70 transition-opacity' : ''}${isManaging ? ' rounded-xl border-slate-200/80 shadow-none dark:border-slate-800' : ''}`}
+            >
+              <table className={`${tableClassName} table-fixed`} style={{ minWidth: tableMinWidth }}>
                 <colgroup>
                   {showSelect ? <col className="w-10" /> : null}
                   <col className="w-[5.5rem]" />
@@ -592,7 +691,7 @@ export function PaginaCaidasActivas({
                   <col className="w-[6.5rem]" />
                   <col className="w-[10.5rem]" />
                   <col className="w-[9rem]" />
-                  <col className="w-[4.5rem]" />
+                  <col className={isManaging ? 'w-[9.5rem]' : 'w-[7.5rem]'} />
                 </colgroup>
                 <thead className={theadClassName}>
                   <tr>
@@ -723,7 +822,40 @@ export function PaginaCaidasActivas({
             />
           </>
         ) : null}
-      </SectionCard>
+          </>
+        )
+
+        return isManaging ? (
+          <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5 dark:border-slate-800">
+              <div className="min-w-0">
+                <h2 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                  {tableTitle}
+                  <span className="ml-2 text-sm font-medium text-slate-400">· listado</span>
+                </h2>
+                <p className="mt-1 text-[13px] text-slate-500 dark:text-slate-400">
+                  Usa los iconos de la derecha: historial, ticket, imagen y gestionar.
+                </p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-semibold text-slate-600 tabular-nums dark:bg-slate-800 dark:text-slate-300">
+                {recordsLabel}
+              </span>
+            </div>
+            <div className="p-3 sm:p-4 md:p-5">{listBody}</div>
+          </section>
+        ) : (
+          <SectionCard
+            title={tableTitle}
+            action={
+              <span className="text-xs font-semibold text-slate-500 tabular-nums dark:text-slate-400">
+                {recordsLabel}
+              </span>
+            }
+          >
+            {listBody}
+          </SectionCard>
+        )
+      })()}
 
       {bulkIds !== null && bulkIds.length > 0 ? (
         <ModalGestionIncidente
@@ -992,12 +1124,12 @@ function OutageTableRow({
           {row.nodo_pop?.trim() ? row.nodo_pop : '—'}
         </Truncate>
       </td>
-      <td className="sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 !align-top text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60">
-        <div className="inline-flex flex-wrap items-center justify-end gap-0.5">
+      <td className="sticky right-0 z-10 overflow-visible bg-white/95 px-2 py-2 !align-top text-right shadow-[-10px_0_12px_-10px_rgba(15,23,42,0.14)] backdrop-blur group-hover:bg-blue-50/60 dark:bg-slate-900/95 dark:group-hover:bg-slate-800/80">
+        <div className="inline-flex flex-nowrap items-center justify-end gap-1">
           {row.school_id ? (
             <Link
               to={`/history/schools/${row.school_id}`}
-              className="inline-flex h-8 w-8 items-center justify-center rounded-lg text-slate-500 hover:bg-slate-100 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+              className="inline-flex size-8 items-center justify-center rounded-lg border border-slate-200 bg-white text-slate-500 shadow-sm transition-colors hover:bg-slate-50 hover:text-slate-800 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:border-slate-700 dark:bg-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-slate-100"
               title="Historial del colegio"
               aria-label="Historial del colegio"
             >
@@ -1005,15 +1137,13 @@ function OutageTableRow({
             </Link>
           ) : null}
           {canManage && showGenerateTicket && onGenerateTicket ? (
-            <Boton
-              type="button"
-              size="sm"
-              variant="secondary"
-              className="!h-8 !px-2 !text-[11px]"
+            <BotonIcono
+              label={row.ticket_code ? 'Ticket / evento' : 'Generar ticket'}
               onClick={() => onGenerateTicket(row)}
+              className="!size-8 text-indigo-700 focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:outline-none dark:text-indigo-300"
             >
-              {row.ticket_code ? 'Ticket / evento' : 'Generar ticket'}
-            </Boton>
+              <Ticket className="h-4 w-4" aria-hidden />
+            </BotonIcono>
           ) : null}
           {showGenerateTicket && row.ticket_code && row.incident_id != null && onDownloadTicketImage ? (
             <BotonIcono
@@ -1034,7 +1164,10 @@ function OutageTableRow({
               {canManage ? <SquarePen className="h-4 w-4" aria-hidden /> : <Eye className="h-4 w-4" aria-hidden />}
             </BotonIcono>
           ) : (
-            <span className="px-1 text-[10px] font-medium text-amber-700 dark:text-amber-300" title="Sin ticket: vigilancia PRTG">
+            <span
+              className="inline-flex h-8 items-center rounded-lg border border-amber-200 bg-amber-50 px-2 text-[10px] font-semibold whitespace-nowrap text-amber-800 dark:border-amber-900 dark:bg-amber-950/40 dark:text-amber-300"
+              title="Sin ticket: vigilancia PRTG"
+            >
               Solo aviso
             </span>
           )}
