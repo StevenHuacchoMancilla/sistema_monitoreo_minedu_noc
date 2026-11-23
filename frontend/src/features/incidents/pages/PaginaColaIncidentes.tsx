@@ -54,6 +54,7 @@ type QueueRow = {
   tss?: number | string | null
   local_educativo?: string | null
   codigo_local?: string | null
+  energy_type?: string | null
   provincia?: string | null
   distrito?: string | null
   tecnologia?: string | null
@@ -346,7 +347,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                   {canSelectMany ? <col className="w-10" /> : null}
                   <col className="w-[7.5rem]" />
                   <col className="w-[4.25rem]" />
-                  <col className="w-[5rem]" />
+                  <col className="w-[7rem]" />
                   <col />
                   <col className="w-[8.5rem]" />
                   <col className="w-[7.5rem]" />
@@ -381,8 +382,8 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                   <th className={thClassName}>CID</th>
                   <th className={thClassName}>TSS</th>
                   {kind === 'pendiente-cierre' ? (
-                    <th className={thClassName} title="Código con el que se registró la gestión">
-                      Código
+                    <th className={thClassName} title="Fuente de energía del colegio">
+                      Tipo de energía
                     </th>
                   ) : null}
                   <th className={thClassName}>Local</th>
@@ -439,8 +440,8 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                         {row.tss ?? '—'}
                       </td>
                       {kind === 'pendiente-cierre' ? (
-                        <td className={`${idTd} font-mono font-semibold text-slate-900 dark:text-slate-100`}>
-                          {row.root_cause_code?.trim() || '—'}
+                        <td className={idTd}>
+                          <EnergyTypeBadge energy={row.energy_type} />
                         </td>
                       ) : null}
                       <td className={queueTd}>
@@ -874,4 +875,32 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
       />
     </DisenoApp>
   )
+}
+
+function EnergyTypeBadge({ energy }: { energy?: string | null }) {
+  const value = (energy ?? '').trim().toUpperCase()
+  if (value.includes('PANEL') || value.includes('SOLAR')) {
+    return (
+      <span
+        className="inline-flex rounded-md bg-yellow-50 px-2 py-0.5 text-[12px] font-semibold text-yellow-900 dark:bg-yellow-950/40 dark:text-yellow-200"
+        title={energy ?? 'Panel solar'}
+      >
+        Panel solar
+      </span>
+    )
+  }
+  if (value.includes('RED')) {
+    return (
+      <span
+        className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
+        title={energy ?? 'Red pública'}
+      >
+        Red pública
+      </span>
+    )
+  }
+  if (value !== '') {
+    return <span className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{energy}</span>
+  }
+  return <span className="text-slate-400">—</span>
 }

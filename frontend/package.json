@@ -6,6 +6,7 @@
   "packageManager": "pnpm@10.15.0",
   "scripts": {
     "dev": "vite",
+    "dev:rama": "vite --host 0.0.0.0 --port 5174 --strictPort",
     "dev:lan": "vite --host 0.0.0.0 --port 5173",
     "build": "tsc -b && vite build",
     "lint": "oxlint",

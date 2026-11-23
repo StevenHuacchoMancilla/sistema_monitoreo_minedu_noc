@@ -1368,6 +1368,7 @@ class IncidentController extends Controller
             'tss' => $school?->current_sequence,
             'local_educativo' => $school?->local_educativo,
             'codigo_local' => $school?->codigo_local,
+            'energy_type' => $school?->energy_type,
             ...$location,
             'tecnologia' => $assignment?->tecnologia_acceso,
             'followup_status' => $incident->followup_status?->value,
