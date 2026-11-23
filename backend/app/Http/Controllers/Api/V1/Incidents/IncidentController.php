@@ -626,10 +626,9 @@ class IncidentController extends Controller
             $request->user()?->name,
         );
 
-        // Correctivo → Incidencias. Asignación libre solo si MINEDU (Queja / Caída enlace) lo marca.
-        if ($kind === \App\Models\ServiceTicket::KIND_CORRECTIVE) {
-            $this->forceMarkGrave($incident->fresh() ?? $incident, $userId);
-        }
+        // Correctivo sin GS01 → Incidencias (Queja/Caída ya las marcó applyOpeningGestion).
+        // GS01 → solo Mantenimientos. Requerimiento MINEDU → Requerimientos.
+        $this->maybeMarkCorrectiveAsGrave($incident->fresh() ?? $incident, $kind, $userId);
 
         return $this->show($incident->fresh() ?? $incident);
     }
@@ -737,9 +736,7 @@ class IncidentController extends Controller
         }
 
         $kind = strtoupper((string) $data['kind']);
-        if ($kind === \App\Models\ServiceTicket::KIND_CORRECTIVE) {
-            $this->forceMarkGrave($incident->fresh() ?? $incident, $userId);
-        }
+        $this->maybeMarkCorrectiveAsGrave($incident->fresh() ?? $incident, $kind, $userId);
 
         return $this->show($incident->fresh() ?? $incident);
     }
@@ -1619,6 +1616,30 @@ class IncidentController extends Controller
                 .($incident->serviceTicket?->ticket_code ? ' ('.$incident->serviceTicket->ticket_code.')' : '')
                 .'. Al generar se reutiliza ese ticket; no se crea uno nuevo.',
         ];
+    }
+
+    /**
+     * Correctivo → Incidencias, salvo:
+     * - causa GS01 (va a Mantenimientos vía markMaintenance),
+     * - razón MINEDU Requerimiento (ya quedó en Requerimientos),
+     * - Queja / Caída de enlace (ya las marcó applyOpeningGestion).
+     */
+    private function maybeMarkCorrectiveAsGrave(Incident $incident, string $kind, int $userId): void
+    {
+        if (strtoupper($kind) !== \App\Models\ServiceTicket::KIND_CORRECTIVE) {
+            return;
+        }
+        if ($incident->isOpenRequirement()) {
+            return;
+        }
+        if (\App\Models\ServiceTicket::isMaintenanceCause($incident->root_cause_code)) {
+            return;
+        }
+        if ($incident->serviceTicket?->is_maintenance) {
+            return;
+        }
+
+        $this->forceMarkGrave($incident, $userId);
     }
 
     private function forceMarkGrave(Incident $incident, int $userId): void

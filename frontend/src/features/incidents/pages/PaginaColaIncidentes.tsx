@@ -1,7 +1,22 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { CircleX, Eye, FileText, History, ImageDown, Images, SquarePen, Ticket, Trash2 } from 'lucide-react'
+import {
+  AlertOctagon,
+  CircleCheck,
+  CircleX,
+  Eye,
+  FileText,
+  History,
+  ImageDown,
+  Images,
+  ListFilter,
+  RefreshCw,
+  SquarePen,
+  Ticket,
+  Trash2,
+  Zap,
+} from 'lucide-react'
 import { descargarReporteServicioPng } from '../lib/descargarReporteServicioPng'
 import { DisenoApp } from '../../../layouts/DisenoApp'
 import { EncabezadoPagina } from '../../../components/ui/EncabezadoPagina'
@@ -144,6 +159,15 @@ const idTd =
 const actionTd =
   'sticky right-0 z-10 overflow-hidden bg-white px-2 py-2 !align-top text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] group-hover:bg-slate-50 dark:bg-slate-900 dark:group-hover:bg-slate-800/60'
 
+const gravesTh =
+  'px-3 py-2.5 text-left text-[10.5px] font-semibold tracking-[0.08em] whitespace-nowrap text-slate-500 uppercase dark:text-slate-400'
+const gravesTd =
+  'min-w-0 px-3 py-3 align-top text-[13px] leading-snug text-slate-700 dark:text-slate-300'
+const gravesIdTd =
+  'whitespace-nowrap px-3 py-3 align-top text-[13px] leading-snug text-slate-700 dark:text-slate-300'
+const gravesActionTd =
+  'sticky right-0 z-10 overflow-hidden bg-white/95 px-3 py-3 align-top text-right shadow-[-10px_0_12px_-10px_rgba(15,23,42,0.14)] backdrop-blur group-hover:bg-blue-50/70 dark:bg-slate-900/95 dark:group-hover:bg-slate-800/80'
+
 export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   const meta = META[kind]
   const { user } = useAuth()
@@ -180,6 +204,8 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
     kind === 'graves' && searchParams.get('tab') === 'cerradas' ? 'closed' : 'open',
   )
   const showingClosedGraves = kind === 'graves' && gravesTab === 'closed'
+  const isGraves = kind === 'graves'
+  const showEnergyCol = kind === 'pendiente-cierre' || isGraves
   const showQueueFilters = kind === 'pendiente-cierre'
 
   useEffect(() => {
@@ -265,6 +291,22 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   const hasQueueFilters = Boolean(
     search.trim() || nodoPop || energy || provincia || distrito || tecnologia || estadoCola,
   )
+  const hasGravesSearch = Boolean(search.trim())
+
+  const energyStats = useMemo(() => {
+    let red = 0
+    let panel = 0
+    let other = 0
+    let none = 0
+    for (const row of allRows) {
+      const bucket = energyBucket(row.energy_type)
+      if (bucket === 'RED') red += 1
+      else if (bucket === 'PANEL') panel += 1
+      else if (bucket === 'OTHER') other += 1
+      else none += 1
+    }
+    return { red, panel, other, none }
+  }, [allRows])
 
   const clearQueueFilters = () => {
     setSearch('')
@@ -298,139 +340,238 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
     ? 'Registro de incidencias ya cerradas. Abre el expediente para ver gestiones y las fotos de evidencia.'
     : meta.description
 
+  const thCell = isGraves ? gravesTh : thClassName
+  const tdCell = isGraves ? gravesTd : queueTd
+  const tdIdCell = isGraves ? gravesIdTd : idTd
+  const tdActionCell = isGraves ? gravesActionTd : actionTd
+  const recordsLabel = `${rows.length} registro${rows.length === 1 ? '' : 's'}${
+    (hasQueueFilters || hasGravesSearch) && rows.length !== allRows.length ? ` de ${allRows.length}` : ''
+  }`
+
   return (
     <DisenoApp>
-      <EncabezadoPagina
-        title={pageTitle}
-        description={pageDescription}
-        actions={
-          <div className="flex flex-wrap items-center gap-2">
-            {kind === 'pendiente-cierre' ? (
-              <Boton variant="secondary" onClick={() => navigate('/incidents/managing')}>
-                Ir a En gestión
-              </Boton>
-            ) : null}
-            <Boton variant="secondary" onClick={() => void query.refetch()}>
-              Refrescar
-            </Boton>
+      {isGraves ? (
+        <div className="mb-5 space-y-4">
+          <section className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div
+              className={`pointer-events-none absolute inset-0 ${
+                showingClosedGraves
+                  ? 'bg-[radial-gradient(ellipse_at_top_right,_rgba(16,185,129,0.10),_transparent_55%),linear-gradient(180deg,_rgba(248,250,252,0.95),_transparent_42%)] dark:bg-[radial-gradient(ellipse_at_top_right,_rgba(16,185,129,0.14),_transparent_55%),linear-gradient(180deg,_rgba(15,23,42,0.55),_transparent_45%)]'
+                  : 'bg-[radial-gradient(ellipse_at_top_right,_rgba(239,68,68,0.10),_transparent_55%),linear-gradient(180deg,_rgba(248,250,252,0.95),_transparent_42%)] dark:bg-[radial-gradient(ellipse_at_top_right,_rgba(239,68,68,0.14),_transparent_55%),linear-gradient(180deg,_rgba(15,23,42,0.55),_transparent_45%)]'
+              }`}
+              aria-hidden
+            />
+            <div className="relative flex flex-col gap-4 p-5 md:flex-row md:items-start md:justify-between md:p-6">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
+                  Operación · cola grave
+                </p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
+                  <span
+                    className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${
+                      showingClosedGraves
+                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
+                        : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
+                    }`}
+                  >
+                    {showingClosedGraves ? (
+                      <CircleCheck className="h-5 w-5" aria-hidden />
+                    ) : (
+                      <AlertOctagon className="h-5 w-5" aria-hidden />
+                    )}
+                  </span>
+                  <h1 className="text-2xl font-bold tracking-tight text-slate-950 dark:text-slate-50">
+                    {pageTitle}
+                  </h1>
+                  <Insignia tone={showingClosedGraves ? 'success' : 'danger'}>
+                    {allRows.length} {showingClosedGraves ? 'cerrada' : 'activa'}
+                    {allRows.length === 1 ? '' : 's'}
+                  </Insignia>
+                </div>
+                <p className="mt-2 max-w-2xl text-[14px] leading-relaxed text-slate-600 dark:text-slate-300">
+                  {pageDescription}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Boton type="button" variant="secondary" size="sm" onClick={() => void query.refetch()}>
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                  Refrescar
+                </Boton>
+              </div>
+            </div>
+          </section>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <GravesStatCard
+              label="En esta vista"
+              value={allRows.length}
+              hint={showingClosedGraves ? 'Incidencias cerradas' : 'Incidencias abiertas'}
+              tone={showingClosedGraves ? 'success' : 'danger'}
+            />
+            <GravesStatCard label="Red pública" value={energyStats.red} hint="Colegios con red" tone="emerald" />
+            <GravesStatCard label="Panel solar" value={energyStats.panel} hint="Colegios con panel" tone="amber" />
+            <GravesStatCard
+              label="Sin energía"
+              value={energyStats.none + energyStats.other}
+              hint="Sin dato o otro tipo"
+              tone="neutral"
+            />
           </div>
-        }
-      />
 
-      {kind === 'graves' ? (
-        <div className="mb-4 inline-flex rounded-xl border border-slate-200 bg-slate-100 p-1 dark:border-slate-700 dark:bg-slate-900">
-          <button
-            type="button"
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              gravesTab === 'open'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-white/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'
-            }`}
-            onClick={() => {
-              setGravesTab('open')
-              setSearch('')
-            }}
-          >
-            Incidencias
-          </button>
-          <button
-            type="button"
-            className={`rounded-lg px-4 py-2 text-sm font-semibold transition ${
-              gravesTab === 'closed'
-                ? 'bg-blue-600 text-white shadow-sm'
-                : 'text-slate-600 hover:bg-white/70 hover:text-slate-900 dark:text-slate-300 dark:hover:bg-slate-800 dark:hover:text-slate-100'
-            }`}
-            onClick={() => {
-              setGravesTab('closed')
-              setSearch('')
-            }}
-          >
-            Incidencias cerradas
-          </button>
-        </div>
-      ) : null}
+          <div className="grid gap-2 sm:grid-cols-2">
+            <button
+              type="button"
+              onClick={() => {
+                setGravesTab('open')
+                setSearch('')
+              }}
+              className={`rounded-xl border px-4 py-3.5 text-left transition duration-150 ${
+                gravesTab === 'open'
+                  ? 'border-slate-900 bg-slate-900 text-white shadow-md shadow-slate-900/15 dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900 dark:shadow-none'
+                  : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600'
+              }`}
+            >
+              <span className={`block text-[12px] font-semibold ${gravesTab === 'open' ? 'opacity-90' : 'text-slate-600 dark:text-slate-300'}`}>
+                Incidencias
+              </span>
+              <span className={`mt-1 block text-[13px] ${gravesTab === 'open' ? 'opacity-80' : 'text-slate-500'}`}>
+                Casos marcados como incidencia grave
+              </span>
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setGravesTab('closed')
+                setSearch('')
+              }}
+              className={`rounded-xl border px-4 py-3.5 text-left transition duration-150 ${
+                gravesTab === 'closed'
+                  ? 'border-slate-900 bg-slate-900 text-white shadow-md shadow-slate-900/15 dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900 dark:shadow-none'
+                  : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600'
+              }`}
+            >
+              <span className={`block text-[12px] font-semibold ${gravesTab === 'closed' ? 'opacity-90' : 'text-slate-600 dark:text-slate-300'}`}>
+                Incidencias cerradas
+              </span>
+              <span className={`mt-1 block text-[13px] ${gravesTab === 'closed' ? 'opacity-80' : 'text-slate-500'}`}>
+                Historial con gestiones y evidencias
+              </span>
+            </button>
+          </div>
 
-      <div className="mb-4">
-        <TarjetaFiltro
-          actions={
-            showQueueFilters ? (
-              <Boton type="button" size="sm" variant="ghost" disabled={!hasQueueFilters} onClick={clearQueueFilters}>
+          <section className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm md:p-5 dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
+                  <ListFilter className="h-4 w-4 text-slate-500" aria-hidden />
+                  Filtros
+                </h2>
+                <p className="mt-0.5 text-[12px] text-slate-500">Busca por CID o TSS en {pageTitle.toLowerCase()}</p>
+              </div>
+              <Boton type="button" size="sm" variant="ghost" disabled={!hasGravesSearch} onClick={() => setSearch('')}>
                 Limpiar
               </Boton>
-            ) : null
-          }
-        >
-          <SearchField
-            className="sm:col-span-2 xl:col-span-2"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder="CID o TSS"
-          />
-          {showQueueFilters ? (
-            <>
-              <FormField label="Nodo / POP">
-                <Select
-                  value={nodoPop}
-                  onChange={(e) => setNodoPop(e.target.value)}
-                >
-                  <option value="">Todos</option>
-                  {nodoOptions.map((nodo) => (
-                    <option key={nodo} value={nodo}>
-                      {nodo}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-              <FormField label="Tipo de energía">
-                <Select value={energy} onChange={(e) => setEnergy(e.target.value)}>
-                  <option value="">Todas</option>
-                  {energyOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-              <CamposFiltroUbicacionPrtg
-                province={provincia}
-                district={distrito}
-                onProvinceChange={setProvincia}
-                onDistrictChange={setDistrito}
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+              <SearchField
+                className="sm:col-span-2"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="CID o TSS"
               />
-              <FormField label="Tecnología">
-                <Select value={tecnologia} onChange={(e) => setTecnologia(e.target.value)}>
-                  <option value="">Todas</option>
-                  {tecnologiaOptions.map((item) => (
-                    <option key={item} value={item}>
-                      {item}
-                    </option>
-                  ))}
-                </Select>
-              </FormField>
-              <FormField label="Estado">
-                <Select value={estadoCola} onChange={(e) => setEstadoCola(e.target.value)}>
-                  <option value="">Todos</option>
-                  <option value="gestion_lista">Gestión lista</option>
-                  <option value="pendiente">Pendiente de cierre</option>
-                </Select>
-              </FormField>
-            </>
-          ) : null}
-        </TarjetaFiltro>
-      </div>
+            </div>
+          </section>
+        </div>
+      ) : (
+        <>
+          <EncabezadoPagina
+            title={pageTitle}
+            description={pageDescription}
+            actions={
+              <div className="flex flex-wrap items-center gap-2">
+                {kind === 'pendiente-cierre' ? (
+                  <Boton variant="secondary" onClick={() => navigate('/incidents/managing')}>
+                    Ir a En gestión
+                  </Boton>
+                ) : null}
+                <Boton variant="secondary" onClick={() => void query.refetch()}>
+                  Refrescar
+                </Boton>
+              </div>
+            }
+          />
 
-      <SectionCard
-        title={`${rows.length} registro${rows.length === 1 ? '' : 's'}${
-          hasQueueFilters && rows.length !== allRows.length ? ` de ${allRows.length}` : ''
-        }`}
-        action={
-          rows.length > 0 ? (
-            <span className="text-[11px] font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
-              {pageTitle}
-            </span>
-          ) : null
-        }
-      >
+          <div className="mb-4">
+            <TarjetaFiltro
+              actions={
+                showQueueFilters ? (
+                  <Boton type="button" size="sm" variant="ghost" disabled={!hasQueueFilters} onClick={clearQueueFilters}>
+                    Limpiar
+                  </Boton>
+                ) : null
+              }
+            >
+              <SearchField
+                className="sm:col-span-2 xl:col-span-2"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="CID o TSS"
+              />
+              {showQueueFilters ? (
+                <>
+                  <FormField label="Nodo / POP">
+                    <Select value={nodoPop} onChange={(e) => setNodoPop(e.target.value)}>
+                      <option value="">Todos</option>
+                      {nodoOptions.map((nodo) => (
+                        <option key={nodo} value={nodo}>
+                          {nodo}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                  <FormField label="Tipo de energía">
+                    <Select value={energy} onChange={(e) => setEnergy(e.target.value)}>
+                      <option value="">Todas</option>
+                      {energyOptions.map((opt) => (
+                        <option key={opt.value} value={opt.value}>
+                          {opt.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                  <CamposFiltroUbicacionPrtg
+                    province={provincia}
+                    district={distrito}
+                    onProvinceChange={setProvincia}
+                    onDistrictChange={setDistrito}
+                  />
+                  <FormField label="Tecnología">
+                    <Select value={tecnologia} onChange={(e) => setTecnologia(e.target.value)}>
+                      <option value="">Todas</option>
+                      {tecnologiaOptions.map((item) => (
+                        <option key={item} value={item}>
+                          {item}
+                        </option>
+                      ))}
+                    </Select>
+                  </FormField>
+                  <FormField label="Estado">
+                    <Select value={estadoCola} onChange={(e) => setEstadoCola(e.target.value)}>
+                      <option value="">Todos</option>
+                      <option value="gestion_lista">Gestión lista</option>
+                      <option value="pendiente">Pendiente de cierre</option>
+                    </Select>
+                  </FormField>
+                </>
+              ) : null}
+            </TarjetaFiltro>
+          </div>
+        </>
+      )}
+
+      {(() => {
+        const listBody = (
+          <>
         {query.isLoading ? <LoadingState /> : null}
         {query.isError ? (
           <ErrorState message={query.error instanceof Error ? query.error.message : 'Error'} />
@@ -524,9 +665,9 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
         ) : null}
 
         {rows.length > 0 ? (
-          <DataTableContainer>
+          <DataTableContainer className={isGraves ? 'rounded-xl border-slate-200/80 shadow-none dark:border-slate-800' : ''}>
             <table
-              className={`${tableClassName}${kind === 'pendiente-cierre' ? ' table-fixed' : ''}`}
+              className={`${tableClassName}${kind === 'pendiente-cierre' ? ' table-fixed' : ''}${isGraves ? ' min-w-[1080px]' : ''}`}
               style={kind === 'pendiente-cierre' ? { minWidth: canSelectMany ? 1320 : 1220 } : undefined}
             >
               {kind === 'pendiente-cierre' ? (
@@ -543,11 +684,22 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                   <col className="w-[6.75rem]" />
                   <col className="w-[17rem]" />
                 </colgroup>
+              ) : isGraves ? (
+                <colgroup>
+                  <col className="w-[7.5rem]" />
+                  <col className="w-[4.5rem]" />
+                  <col className="w-[8rem]" />
+                  <col />
+                  <col className="w-[9rem]" />
+                  <col className="w-[8.5rem]" />
+                  <col className="w-[8rem]" />
+                  <col className="w-[12rem]" />
+                </colgroup>
               ) : null}
-              <thead className={theadClassName}>
+              <thead className={isGraves ? 'border-b border-slate-200 bg-slate-50/90 dark:border-slate-800 dark:bg-slate-950/50' : theadClassName}>
                 <tr>
                   {canSelectMany ? (
-                    <th className={thClassName}>
+                    <th className={thCell}>
                       <input
                         type="checkbox"
                         className="h-4 w-4 rounded border-slate-300"
@@ -567,31 +719,44 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                       />
                     </th>
                   ) : null}
-                  <th className={thClassName}>CID</th>
-                  <th className={thClassName}>TSS</th>
-                  {kind === 'pendiente-cierre' ? (
-                    <th className={thClassName} title="Fuente de energía del colegio">
+                  <th className={thCell}>CID</th>
+                  <th className={thCell}>TSS</th>
+                  {showEnergyCol ? (
+                    <th className={thCell} title="Fuente de energía del colegio">
                       Tipo de energía
                     </th>
                   ) : null}
-                  <th className={thClassName}>Local</th>
-                  <th className={thClassName}>Ubicación</th>
+                  <th className={thCell}>Local</th>
+                  <th className={thCell}>Ubicación</th>
                   {kind === 'pendiente-cierre' ? (
-                    <th className={thClassName} title="Nodo o POP del colegio">
+                    <th className={thCell} title="Nodo o POP del colegio">
                       Nodo/POP
                     </th>
                   ) : null}
-                  <th className={thClassName}>Estado</th>
+                  <th className={thCell}>Estado</th>
                   {kind === 'pendiente-cierre' ? (
-                    <th className={thClassName} title="Inicio de la caída">
+                    <th className={thCell} title="Inicio de la caída">
                       Caída
                     </th>
                   ) : null}
-                  <th className={thClassName}>{markedLabel}</th>
-                  <th className={`${thClassName} text-right`}>Acción</th>
+                  <th className={thCell}>
+                    {isGraves ? (
+                      <>
+                        <span className="block">{markedLabel}</span>
+                        <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">
+                          fecha · hora
+                        </span>
+                      </>
+                    ) : (
+                      markedLabel
+                    )}
+                  </th>
+                  <th className={`${thCell} ${isGraves ? 'sticky right-0 z-10 bg-slate-50/95 text-right dark:bg-slate-950/80' : 'text-right'}`}>
+                    Acción
+                  </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className={isGraves ? 'divide-y divide-slate-100 dark:divide-slate-800/80' : undefined}>
                 {rows.map((row) => {
                   const localSub = [row.ticket_code, row.codigo_local, row.tecnologia]
                     .filter(Boolean)
@@ -609,9 +774,16 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           : row.recovered_at ?? null
 
                   return (
-                    <tr key={row.incident_id} className={`${trClassName} group`}>
+                    <tr
+                      key={row.incident_id}
+                      className={
+                        isGraves
+                          ? 'group transition-colors hover:bg-blue-50/40 dark:hover:bg-slate-800/50'
+                          : `${trClassName} group`
+                      }
+                    >
                       {canSelectMany ? (
-                        <td className={idTd}>
+                        <td className={tdIdCell}>
                           <input
                             type="checkbox"
                             className="h-4 w-4 rounded border-slate-300"
@@ -628,16 +800,16 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           />
                         </td>
                       ) : null}
-                      <td className={`${idTd} font-medium tabular-nums`}>{row.cid ?? '—'}</td>
-                      <td className={`${idTd} font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
+                      <td className={`${tdIdCell} font-medium tabular-nums`}>{row.cid ?? '—'}</td>
+                      <td className={`${tdIdCell} font-semibold tabular-nums text-slate-900 dark:text-slate-100`}>
                         {row.tss ?? '—'}
                       </td>
-                      {kind === 'pendiente-cierre' ? (
-                        <td className={idTd}>
+                      {showEnergyCol ? (
+                        <td className={tdIdCell}>
                           <InsigniaEnergia energy={row.energy_type} size="sm" />
                         </td>
                       ) : null}
-                      <td className={queueTd}>
+                      <td className={tdCell}>
                         <Truncate
                           title={row.local_educativo}
                           className="font-medium text-slate-900 dark:text-slate-100"
@@ -651,7 +823,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           {localSub || '—'}
                         </span>
                       </td>
-                      <td className={queueTd}>
+                      <td className={tdCell}>
                         <Truncate title={row.provincia}>{row.provincia ?? '—'}</Truncate>
                         <Truncate
                           title={row.distrito}
@@ -661,11 +833,11 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                         </Truncate>
                       </td>
                       {kind === 'pendiente-cierre' ? (
-                        <td className={queueTd}>
+                        <td className={tdCell}>
                           <Truncate title={row.nodo_pop ?? undefined}>{row.nodo_pop?.trim() || '—'}</Truncate>
                         </td>
                       ) : null}
-                      <td className={queueTd}>
+                      <td className={tdCell}>
                         <div className="flex min-w-0 flex-col items-start gap-1">
                           {kind === 'pendiente-cierre' && row.gestion_lista ? (
                             <Insignia tone="success" title="Gestión guardada. Cierra el ticket cuando termines.">
@@ -688,16 +860,16 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                         </div>
                       </td>
                       {kind === 'pendiente-cierre' ? (
-                        <td className={`${tdDateClassName} !align-top`}>
+                        <td className={`${isGraves ? gravesIdTd : tdDateClassName} ${isGraves ? '' : '!align-top'}`}>
                           <IsoDateTimeCell
                             value={row.current_down_started_at ?? row.started_at ?? null}
                           />
                         </td>
                       ) : null}
-                      <td className={`${tdDateClassName} !align-top`}>
+                      <td className={`${isGraves ? gravesIdTd : `${tdDateClassName} !align-top`}`}>
                         <IsoDateTimeCell value={markedAt} />
                       </td>
-                      <td className={actionTd}>
+                      <td className={tdActionCell}>
                         <div className="inline-flex flex-wrap items-center justify-end gap-0.5">
                           {kind === 'pendiente-cierre' ? (
                             <>
@@ -825,7 +997,42 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             </table>
           </DataTableContainer>
         ) : null}
-      </SectionCard>
+          </>
+        )
+
+        return isGraves ? (
+          <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
+              <div>
+                <h2 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">
+                  {pageTitle}
+                  <span className="ml-2 text-sm font-medium text-slate-400">· listado</span>
+                </h2>
+                <p className="mt-1 text-[13px] text-slate-500 dark:text-slate-400">
+                  Incluye tipo de energía del colegio para priorizar atención en campo.
+                </p>
+              </div>
+              <span className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-semibold text-slate-600 tabular-nums dark:bg-slate-800 dark:text-slate-300">
+                {recordsLabel}
+              </span>
+            </div>
+            <div className="p-4 md:p-5">{listBody}</div>
+          </section>
+        ) : (
+          <SectionCard
+            title={recordsLabel}
+            action={
+              rows.length > 0 ? (
+                <span className="text-[11px] font-medium tracking-wide text-slate-500 uppercase dark:text-slate-400">
+                  {pageTitle}
+                </span>
+              ) : null
+            }
+          >
+            {listBody}
+          </SectionCard>
+        )
+      })()}
 
       {bulkIds !== null && bulkIds.length > 1 ? (
         <ModalGestionIncidente
@@ -1072,6 +1279,39 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
         }}
       />
     </DisenoApp>
+  )
+}
+
+function GravesStatCard({
+  label,
+  value,
+  hint,
+  tone = 'neutral',
+}: {
+  label: string
+  value: number
+  hint: string
+  tone?: 'danger' | 'success' | 'emerald' | 'amber' | 'neutral'
+}) {
+  const tones: Record<typeof tone, string> = {
+    danger: 'from-rose-50 to-white text-rose-800 dark:from-rose-950/40 dark:to-slate-900 dark:text-rose-200',
+    success: 'from-emerald-50 to-white text-emerald-800 dark:from-emerald-950/40 dark:to-slate-900 dark:text-emerald-200',
+    emerald: 'from-emerald-50/80 to-white text-emerald-800 dark:from-emerald-950/30 dark:to-slate-900 dark:text-emerald-200',
+    amber: 'from-amber-50 to-white text-amber-900 dark:from-amber-950/40 dark:to-slate-900 dark:text-amber-200',
+    neutral: 'from-slate-50 to-white text-slate-800 dark:from-slate-800/60 dark:to-slate-900 dark:text-slate-100',
+  }
+
+  return (
+    <div className={`rounded-2xl border border-slate-200/90 bg-gradient-to-br p-4 shadow-sm dark:border-slate-800 ${tones[tone]}`}>
+      <div className="flex items-start justify-between gap-2">
+        <p className="text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase dark:text-slate-400">
+          {label}
+        </p>
+        {tone === 'amber' || tone === 'emerald' ? <Zap className="h-3.5 w-3.5 opacity-60" aria-hidden /> : null}
+      </div>
+      <p className="mt-2 text-2xl font-bold tracking-tight tabular-nums">{value}</p>
+      <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">{hint}</p>
+    </div>
   )
 }
 
