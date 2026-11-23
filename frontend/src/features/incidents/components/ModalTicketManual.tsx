@@ -41,7 +41,7 @@ function kindHelp(kind: TicketKind): string {
   if (kind === 'ASIGNACION_LIBRE') {
     return 'Asignación libre: ticket sin denominación correctivo/preventivo. Seguimiento normal en Detalle; Detalle de evento solo si va técnico.'
   }
-  return 'Correctivo → Incidencias. Si el colegio ya tiene caso abierto, se reutiliza ese ticket. Queja / Caída de enlace → Incidencias; Requerimiento → Requerimientos; causa GS01 → Mantenimientos.'
+  return 'Correctivo → Incidencias. Si el colegio ya tiene una caída abierta, se reutiliza ese ticket. Un requerimiento abierto se queda en Requerimientos y este registro abre un ticket nuevo. Queja / Caída de enlace → Incidencias; Requerimiento → Requerimientos; causa GS01 → Mantenimientos.'
 }
 
 export function ModalTicketManual({

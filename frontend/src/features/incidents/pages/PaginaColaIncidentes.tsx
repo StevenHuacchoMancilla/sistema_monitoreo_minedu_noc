@@ -2,6 +2,7 @@ import { useEffect, useMemo, useState } from 'react'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { CircleX, Eye, FileText, History, ImageDown, Images, SquarePen, Ticket, Trash2 } from 'lucide-react'
+import { descargarReporteServicioPng } from '../lib/descargarReporteServicioPng'
 import { DisenoApp } from '../../../layouts/DisenoApp'
 import { EncabezadoPagina } from '../../../components/ui/EncabezadoPagina'
 import { SectionCard } from '../../../components/ui/Tarjeta'
@@ -55,12 +56,14 @@ type QueueRow = {
   local_educativo?: string | null
   codigo_local?: string | null
   energy_type?: string | null
+  nodo_pop?: string | null
   provincia?: string | null
   distrito?: string | null
   tecnologia?: string | null
   followup_status?: string | null
   gestion_lista?: boolean
   root_cause_code?: string | null
+  root_cause_label?: string | null
   started_at?: string | null
   current_down_started_at?: string | null
   recovered_at?: string | null
@@ -130,6 +133,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   const [bulkIds, setBulkIds] = useState<number[] | null>(null)
   const [bulkCloseOpen, setBulkCloseOpen] = useState(false)
   const [bulkClosing, setBulkClosing] = useState(false)
+  const [reportBusy, setReportBusy] = useState(false)
   const [ticketRow, setTicketRow] = useState<QueueRow | null>(null)
   const [pngBusyId, setPngBusyId] = useState<number | null>(null)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -328,6 +332,38 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             >
               Cerrar selección
             </Boton>
+            {kind === 'pendiente-cierre' ? (
+              <Boton
+                type="button"
+                variant="secondary"
+                size="sm"
+                disabled={selectedIds.size === 0 || reportBusy}
+                loading={reportBusy}
+                onClick={() => {
+                  setActionError(null)
+                  setReportBusy(true)
+                  void descargarReporteServicioPng({
+                    kind: 'restablecido',
+                    responsable: user?.name ?? 'NOC',
+                    rows: selectedRows.map((row) => ({
+                      cid: row.cid ?? null,
+                      tss: row.tss == null || row.tss === '' ? null : String(row.tss),
+                      codigoLocal: row.codigo_local ?? null,
+                      nodoPop: row.nodo_pop ?? null,
+                      caidaIso: row.current_down_started_at ?? row.started_at ?? null,
+                      restablecidoIso: row.recuperada_en ?? row.recovered_at ?? null,
+                      causaRaiz: row.root_cause_label ?? row.root_cause_code ?? null,
+                    })),
+                  })
+                    .catch((err: unknown) =>
+                      setActionError(err instanceof Error ? err.message : 'No se pudo generar el reporte de restablecimiento.'),
+                    )
+                    .finally(() => setReportBusy(false))
+                }}
+              >
+                Imagen restablecido
+              </Boton>
+            ) : null}
             {selectedIds.size > 0 ? (
               <Boton type="button" variant="ghost" size="sm" onClick={() => setSelectedIds(new Set())}>
                 Limpiar
@@ -340,7 +376,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
           <DataTableContainer>
             <table
               className={`${tableClassName}${kind === 'pendiente-cierre' ? ' table-fixed' : ''}`}
-              style={kind === 'pendiente-cierre' ? { minWidth: canSelectMany ? 1180 : 1080 } : undefined}
+              style={kind === 'pendiente-cierre' ? { minWidth: canSelectMany ? 1320 : 1220 } : undefined}
             >
               {kind === 'pendiente-cierre' ? (
                 <colgroup>
@@ -350,6 +386,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                   <col className="w-[7rem]" />
                   <col />
                   <col className="w-[8.5rem]" />
+                  <col className="w-[8rem]" />
                   <col className="w-[7.5rem]" />
                   <col className="w-[6.75rem]" />
                   <col className="w-[6.75rem]" />
@@ -388,6 +425,11 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                   ) : null}
                   <th className={thClassName}>Local</th>
                   <th className={thClassName}>Ubicación</th>
+                  {kind === 'pendiente-cierre' ? (
+                    <th className={thClassName} title="Nodo o POP del colegio">
+                      Nodo/POP
+                    </th>
+                  ) : null}
                   <th className={thClassName}>Estado</th>
                   {kind === 'pendiente-cierre' ? (
                     <th className={thClassName} title="Inicio de la caída">
@@ -467,6 +509,11 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           {row.distrito ?? '—'}
                         </Truncate>
                       </td>
+                      {kind === 'pendiente-cierre' ? (
+                        <td className={queueTd}>
+                          <Truncate title={row.nodo_pop ?? undefined}>{row.nodo_pop?.trim() || '—'}</Truncate>
+                        </td>
+                      ) : null}
                       <td className={queueTd}>
                         <div className="flex min-w-0 flex-col items-start gap-1">
                           {kind === 'pendiente-cierre' && row.gestion_lista ? (

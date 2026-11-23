@@ -11,6 +11,7 @@ use App\Models\IncidentUpdate;
 use App\Models\NetworkAssignment;
 use App\Models\PrtgSensor;
 use App\Models\School;
+use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -70,6 +71,45 @@ class RequirementParallelOutageTest extends TestCase
         $this->assertNull($fresh->recovered_at);
         $this->assertFalse((bool) $fresh->is_requirement_case);
         $this->assertSame(FollowupStatus::PendienteContacto, $fresh->followup_status);
+    }
+
+    public function test_manual_ticket_does_not_reuse_open_requirement_still_down(): void
+    {
+        [$assignment, , $requirement] = $this->seedRequirement(
+            recoveredAt: null,
+            currentStatus: MonitoringStatus::Caido->value,
+        );
+        $user = User::factory()->create(['role' => 'ADMIN', 'active' => true]);
+
+        $this->assertNull(app(IncidentService::class)->findManualTicketReuseTarget($assignment->id));
+
+        $fresh = app(IncidentService::class)->openManualReported($assignment, $user->id, 'caída nueva');
+
+        $requirement = $requirement->fresh();
+        $this->assertNotSame($requirement->id, $fresh->id);
+        $this->assertTrue($requirement->isOpenRequirement());
+        $this->assertNotNull($requirement->recovered_at);
+        $this->assertNull($fresh->recovered_at);
+        $this->assertFalse((bool) $fresh->is_requirement_case);
+        $this->assertSame($fresh->id, app(IncidentService::class)->findManualTicketReuseTarget($assignment->id)?->id);
+    }
+
+    public function test_manual_ticket_with_already_recovered_requirement_creates_a_new_incident(): void
+    {
+        [$assignment, , $requirement] = $this->seedRequirement(
+            recoveredAt: now()->subHour(),
+            currentStatus: MonitoringStatus::Operativo->value,
+        );
+        $user = User::factory()->create(['role' => 'ADMIN', 'active' => true]);
+
+        $this->assertNull(app(IncidentService::class)->findManualTicketReuseTarget($assignment->id));
+
+        $fresh = app(IncidentService::class)->openManualReported($assignment, $user->id, 'caída nueva');
+
+        $this->assertNotSame($requirement->id, $fresh->id);
+        $this->assertTrue($requirement->fresh()->isOpenRequirement());
+        $this->assertNull($fresh->recovered_at);
+        $this->assertFalse((bool) $fresh->is_requirement_case);
     }
 
     /**

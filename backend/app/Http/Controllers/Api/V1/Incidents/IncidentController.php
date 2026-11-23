@@ -1369,11 +1369,16 @@ class IncidentController extends Controller
             'local_educativo' => $school?->local_educativo,
             'codigo_local' => $school?->codigo_local,
             'energy_type' => $school?->energy_type,
+            'nodo_pop' => $assignment?->nodo_pop,
             ...$location,
             'tecnologia' => $assignment?->tecnologia_acceso,
             'followup_status' => $incident->followup_status?->value,
             'gestion_lista' => $gestionLista,
             'root_cause_code' => $incident->root_cause_code,
+            'root_cause_label' => \App\Domain\Incidents\Support\RootCauseLegend::display(
+                $incident->root_cause_code,
+                $incident->cause,
+            ),
             'managements_count' => $managementsCount,
             'started_at' => $incident->started_at?->toIso8601String(),
             'recovered_at' => $incident->recovered_at?->toIso8601String(),
@@ -1548,16 +1553,14 @@ class IncidentController extends Controller
     }
 
     /**
+     * Aviso de Registrar ticket: solo el caso que de verdad se va a continuar.
+     * Un requerimiento abierto no reutiliza ticket, así que no genera este aviso.
+     *
      * @return array<string, mixed>|null
      */
     private function openCaseSummaryForAssignment(int $assignmentId): ?array
     {
-        $incident = Incident::query()
-            ->with('serviceTicket')
-            ->where('network_assignment_id', $assignmentId)
-            ->where('followup_status', '!=', FollowupStatus::Cerrado->value)
-            ->orderByDesc('id')
-            ->first();
+        $incident = $this->incidents->findManualTicketReuseTarget($assignmentId);
 
         if ($incident === null) {
             return null;

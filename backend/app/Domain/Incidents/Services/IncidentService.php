@@ -17,6 +17,7 @@ use App\Support\OperationalTime;
 use Carbon\CarbonInterface;
 use Closure;
 use Illuminate\Support\Carbon;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use InvalidArgumentException;
 
@@ -870,8 +871,28 @@ class IncidentService
     }
 
     /**
+     * Caída abierta que Registrar ticket debe continuar.
+     * Un requerimiento abierto no cuenta: se queda en su cola y el alta crea ticket nuevo.
+     */
+    public function findManualTicketReuseTarget(int $assignmentId): ?Incident
+    {
+        return Incident::query()
+            ->with('serviceTicket')
+            ->falls()
+            ->where('network_assignment_id', $assignmentId)
+            ->whereNull('recovered_at')
+            ->where(function ($q) {
+                $q->where('is_requirement_case', false)
+                    ->orWhereNotNull('requirement_closed_at');
+            })
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
      * Ticket abierto a mano (CID o TSS) cuando la caída no llega por PRTG.
-     * Si el colegio ya tiene una caída abierta, se devuelve esa.
+     * Si el colegio ya tiene una caída abierta que no es requerimiento, se devuelve esa.
+     * Un requerimiento abierto no se reutiliza.
      */
     public function openManualReported(
         NetworkAssignment $assignment,
@@ -884,12 +905,7 @@ class IncidentService
         }
 
         $assignment->loadMissing(['school', 'sensors']);
-        $existing = Incident::query()
-            ->falls()
-            ->where('network_assignment_id', $assignment->id)
-            ->whereNull('recovered_at')
-            ->orderByDesc('id')
-            ->first();
+        $existing = $this->findManualTicketReuseTarget($assignment->id);
         if ($existing) {
             $this->serviceTickets->ensureForIncident($existing);
 
@@ -903,6 +919,54 @@ class IncidentService
             throw new InvalidArgumentException('Ese colegio no tiene sensor en PRTG para abrir el ticket.');
         }
 
+        return DB::transaction(function () use ($assignment, $userId, $detail, $startedAt, $sensor) {
+            $this->parkOpenRequirementsForManualTicket($assignment->id);
+
+            return $this->createManualReportedIncident($assignment, $sensor, $userId, $detail, $startedAt);
+        });
+    }
+
+    /**
+     * Libera el índice de una caída activa para que el ticket manual nazca aparte.
+     * El requerimiento sigue abierto en su cola (cierre manual).
+     */
+    private function parkOpenRequirementsForManualTicket(int $assignmentId): void
+    {
+        $open = Incident::query()
+            ->where('network_assignment_id', $assignmentId)
+            ->where('is_requirement_case', true)
+            ->whereNull('requirement_closed_at')
+            ->whereNull('recovered_at')
+            ->orderByDesc('id')
+            ->get();
+
+        foreach ($open as $requirement) {
+            $before = $requirement->followup_status?->value;
+            $at = now();
+            $requirement->forceFill([
+                'recovered_at' => OperationalTime::toStorage($at),
+                'prtg_up_at' => $requirement->prtg_up_at ?? OperationalTime::toStorage($at),
+                'current_status' => MonitoringStatus::Operativo->value,
+            ])->save();
+
+            IncidentUpdate::query()->create([
+                'incident_id' => $requirement->id,
+                'type' => 'SYSTEM',
+                'status_before' => $before,
+                'status_after' => $before,
+                'observation' => 'Requerimiento se mantiene en su cola. El ticket nuevo se registra aparte y no reutiliza este caso.',
+                'created_at' => now(),
+            ]);
+        }
+    }
+
+    private function createManualReportedIncident(
+        NetworkAssignment $assignment,
+        PrtgSensor $sensor,
+        int $userId,
+        ?string $detail,
+        ?CarbonInterface $startedAt,
+    ): Incident {
         $school = $assignment->school;
         $incident = Incident::query()->create([
             'school_id' => $assignment->school_id,

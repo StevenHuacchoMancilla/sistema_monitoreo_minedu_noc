@@ -39,6 +39,7 @@ import { ModalRegistrarCaidaEnlace } from '../components/ModalRegistrarCaidaEnla
 import { ModalTicketManual } from '../components/ModalTicketManual'
 import { ModalGenerarTicket } from '../components/ModalGenerarTicket'
 import { downloadTicketImageFromIncidentId } from '../lib/imagenTicket'
+import { descargarReporteServicioPng } from '../lib/descargarReporteServicioPng'
 import type { OutageRow } from '../../../types/api'
 
 const outageTd = `${tdClassName} !align-top`
@@ -103,6 +104,13 @@ function isRecentFullDown(row: OutageRow, nowMs: number): boolean {
 
 function isPartialRow(row: OutageRow): boolean {
   return row.estado_prtg === 'PARCIAL' || Boolean(row.is_intermittent_watch) || Boolean(row.is_link_outage)
+}
+
+function reportKey(row: OutageRow): string | null {
+  if (row.incident_id != null) return `i-${row.incident_id}`
+  if (row.assignment_id != null) return `a-${row.assignment_id}`
+  if (row.cid) return `c-${row.cid}`
+  return null
 }
 
 function rowKey(row: OutageRow): string {
@@ -173,6 +181,8 @@ export function PaginaCaidasActivas({
   const [duration, setDuration] = useState<DurationBucket>('')
   const [manageId, setManageId] = useState<number | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [reportKeys, setReportKeys] = useState<Set<string>>(new Set())
+  const [reportBusy, setReportBusy] = useState(false)
   const [bulkIds, setBulkIds] = useState<number[] | null>(null)
   const [ticketRow, setTicketRow] = useState<OutageRow | null>(null)
   const [pngBusyId, setPngBusyId] = useState<number | null>(null)
@@ -197,6 +207,7 @@ export function PaginaCaidasActivas({
     setDuration('')
     setPage(1)
     setSelectedIds(new Set())
+    setReportKeys(new Set())
     setProvincia(searchParams.get('provincia') ?? '')
     setDistrito(searchParams.get('distrito') ?? '')
   }, [title, presetFollowup])
@@ -278,6 +289,10 @@ export function PaginaCaidasActivas({
   const currentPage = Math.min(page, lastPage)
   const pageRows = rows.slice((currentPage - 1) * perPage, currentPage * perPage)
   const canSelectMany = title === 'Pendientes de gestión' && canManage
+  const canSelectReport = title === 'Caídas totales'
+  const showSelect = canSelectMany || canSelectReport
+  const pageReportKeys = pageRows.map(reportKey).filter((key): key is string => key != null)
+  const allReportPageSelected = pageReportKeys.length > 0 && pageReportKeys.every((key) => reportKeys.has(key))
   const pageSelectableIds = pageRows
     .map((row) => row.incident_id)
     .filter((id): id is number => id != null)
@@ -489,6 +504,51 @@ export function PaginaCaidasActivas({
 
         {actionError ? <p className="mb-3 text-sm text-red-600">{actionError}</p> : null}
 
+        {canSelectReport && rows.length > 0 ? (
+          <div className="mb-3 flex flex-wrap items-center gap-2">
+            <span className="text-[13px] font-medium text-slate-600 dark:text-slate-300">
+              {reportKeys.size} seleccionados
+            </span>
+            <Boton
+              type="button"
+              variant="danger"
+              size="sm"
+              disabled={reportKeys.size === 0 || reportBusy}
+              loading={reportBusy}
+              onClick={() => {
+                const picked = rows.filter((row) => {
+                  const key = reportKey(row)
+                  return key != null && reportKeys.has(key)
+                })
+                setActionError(null)
+                setReportBusy(true)
+                void descargarReporteServicioPng({
+                  kind: 'corte',
+                  responsable: user?.name ?? 'NOC',
+                  rows: picked.map((row) => ({
+                    cid: row.cid,
+                    tss: row.tss == null || row.tss === '' ? null : String(row.tss),
+                    codigoLocal: row.codigo_local,
+                    nodoPop: row.nodo_pop,
+                    caidaIso: downClock(row, durationSource),
+                  })),
+                })
+                  .catch((err: unknown) =>
+                    setActionError(err instanceof Error ? err.message : 'No se pudo generar el reporte de corte.'),
+                  )
+                  .finally(() => setReportBusy(false))
+              }}
+            >
+              Imagen de corte
+            </Boton>
+            {reportKeys.size > 0 ? (
+              <Boton type="button" variant="ghost" size="sm" onClick={() => setReportKeys(new Set())}>
+                Limpiar
+              </Boton>
+            ) : null}
+          </div>
+        ) : null}
+
         {canSelectMany && rows.length > 0 ? (
           <div className="mb-3 flex flex-wrap items-center gap-2">
             <span className="text-[13px] font-medium text-slate-600 dark:text-slate-300">
@@ -514,9 +574,9 @@ export function PaginaCaidasActivas({
         {rows.length > 0 ? (
           <>
             <DataTableContainer className={outages.isPlaceholderData ? 'opacity-70 transition-opacity' : ''}>
-              <table className={`${tableClassName} table-fixed`} style={{ minWidth: canSelectMany ? 1220 : 1180 }}>
+              <table className={`${tableClassName} table-fixed`} style={{ minWidth: showSelect ? 1220 : 1180 }}>
                 <colgroup>
-                  {canSelectMany ? <col className="w-10" /> : null}
+                  {showSelect ? <col className="w-10" /> : null}
                   <col className="w-[5.5rem]" />
                   <col className="w-[4.75rem]" />
                   <col className="w-[14rem]" />
@@ -530,13 +590,22 @@ export function PaginaCaidasActivas({
                 </colgroup>
                 <thead className={theadClassName}>
                   <tr>
-                    {canSelectMany ? (
+                    {showSelect ? (
                       <th className={thClassName}>
                         <input
                           type="checkbox"
                           className="h-4 w-4 rounded border-slate-300"
-                          checked={allPageSelected}
+                          checked={canSelectReport ? allReportPageSelected : allPageSelected}
                           onChange={() => {
+                            if (canSelectReport) {
+                              setReportKeys((prev) => {
+                                const next = new Set(prev)
+                                if (allReportPageSelected) pageReportKeys.forEach((key) => next.delete(key))
+                                else pageReportKeys.forEach((key) => next.add(key))
+                                return next
+                              })
+                              return
+                            }
                             setSelectedIds((prev) => {
                               const next = new Set(prev)
                               if (allPageSelected) {
@@ -588,8 +657,21 @@ export function PaginaCaidasActivas({
                       durationSource={durationSource}
                       durationCaption={durationCaption}
                       showManagementTag={showManagementTag}
-                      showSelect={canSelectMany}
-                      selected={row.incident_id != null && selectedIds.has(row.incident_id)}
+                      showSelect={showSelect}
+                      selectKey={canSelectReport ? reportKey(row) : null}
+                      selected={
+                        canSelectReport
+                          ? reportKey(row) != null && reportKeys.has(reportKey(row) as string)
+                          : row.incident_id != null && selectedIds.has(row.incident_id)
+                      }
+                      onToggleReport={(key) => {
+                        setReportKeys((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(key)) next.delete(key)
+                          else next.add(key)
+                          return next
+                        })
+                      }}
                       onToggleSelect={(id) => {
                         setSelectedIds((prev) => {
                           const next = new Set(prev)
@@ -703,8 +785,10 @@ function OutageTableRow({
   durationSource,
   durationCaption,
   showSelect = false,
+  selectKey = null,
   selected = false,
   onToggleSelect,
+  onToggleReport,
   showGenerateTicket = false,
   pngBusy = false,
   onManage,
@@ -718,8 +802,10 @@ function OutageTableRow({
   durationCaption: string
   showManagementTag?: boolean
   showSelect?: boolean
+  selectKey?: string | null
   selected?: boolean
   onToggleSelect?: (incidentId: number) => void
+  onToggleReport?: (key: string) => void
   showGenerateTicket?: boolean
   pngBusy?: boolean
   onManage: (id: number) => void
@@ -746,7 +832,15 @@ function OutageTableRow({
     >
       {showSelect ? (
         <td className={outageTd}>
-          {row.incident_id != null ? (
+          {selectKey ? (
+            <input
+              type="checkbox"
+              className="h-4 w-4 rounded border-slate-300"
+              checked={selected}
+              onChange={() => onToggleReport?.(selectKey)}
+              aria-label={`Seleccionar CID ${row.cid ?? selectKey}`}
+            />
+          ) : row.incident_id != null ? (
             <input
               type="checkbox"
               className="h-4 w-4 rounded border-slate-300"
