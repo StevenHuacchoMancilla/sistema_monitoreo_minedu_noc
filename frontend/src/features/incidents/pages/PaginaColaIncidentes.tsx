@@ -24,6 +24,7 @@ import {
 import { TarjetaFiltro } from '../../../components/ui/TarjetaFiltro'
 import { SearchField } from '../../../components/ui/ControlesFormulario'
 import { FollowupBadge } from '../../../components/monitoring/InsigniasEstado'
+import { InsigniaEnergia } from '../../../components/monitoring/InsigniaEnergia'
 import { Insignia } from '../../../components/ui/InsigniaSuave'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/ContextoAuth'
@@ -483,7 +484,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                       </td>
                       {kind === 'pendiente-cierre' ? (
                         <td className={idTd}>
-                          <EnergyTypeBadge energy={row.energy_type} />
+                          <InsigniaEnergia energy={row.energy_type} size="sm" />
                         </td>
                       ) : null}
                       <td className={queueTd}>
@@ -924,30 +925,3 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   )
 }
 
-function EnergyTypeBadge({ energy }: { energy?: string | null }) {
-  const value = (energy ?? '').trim().toUpperCase()
-  if (value.includes('PANEL') || value.includes('SOLAR')) {
-    return (
-      <span
-        className="inline-flex rounded-md bg-yellow-50 px-2 py-0.5 text-[12px] font-semibold text-yellow-900 dark:bg-yellow-950/40 dark:text-yellow-200"
-        title={energy ?? 'Panel solar'}
-      >
-        Panel solar
-      </span>
-    )
-  }
-  if (value.includes('RED')) {
-    return (
-      <span
-        className="inline-flex rounded-md bg-emerald-50 px-2 py-0.5 text-[12px] font-semibold text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-300"
-        title={energy ?? 'Red pública'}
-      >
-        Red pública
-      </span>
-    )
-  }
-  if (value !== '') {
-    return <span className="text-[12px] font-semibold text-slate-800 dark:text-slate-100">{energy}</span>
-  }
-  return <span className="text-slate-400">—</span>
-}
