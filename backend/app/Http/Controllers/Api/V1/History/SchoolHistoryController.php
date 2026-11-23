@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Api\V1\History;
 
 use App\Domain\Incidents\Services\IncidentCaseFileService;
 use App\Domain\Incidents\Services\IncidentHistoryService;
+use App\Domain\Incidents\Services\SlaClockService;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Enums\MonitoringStatus;
@@ -11,13 +12,17 @@ use App\Http\Controllers\Controller;
 use App\Models\Incident;
 use App\Models\School;
 use App\Models\ServiceTicket;
+use App\Support\OperationalTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
 
 class SchoolHistoryController extends Controller
 {
-    public function __construct(private readonly IncidentHistoryService $history) {}
+    public function __construct(
+        private readonly IncidentHistoryService $history,
+        private readonly SlaClockService $sla,
+    ) {}
 
     public function index(Request $request): JsonResponse
     {
@@ -68,6 +73,19 @@ class SchoolHistoryController extends Controller
                 'total' => $page->total(),
             ],
         ]);
+    }
+
+    /**
+     * SLA mensual del colegio: consumo por caída y si se superó el cupo (se reinicia cada mes).
+     */
+    public function slaMonthly(Request $request, School $school): JsonResponse
+    {
+        $data = $request->validate([
+            'month' => ['nullable', 'string', 'regex:/^\d{4}-\d{2}$/'],
+        ]);
+        $month = $data['month'] ?? OperationalTime::now()->format('Y-m');
+
+        return response()->json($this->sla->monthlyBreakdown((int) $school->id, $month));
     }
 
     public function incidentCaseFile(Incident $incident, IncidentCaseFileService $caseFile): JsonResponse

@@ -42,6 +42,7 @@ import {
   incidentCaseFilePath,
   updateHistoryIncidentCategory,
 } from '../api/apiHistorial'
+import { PanelSlaMensualColegio } from '../components/PanelSlaMensualColegio'
 import type { SchoolHistoryCategory, SchoolHistoryIncidentRow } from '../types/historial'
 
 const detailTextareaClass = `${inputClassName} !h-auto min-h-24 resize-y py-2`
@@ -333,6 +334,18 @@ export function PaginaHistorialColegioDetalle() {
               <PeriodStat label="Promedio" value={statistics.ultimos_30_dias.promedio ?? '—'} />
             </div>
           </section>
+
+          <PanelSlaMensualColegio
+            schoolId={id}
+            schoolLabel={
+              [
+                network?.cid ? `CID ${network.cid}` : null,
+                school.local_educativo,
+              ]
+                .filter(Boolean)
+                .join(' · ') || `Colegio ${id}`
+            }
+          />
 
           <section className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm md:p-5 dark:border-slate-800 dark:bg-slate-900">
             <div className="mb-3">

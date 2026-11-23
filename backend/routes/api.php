@@ -59,6 +59,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/history/schools', [SchoolHistoryController::class, 'index']);
         Route::get('/history/schools/{school}', [SchoolHistoryController::class, 'show']);
         Route::get('/history/schools/{school}/incidents', [SchoolHistoryController::class, 'incidents']);
+        Route::get('/history/schools/{school}/sla-monthly', [SchoolHistoryController::class, 'slaMonthly']);
         Route::get('/history/incidents/{incident}', [SchoolHistoryController::class, 'incidentCaseFile']);
         Route::get('/history/tickets/{ticketCode}', [SchoolHistoryController::class, 'ticketCaseFile'])
             ->where('ticketCode', 'TGS_[A-Za-z0-9_]+');
@@ -92,6 +93,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/notifications/live', [OperationalNotificationController::class, 'live']);
         Route::get('/excel-google/comparar', [ExcelGoogleController::class, 'comparar']);
         Route::get('/incidents/{incident}', [IncidentController::class, 'show']);
+        Route::get('/incidents/{incident}/prtg-outages', [IncidentController::class, 'prtgOutages']);
         Route::get('/incidents/{incident}/attachments', [IncidentAttachmentController::class, 'index']);
         Route::get('/assignments/{assignment}/prtg-sensors', [PrtgSensorController::class, 'byAssignment']);
     });

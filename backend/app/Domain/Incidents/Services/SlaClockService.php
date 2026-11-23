@@ -213,28 +213,138 @@ class SlaClockService
 
     private function monthUsageSeconds(int $schoolId, int $currentId, int $currentNet, bool $currentApplies): int
     {
-        $start = OperationalTime::dayStart(OperationalTime::now()->startOfMonth());
-        $end = OperationalTime::dayEnd(OperationalTime::now()->endOfMonth());
+        // Cupo mensual = suma de horas efectivas recortadas al mes (no el neto total de la caída).
+        unset($currentId, $currentNet, $currentApplies);
 
-        $others = Incident::query()
+        return (int) ($this->monthlyBreakdown($schoolId, OperationalTime::now()->format('Y-m'))['used_seconds'] ?? 0);
+    }
+
+    /**
+     * Desglose SLA del colegio en un mes (YYYY-MM).
+     * Solo caídas con razón MINEDU. Horas = 08:00–16:00 menos parada, recortadas al mes.
+     *
+     * @return array{
+     *   month: string,
+     *   from: string,
+     *   to: string,
+     *   zone: string,
+     *   zone_label: string,
+     *   cap_seconds: int,
+     *   used_seconds: int,
+     *   remaining_seconds: int,
+     *   exceeded: bool,
+     *   business_window: string,
+     *   incidents: list<array<string, mixed>>
+     * }
+     */
+    public function monthlyBreakdown(int $schoolId, string $yearMonth): array
+    {
+        if (! preg_match('/^\d{4}-\d{2}$/', $yearMonth)) {
+            $yearMonth = OperationalTime::now()->format('Y-m');
+        }
+
+        $school = School::query()->find($schoolId);
+        $zone = $this->zoneForSchool($school);
+        $cap = (int) $zone['cap_seconds'];
+
+        $from = OperationalTime::dayStart($yearMonth.'-01');
+        $lastDay = Carbon::parse($yearMonth.'-01', OperationalTime::tz())->endOfMonth()->toDateString();
+        $to = OperationalTime::dayEnd($lastDay);
+        $now = OperationalTime::now();
+
+        $incidents = Incident::query()
+            ->with(['serviceTicket:id,incident_id,ticket_code,status'])
             ->where('school_id', $schoolId)
             ->whereNotNull('minedu_reason')
-            ->where('id', '!=', $currentId)
-            ->where('started_at', '<=', $end)
-            ->where(function ($q) use ($start) {
-                $q->whereNull('recovered_at')->orWhere('recovered_at', '>=', $start);
+            ->where('minedu_reason', '!=', '')
+            ->whereNotNull('started_at')
+            ->where('started_at', '<=', $to)
+            ->where(function ($q) use ($from) {
+                $q->whereNull('recovered_at')->orWhere('recovered_at', '>=', $from);
             })
+            ->orderBy('started_at')
+            ->orderBy('id')
             ->get();
 
+        $rows = [];
         $used = 0;
-        foreach ($others as $row) {
-            $used += $this->netSeconds($row);
-        }
-        if ($currentApplies) {
-            $used += $currentNet;
+        foreach ($incidents as $incident) {
+            $slaSeconds = $this->effectiveSecondsInWindow($incident, $from, $to, $now);
+            $used += $slaSeconds;
+            $reason = $incident->minedu_reason instanceof MineduReason
+                ? $incident->minedu_reason->value
+                : (string) ($incident->minedu_reason ?? '');
+
+            $rows[] = [
+                'incident_id' => $incident->id,
+                'ticket' => $incident->serviceTicket?->ticket_code,
+                'started_at' => $incident->started_at?->toIso8601String(),
+                'recovered_at' => $incident->recovered_at?->toIso8601String(),
+                'minedu_reason' => $reason !== '' ? $reason : null,
+                'sla_seconds' => $slaSeconds,
+                'sla_label' => $this->secondsLabel($slaSeconds),
+                'total_seconds' => $this->elapsedSeconds($incident, $now),
+                'active' => $incident->recovered_at === null,
+            ];
         }
 
-        return $used;
+        $remaining = $cap - $used;
+
+        return [
+            'month' => $yearMonth,
+            'from' => $from->copy()->timezone(OperationalTime::tz())->toDateString(),
+            'to' => $to->copy()->timezone(OperationalTime::tz())->toDateString(),
+            'zone' => $zone['zone'],
+            'zone_label' => $zone['label'],
+            'cap_seconds' => $cap,
+            'used_seconds' => $used,
+            'remaining_seconds' => $remaining,
+            'exceeded' => $used > $cap,
+            'business_window' => '08:00–16:00',
+            'incidents' => $rows,
+        ];
+    }
+
+    /**
+     * Horas efectivas de la incidencia recortadas a una ventana (mes).
+     */
+    public function effectiveSecondsInWindow(
+        Incident $incident,
+        CarbonInterface $windowStart,
+        CarbonInterface $windowEnd,
+        ?CarbonInterface $now = null,
+    ): int {
+        if ($incident->started_at === null) {
+            return 0;
+        }
+        $now ??= OperationalTime::now();
+        $start = $incident->started_at->greaterThan($windowStart) ? $incident->started_at : $windowStart;
+        $rawEnd = $incident->recovered_at ?? $now;
+        $end = $rawEnd->lessThan($windowEnd) ? $rawEnd : $windowEnd;
+        if ($end->lessThanOrEqualTo($start)) {
+            return 0;
+        }
+
+        $business = $this->businessSeconds($start, $end);
+        $paused = 0;
+        foreach ($this->pauseIntervals($incident, $now) as [$from, $to]) {
+            $pStart = $from->greaterThan($start) ? $from : $start;
+            $pEnd = $to->lessThan($end) ? $to : $end;
+            if ($pEnd->greaterThan($pStart)) {
+                $paused += $this->businessSeconds($pStart, $pEnd);
+            }
+        }
+
+        return max(0, $business - $paused);
+    }
+
+    private function secondsLabel(int $seconds): string
+    {
+        $seconds = max(0, $seconds);
+        $h = intdiv($seconds, 3600);
+        $m = intdiv($seconds % 3600, 60);
+
+        return sprintf('%d h %02d min', $h, $m);
     }
 
     /**

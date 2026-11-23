@@ -1,4 +1,6 @@
-import { Fragment, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { Clock3, MessageSquareText, X } from 'lucide-react'
 import { formatDateTime24 } from '../../../lib/fechaHora'
 import { DataTableContainer, tableClassName, thClassName, theadClassName, trClassName } from '../../../components/ui/MarcoTablaDatos'
 import { causaDe, clasificarApertura, codigoDe, CUADRE_CATEGORIAS, type CuadreKey } from '../lib/cuadre'
@@ -17,10 +19,166 @@ function badge(status: TicketeraStatus) {
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone}`}>{status}</span>
 }
 
+function mineduBadge(value: string | null | undefined) {
+  const raw = (value ?? '').trim()
+  if (!raw || raw === '—' || raw.toUpperCase() === 'NINGUNO') {
+    return (
+      <span className="inline-flex rounded-full bg-slate-100 px-2 py-0.5 text-[10px] font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+        Sin razón MINEDU
+      </span>
+    )
+  }
+  return (
+    <span className="inline-flex rounded-full bg-violet-100 px-2 py-0.5 text-[10px] font-semibold text-violet-800 dark:bg-violet-950/50 dark:text-violet-200">
+      {raw}
+    </span>
+  )
+}
+
+function descripcionDe(row: PreparedRow): string {
+  const detalle = (row.detalle ?? '').trim()
+  if (detalle && detalle !== '—') return detalle
+  const evento = (row.event_detail ?? '').trim()
+  if (evento && evento !== '—') return evento
+  return ''
+}
+
+function parseTimeline(body: string): Array<{ at?: string; text: string }> {
+  const lines = body
+    .split(/\n+/)
+    .map((l) => l.trim())
+    .filter(Boolean)
+  if (lines.length === 0) return []
+
+  return lines.map((line) => {
+    const m = line.match(/^(\d{2}\/\d{2}\/\d{4}\s+\d{1,2}:\d{2})\s*[·\-–]\s*(.+)$/)
+    if (m) return { at: m[1], text: m[2] }
+    return { text: line }
+  })
+}
+
+function MetaChip({ label }: { label: string }) {
+  if (!label || label === '—') return null
+  return (
+    <span className="inline-flex max-w-[10rem] truncate rounded-md bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+      {label}
+    </span>
+  )
+}
+
+/** Flotante lateral igual que Seguimiento de caídas: detalle fuera de la tabla. */
+function ComentarioSidePanel({
+  row,
+  body,
+  onClose,
+}: {
+  row: PreparedRow
+  body: string
+  onClose: () => void
+}) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose()
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [onClose])
+
+  const entries = body ? parseTimeline(body) : []
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 flex justify-end">
+      <button type="button" className="absolute inset-0 bg-slate-950/55 backdrop-blur-[2px]" aria-label="Cerrar" onClick={onClose} />
+      <aside className="relative flex h-full w-full max-w-md flex-col border-l border-slate-200 bg-slate-50 shadow-2xl dark:border-slate-700 dark:bg-slate-950 sm:max-w-lg">
+        <header className="border-b border-slate-200 bg-white px-5 py-4 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="mb-2 inline-flex items-center gap-2">
+                <span className="inline-flex items-center gap-1.5 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-bold text-sky-800 dark:bg-sky-500/20 dark:text-sky-200">
+                  <MessageSquareText className="h-3.5 w-3.5" aria-hidden />
+                  Detalle de gestión
+                </span>
+                {badge(row.status)}
+              </div>
+              <h2 className="truncate font-mono text-sm font-bold text-slate-900 dark:text-slate-50" title={row.ticket}>
+                {row.ticket || 'Sin ticket'}
+              </h2>
+              <p className="mt-1 truncate text-[13px] font-medium text-slate-700 dark:text-slate-300">
+                CID {row.cid || '—'}
+                {row.tss ? ` · ${row.tss}` : ''}
+                {row.nombre ? ` · ${row.nombre}` : ''}
+              </p>
+            </div>
+            <button
+              type="button"
+              className="rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800 dark:hover:bg-slate-800 dark:hover:text-slate-100"
+              onClick={onClose}
+              aria-label="Cerrar panel"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+
+          <div className="mt-3 flex flex-wrap gap-1.5">
+            <MetaChip label={row.provincia} />
+            <MetaChip label={row.distrito} />
+            <MetaChip label={row.minedu} />
+            {codigoDe(row) !== '(sin código)' ? <MetaChip label={codigoDe(row)} /> : null}
+          </div>
+        </header>
+
+        <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
+          {entries.length > 0 ? (
+            <ol className="relative space-y-0 border-l-2 border-sky-200 pl-5 dark:border-sky-900">
+              {entries.map((entry, i) => (
+                <li key={`${entry.at ?? ''}-${i}`} className="relative pb-5 last:pb-0">
+                  <span className="absolute -left-[1.4rem] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-sky-500 dark:border-slate-950" />
+                  {entry.at ? (
+                    <p className="mb-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
+                      <Clock3 className="h-3 w-3" aria-hidden />
+                      {entry.at}
+                    </p>
+                  ) : null}
+                  <div className="rounded-xl border border-slate-200 bg-white px-3.5 py-3 text-[13px] leading-relaxed text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+                    {entry.text}
+                  </div>
+                </li>
+              ))}
+            </ol>
+          ) : body ? (
+            <div className="rounded-xl border border-slate-200 bg-white px-4 py-4 text-[13px] leading-relaxed text-slate-800 shadow-sm dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100">
+              <pre className="whitespace-pre-wrap break-words font-sans">{body}</pre>
+            </div>
+          ) : (
+            <div className="flex h-full min-h-[12rem] flex-col items-center justify-center rounded-2xl border border-dashed border-slate-300 bg-white/70 px-6 text-center dark:border-slate-700 dark:bg-slate-900/50">
+              <div className="mb-3 inline-flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400 dark:bg-slate-800">
+                <MessageSquareText className="h-5 w-5" />
+              </div>
+              <p className="text-sm font-semibold text-slate-700 dark:text-slate-200">Sin contenido</p>
+              <p className="mt-1 max-w-xs text-[13px] text-slate-500">
+                Todavía no hay comentarios de gestión del operador NOC o admin.
+              </p>
+            </div>
+          )}
+        </div>
+
+        {causaDe(row) !== 'Causa raíz sin descripción' ? (
+          <footer className="border-t border-slate-200 bg-white px-5 py-3 dark:border-slate-800 dark:bg-slate-900">
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-slate-400">Causa raíz</p>
+            <p className="mt-0.5 text-[13px] text-slate-700 dark:text-slate-300">{causaDe(row)}</p>
+          </footer>
+        ) : null}
+      </aside>
+    </div>,
+    document.body,
+  )
+}
+
 export function PanelCuadre({ rows, now }: { rows: PreparedRow[]; now: string }) {
   const nowMs = Number.isFinite(Date.parse(now)) ? Date.parse(now) : Date.now()
   const [open, setOpen] = useState<CuadreKey | null>(null)
   const [code, setCode] = useState('')
+  const [panelRow, setPanelRow] = useState<PreparedRow | null>(null)
   const classified = useMemo(
     () => rows.map((row) => ({ row, categoria: clasificarApertura(row, nowMs) })),
     [rows, nowMs],
@@ -148,7 +306,9 @@ export function PanelCuadre({ rows, now }: { rows: PreparedRow[]; now: string })
       <div className="mt-5 mb-2 flex items-center justify-between gap-3">
         <div>
           <h3 className="text-base font-semibold">Detalle de tickets clasificados</h3>
-          <p className="text-xs text-slate-500">{open ? labels[open] : 'Todas las categorías'} · {num(detail.length)} tickets</p>
+          <p className="text-xs text-slate-500">
+            {open ? labels[open] : 'Todas las categorías'} · {num(detail.length)} tickets · comentario en flotante (como Seguimiento)
+          </p>
         </div>
         {open ? (
           <button type="button" className="text-xs font-semibold text-indigo-400" onClick={() => { setOpen(null); setCode('') }}>
@@ -160,32 +320,58 @@ export function PanelCuadre({ rows, now }: { rows: PreparedRow[]; now: string })
         <table className={tableClassName}>
           <thead className={theadClassName}>
             <tr>
-              {['Ticket', 'CID', 'Apertura', 'Cierre', 'Estado', 'Razón', 'Código', 'Causa', 'Clasificación'].map((label) => (
+              {['Ticket', 'CID', 'Apertura', 'Cierre', 'Estado', 'Razón MINEDU', 'Código', 'Causa', 'Comentario'].map((label) => (
                 <th key={label} className={thClassName}>{label}</th>
               ))}
             </tr>
           </thead>
           <tbody>
-            {detail.slice(0, 80).map((item) => (
-              <tr key={`${item.row.row}-${item.row.ticket}`} className={trClassName}>
-                <td className={cell}>{item.row.ticket || '—'}</td>
-                <td className={`${cell} max-w-none`}>
-                  {item.row.cid || '—'}
-                  <span className="block text-[11px] text-slate-500">{item.row.nombre}</span>
-                </td>
-                <td className={`${cell} whitespace-nowrap`}>{item.row.open_text || formatDateTime24(item.row.open)}</td>
-                <td className={`${cell} whitespace-nowrap`}>{item.row.close_text || 'Sin cierre'}</td>
-                <td className={cell}>{badge(item.row.status)}</td>
-                <td className={cell}>{item.row.minedu || '—'}</td>
-                <td className={cell}>{codigoDe(item.row)}</td>
-                <td className={`${cell} max-w-[16rem]`}>{causaDe(item.row)}</td>
-                <td className={cell}>{labels[item.categoria]}</td>
-              </tr>
-            ))}
+            {detail.slice(0, 80).map((item) => {
+              const body = descripcionDe(item.row)
+              const hasComment = Boolean(body)
+              return (
+                <tr key={`${item.row.row}-${item.row.ticket}`} className={trClassName}>
+                  <td className={cell}>{item.row.ticket || '—'}</td>
+                  <td className={`${cell} max-w-none`}>
+                    {item.row.cid || '—'}
+                    <span className="block text-[11px] text-slate-500">{item.row.nombre}</span>
+                  </td>
+                  <td className={`${cell} whitespace-nowrap`}>{item.row.open_text || formatDateTime24(item.row.open)}</td>
+                  <td className={`${cell} whitespace-nowrap`}>{item.row.close_text || 'Sin cierre'}</td>
+                  <td className={cell}>{badge(item.row.status)}</td>
+                  <td className={cell}>{mineduBadge(item.row.minedu)}</td>
+                  <td className={cell}>{codigoDe(item.row)}</td>
+                  <td className={`${cell} max-w-[14rem]`}>{causaDe(item.row)}</td>
+                  <td className={cell}>
+                    <button
+                      type="button"
+                      onClick={() => setPanelRow(item.row)}
+                      className={`inline-flex items-center gap-1.5 rounded-lg border px-2.5 py-1.5 text-[11px] font-semibold transition ${
+                        hasComment
+                          ? 'border-sky-200 bg-sky-50 text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-950'
+                          : 'border-slate-200 bg-white text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-400 dark:hover:bg-slate-800'
+                      }`}
+                      title={hasComment ? 'Ver comentario en flotante' : 'Sin comentario todavía'}
+                    >
+                      <MessageSquareText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                      {hasComment ? 'Ver detalle' : 'Sin comentario'}
+                    </button>
+                  </td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </DataTableContainer>
       {detail.length > 80 ? <p className="mt-2 text-xs text-slate-500">Mostrando 80 de {num(detail.length)} tickets.</p> : null}
+
+      {panelRow ? (
+        <ComentarioSidePanel
+          row={panelRow}
+          body={descripcionDe(panelRow)}
+          onClose={() => setPanelRow(null)}
+        />
+      ) : null}
     </section>
   )
 }

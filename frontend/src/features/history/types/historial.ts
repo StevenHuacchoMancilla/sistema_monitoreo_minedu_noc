@@ -312,3 +312,29 @@ export type SchoolHistoryIncidentsResponse = {
   data: SchoolHistoryIncidentRow[]
   meta: PaginatedMeta
 }
+
+export type SchoolSlaMonthlyIncident = {
+  incident_id: number
+  ticket: string | null
+  started_at: string | null
+  recovered_at: string | null
+  minedu_reason: string | null
+  sla_seconds: number
+  sla_label: string
+  total_seconds: number
+  active: boolean
+}
+
+export type SchoolSlaMonthlyResponse = {
+  month: string
+  from: string
+  to: string
+  zone: string
+  zone_label: string
+  cap_seconds: number
+  used_seconds: number
+  remaining_seconds: number
+  exceeded: boolean
+  business_window: string
+  incidents: SchoolSlaMonthlyIncident[]
+}

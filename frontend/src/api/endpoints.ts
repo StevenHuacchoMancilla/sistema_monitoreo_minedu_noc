@@ -70,6 +70,25 @@ export const endpoints = {
   deactivateContact: (schoolId: number, contactId: number) =>
     apiPost(`/schools/${schoolId}/contacts/${contactId}/deactivate`),
   incidentDetail: (id: number) => apiGet<IncidentDetail>(`/incidents/${id}`),
+  incidentPrtgOutages: (id: number) =>
+    apiGet<{
+      source: 'prtg' | 'sheet' | 'none'
+      cid: string
+      sensor: string | null
+      sensor_name: string | null
+      ignored_under_minute: number
+      outages: Array<{ start: string; end: string | null; seconds: number }>
+      message: string | null
+      from: string | null
+      to: string | null
+      incident_id?: number
+      summary: {
+        caidas: number
+        levantamientos: number
+        patron: 'continuo' | 'intermitente' | 'sin_datos'
+        still_down: boolean
+      }
+    }>(`/incidents/${id}/prtg-outages`),
   updateIncident: (id: number, body: IncidentGestionPayload) =>
     apiPut<IncidentDetail>(`/incidents/${id}`, body),
   applyIncidentManagement: (id: number, body: ManagementPayload) =>

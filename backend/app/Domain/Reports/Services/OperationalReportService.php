@@ -489,11 +489,17 @@ class OperationalReportService
 
     /**
      * Solo comentarios del operador, con hora Lima. Sin códigos ni causa raíz.
+     * Devuelve el hilo completo (todas las gestiones), no solo el último.
      */
     public function operatorDetailOnly(Incident $incident): ?string
     {
-        if ($incident->relationLoaded('managements') && $incident->managements->isNotEmpty()) {
+        if (! $incident->relationLoaded('managements')) {
+            $incident->load(['managements' => fn ($q) => $q->orderBy('id')]);
+        }
+
+        if ($incident->managements->isNotEmpty()) {
             $lines = [];
+            $seen = [];
             foreach ($incident->managements->sortBy('id') as $management) {
                 $text = trim((string) ($management->detail ?: $management->observation ?: ''));
                 if ($text === '') {
@@ -502,9 +508,14 @@ class OperationalReportService
                 // Quitar prefijos de sistema tipo "Caída de enlace · PINT ·"
                 $text = preg_replace('/^(Caída de enlace|Queja|Requerimiento|Gestión)[^\n]*·\s*/iu', '', $text) ?: $text;
                 $text = trim($text);
-                if ($text === '' || in_array($text, $lines, true)) {
+                if ($text === '') {
                     continue;
                 }
+                $key = mb_strtolower($text);
+                if (isset($seen[$key])) {
+                    continue;
+                }
+                $seen[$key] = true;
                 $at = $management->created_at ?? $management->contact_attempted_at ?? null;
                 $stamp = $at ? OperationalTime::format($at, 'd/m/Y H:i') : null;
                 $lines[] = $stamp ? $stamp.' · '.$text : $text;

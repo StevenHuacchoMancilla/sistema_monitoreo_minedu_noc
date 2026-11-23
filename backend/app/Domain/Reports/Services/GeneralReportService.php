@@ -380,10 +380,10 @@ class GeneralReportService
             ?: $incident->cause
             ?: ($legend['cause'] ?? '')
         ));
-        // Igual que Vista de reporte: comentarios del operador con fecha/hora (no editable aquí).
+        // Hilo completo de gestiones (fecha/hora). lista_detalle a veces solo guarda el último.
         $detalle = trim((string) (
-            $incident->lista_detalle
-            ?: $this->operational->operatorDetailOnly($incident)
+            $this->operational->operatorDetailOnly($incident)
+            ?: $incident->lista_detalle
             ?: $ticket?->detail
             ?: ''
         ));
@@ -405,6 +405,7 @@ class GeneralReportService
 
         return [
             'incident_id' => $incident->id,
+            'school_id' => $incident->school_id,
             'ticket' => $ticket?->ticket_code ?: 'SIN TICKET',
             'cid' => $cid ?: '—',
             'tss' => $tss ?: '—',

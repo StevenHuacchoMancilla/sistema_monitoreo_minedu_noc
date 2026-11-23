@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { createPortal } from 'react-dom'
+import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import {
   ChevronLeft,
@@ -7,12 +8,14 @@ import {
   Clock3,
   Download,
   FileSpreadsheet,
+  History,
   MessageSquareText,
   RefreshCw,
   ScrollText,
   Ticket,
   X,
 } from 'lucide-react'
+import { incidentCaseFilePath } from '../../history/api/apiHistorial'
 import { DisenoApp } from '../../../layouts/DisenoApp'
 import { EncabezadoPagina } from '../../../components/ui/EncabezadoPagina'
 import { TarjetaFiltro } from '../../../components/ui/TarjetaFiltro'
@@ -254,30 +257,39 @@ export function PaginaReporteGeneral() {
 
         <div className="grid min-w-0 grid-cols-1 gap-3 min-[420px]:grid-cols-2 xl:grid-cols-4">
           <StatCard
-            label="En esta página"
-            value={pageStats.total.toLocaleString('es-PE')}
-            hint={meta ? `${(meta.total ?? 0).toLocaleString('es-PE')} en total` : undefined}
+            label="Total filtrado"
+            value={(meta?.total ?? pageStats.total).toLocaleString('es-PE')}
+            hint={
+              meta
+                ? `Página ${meta.page ?? page}: ${pageStats.total.toLocaleString('es-PE')} de ${meta.per_page ?? perPage} por página`
+                : undefined
+            }
             tone="slate"
           />
           <StatCard
             label="Abiertos"
             value={pageStats.abiertos.toLocaleString('es-PE')}
-            hint="Caídos / en curso"
+            hint="En esta página · caídos / en curso"
             tone="amber"
           />
           <StatCard
             label="Con ticket TGS"
             value={pageStats.conTicket.toLocaleString('es-PE')}
-            hint={`${pageStats.sinTicket} sin ticket`}
+            hint={`En esta página · ${pageStats.sinTicket} sin ticket`}
             tone="sky"
           />
           <StatCard
             label="Con comentarios"
             value={pageStats.conDetalle.toLocaleString('es-PE')}
-            hint="Detalle de gestión"
+            hint="En esta página · detalle de gestión"
             tone="emerald"
           />
         </div>
+        <p className="text-[12px] leading-snug text-slate-500 dark:text-slate-400">
+          El total filtrado cuenta todos los registros del periodo/filtros (incluye sin ticket TGS). No es lo mismo que{' '}
+          <span className="font-medium text-slate-700 dark:text-slate-200">Histórico de tickets</span>, que cuadrea
+          incidencias de la ticketera del día y puede dar otro número.
+        </p>
 
         <TarjetaFiltro
           title="Filtros"
@@ -661,6 +673,22 @@ function GeneralReportTable({
                     <ScrollText className="h-3.5 w-3.5 shrink-0" aria-hidden />
                     Detalle de evento
                   </button>
+                  <Link
+                    to={
+                      row.school_id
+                        ? `/history/schools/${row.school_id}`
+                        : incidentCaseFilePath(row.incident_id)
+                    }
+                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-indigo-200 bg-indigo-50 px-2.5 py-1.5 text-[11px] font-semibold text-indigo-800 transition hover:bg-indigo-100 dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-200 dark:hover:bg-indigo-950"
+                    title={
+                      row.school_id
+                        ? 'Ir a Historial por colegio (todas las caídas del LLEE)'
+                        : 'Ir al expediente completo de este ticket'
+                    }
+                  >
+                    <History className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                    Historial completo
+                  </Link>
                 </div>
               </td>
             </tr>

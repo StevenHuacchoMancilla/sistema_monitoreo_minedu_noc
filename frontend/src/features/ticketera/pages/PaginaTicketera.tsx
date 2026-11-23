@@ -68,7 +68,12 @@ const SUMMARY_CARDS = [
   { key: 'queja', label: 'Quejas', hint: 'Razón MINEDU: Queja', className: 'from-[#ae3d76] to-[#e45c9e]' },
   { key: 'caida', label: 'Caídas de enlace', hint: 'Razón MINEDU: Caída de Enlace', className: 'from-[#be7024] to-[#f5a83c]' },
   { key: 'req', label: 'Requerimientos', hint: 'Incluye el texto de la hoja', className: 'from-[#197e9c] to-[#16b1c6]' },
-  { key: 'missing', label: 'Sin razón', hint: 'Vacío o sin clasificar', className: 'from-[#516176] to-[#7384a0]' },
+  {
+    key: 'missing',
+    label: 'Sin razón MINEDU',
+    hint: 'Razón MINEDU vacía o sin clasificar',
+    className: 'from-[#516176] to-[#7384a0]',
+  },
 ] as const
 
 function downloadCsv(rows: PreparedRow[], from: string, to: string) {
@@ -216,8 +221,8 @@ export function PaginaTicketera() {
         title="Histórico de tickets"
         description={
           query.data?.source.mode === 'sistema'
-            ? 'Consulta del histórico. La gestión de cada ticket se hace en la incidencia; aquí se ve el mismo formato de la hoja.'
-            : 'Consulta del histórico de tickets. Las gráficas se actualizan solas cada 30 segundos.'
+            ? 'Dashboard visual del histórico: KPIs por razón MINEDU, cuadre del día y detalle con comentarios NOC. La gestión se hace en la incidencia.'
+            : 'Dashboard visual del histórico de tickets. Las gráficas se actualizan solas cada 30 segundos.'
         }
         badges={
           query.data ? (
@@ -344,6 +349,11 @@ export function PaginaTicketera() {
               </article>
             ))}
           </div>
+          <p className="text-[12px] leading-snug text-slate-500 dark:text-slate-400">
+            KPIs del periodo filtrado arriba (una fila = una incidencia). Quejas / Caídas de enlace / Requerimientos /
+            Sin razón MINEDU parten de la columna razón MINEDU. Puede diferir de Seguimiento de caídas si ese reporte
+            incluye filas sin ticket o usa otros filtros.
+          </p>
 
           <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
             {(

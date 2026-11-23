@@ -16,6 +16,7 @@ use App\Domain\Incidents\Services\RecoveryReviewService;
 use App\Domain\Incidents\Services\SlaClockService;
 use App\Domain\Reports\Services\ListaLleeDayService;
 use App\Domain\Ticketera\Services\ServiceTicketService;
+use App\Domain\Ticketera\Services\TicketeraPrtgTimelineService;
 use App\Models\School;
 use App\Domain\Incidents\Support\IncidentTimelineBuilder;
 use App\Domain\Incidents\Support\RootCauseLegend;
@@ -28,6 +29,7 @@ use App\Models\Incident;
 use App\Models\IncidentManagement;
 use App\Models\IncidentUpdate;
 use App\Models\NetworkAssignment;
+use App\Support\OperationalTime;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
@@ -43,6 +45,7 @@ class IncidentController extends Controller
         private readonly SlaClockService $slaClock,
         private readonly ServiceTicketService $serviceTickets,
         private readonly ListaLleeDayService $listaDays,
+        private readonly TicketeraPrtgTimelineService $prtgTimeline,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -1371,6 +1374,70 @@ class IncidentController extends Controller
             $incident->serviceTicket?->delete();
             $incident->delete();
         });
+    }
+
+    /**
+     * Solo lectura: caídas/levantamientos PRTG dentro del periodo de la incidencia.
+     * No crea tickets ni altera el conteo SLA.
+     */
+    public function prtgOutages(Incident $incident): JsonResponse
+    {
+        $incident->loadMissing('networkAssignment:id,cid');
+        $cid = trim((string) ($incident->networkAssignment?->cid ?? ''));
+        if ($cid === '') {
+            return response()->json([
+                'source' => 'none',
+                'cid' => '',
+                'sensor' => null,
+                'sensor_name' => null,
+                'ignored_under_minute' => 0,
+                'outages' => [],
+                'message' => 'Esta incidencia no tiene CID de monitoreo PRTG.',
+                'from' => null,
+                'to' => null,
+                'summary' => [
+                    'caidas' => 0,
+                    'levantamientos' => 0,
+                    'patron' => 'sin_datos',
+                    'still_down' => false,
+                ],
+            ]);
+        }
+
+        $from = OperationalTime::localDate($incident->started_at) ?? OperationalTime::now()->toDateString();
+        $to = OperationalTime::localDate($incident->recovered_at) ?? OperationalTime::now()->toDateString();
+        if ($to < $from) {
+            [$from, $to] = [$to, $from];
+        }
+
+        $timeline = $this->prtgTimeline->forCid($cid, $from, $to);
+        $outages = $timeline['outages'] ?? [];
+        $caidas = count($outages);
+        $levantamientos = 0;
+        foreach ($outages as $outage) {
+            if (! empty($outage['end'])) {
+                $levantamientos++;
+            }
+        }
+        $stillDown = $caidas > 0 && empty($outages[$caidas - 1]['end'] ?? null);
+        $patron = match (true) {
+            $caidas === 0 => 'sin_datos',
+            $caidas === 1 => 'continuo',
+            default => 'intermitente',
+        };
+
+        return response()->json([
+            ...$timeline,
+            'from' => $from,
+            'to' => $to,
+            'incident_id' => $incident->id,
+            'summary' => [
+                'caidas' => $caidas,
+                'levantamientos' => $levantamientos,
+                'patron' => $patron,
+                'still_down' => $stillDown,
+            ],
+        ]);
     }
 
     /** Cierre operativo unificado: Tracking (si existe) + incidencia CERRADO. */

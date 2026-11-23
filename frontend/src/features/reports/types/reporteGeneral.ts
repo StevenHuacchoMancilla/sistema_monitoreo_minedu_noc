@@ -6,6 +6,7 @@ export type GeneralReportColumn = {
 export type GeneralReportRow = {
   n: number
   incident_id: number
+  school_id?: number | null
   ticket: string
   cid: string
   tss: string

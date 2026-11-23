@@ -5,6 +5,7 @@ import type {
   SchoolHistoryIndexResponse,
   SchoolHistoryIncidentsResponse,
   SchoolHistoryOverview,
+  SchoolSlaMonthlyResponse,
 } from '../types/historial'
 
 function toQuery(params: Record<string, string | number | undefined | null>): string {
@@ -29,6 +30,12 @@ export function fetchSchoolHistoryIncidents(
   params: Record<string, string | number | undefined | null> = {},
 ) {
   return apiGet<SchoolHistoryIncidentsResponse>(`/history/schools/${schoolId}/incidents${toQuery(params)}`)
+}
+
+export function fetchSchoolSlaMonthly(schoolId: number, month?: string) {
+  return apiGet<SchoolSlaMonthlyResponse>(
+    `/history/schools/${schoolId}/sla-monthly${toQuery({ month: month || undefined })}`,
+  )
 }
 
 export function fetchIncidentCaseFile(incidentId: number) {

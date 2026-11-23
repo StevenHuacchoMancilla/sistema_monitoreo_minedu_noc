@@ -25,16 +25,18 @@ import {
 import { incidentCaseFilePath } from '../../history/api/apiHistorial'
 import { BotonDictadoVoz } from '../../voice/components/BotonDictadoVoz'
 import { PanelAdjuntosEvidencia } from './PanelAdjuntosEvidencia'
+import { PanelCaidasPrtgIncidente } from './PanelCaidasPrtgIncidente'
 import { PanelInformeVisita } from './PanelInformeVisita'
 import { SelectorCausaRaiz } from './SelectorCausaRaiz'
 import type { IncidentDetail } from '../../../types/api'
 
-type TabKey = 'summary' | 'management' | 'history'
+type TabKey = 'summary' | 'management' | 'history' | 'prtg_outages'
 
 const TABS: Array<{ key: TabKey; label: string }> = [
   { key: 'summary', label: 'Resumen' },
   { key: 'management', label: 'Contacto y gestión' },
   { key: 'history', label: 'Historial' },
+  { key: 'prtg_outages', label: 'Caídas PRTG' },
 ]
 
 const TIMELINE_PAGE = 15
@@ -860,6 +862,14 @@ export function ModalGestionIncidente({
           ) : null}
 
           {data && tab === 'history' ? <HistoryTab data={data} incidentId={incidentId} onNavigate={onClose} /> : null}
+
+          {data && tab === 'prtg_outages' ? (
+            <PanelCaidasPrtgIncidente
+              incidentId={incidentId}
+              cid={data.colegio.cid}
+              tss={data.colegio.current_sequence}
+            />
+          ) : null}
         </div>
 
         <footer className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-t border-slate-200 bg-white px-5 py-3 dark:border-slate-800 dark:bg-slate-900">

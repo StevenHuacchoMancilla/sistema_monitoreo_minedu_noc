@@ -2,6 +2,8 @@
 
 namespace App\Domain\Ticketera\Services;
 
+use App\Domain\Reports\Services\OperationalReportService;
+use App\Models\Incident;
 use App\Models\ServiceTicket;
 use App\Support\OperationalTime;
 use Carbon\Carbon;
@@ -11,7 +13,10 @@ use Carbon\Carbon;
  */
 class LocalTicketeraService
 {
-    public function __construct(private readonly ServiceTicketService $tickets) {}
+    public function __construct(
+        private readonly ServiceTicketService $tickets,
+        private readonly OperationalReportService $operational,
+    ) {}
 
     /**
      * @return array<string, mixed>
@@ -20,6 +25,10 @@ class LocalTicketeraService
     {
         $now = OperationalTime::now();
         $rows = ServiceTicket::query()
+            ->with([
+                'incident:id,lista_detalle,detail_text,root_cause_code,cause',
+                'incident.managements' => fn ($q) => $q->orderBy('id'),
+            ])
             ->orderByDesc('opened_at')
             ->orderByDesc('id')
             ->get()
@@ -27,16 +36,20 @@ class LocalTicketeraService
             ->values()
             ->all();
 
+        // utc() muta el Carbon: calcular "today" en Lima ANTES de convertir a UTC.
+        $today = $now->toDateString();
+        $nowUtc = $now->copy()->utc()->toIso8601String();
+
         return [
-            'now' => $now->utc()->toIso8601String(),
-            'today' => $now->toDateString(),
+            'now' => $nowUtc,
+            'today' => $today,
             'refresh_seconds' => 30,
             'source' => [
                 'spreadsheet_id' => '',
                 'sheet' => 'Sistema',
                 'mode' => 'sistema',
                 'row_count' => count($rows),
-                'fetched_at' => $now->utc()->toIso8601String(),
+                'fetched_at' => $nowUtc,
             ],
             'audit' => [
                 'read_rows' => count($rows),
@@ -80,11 +93,11 @@ class LocalTicketeraService
             'area' => (string) ($ticket->area ?? ''),
             'minedu' => (string) ($ticket->minedu ?? ''),
             'causa' => (string) ($ticket->cause ?? ''),
-            'detalle' => (string) ($ticket->detail ?? ''),
+            'detalle' => $this->detailText($ticket),
             'event_detail' => $this->tickets->eventText($ticket),
-            'open' => $open?->utc()->toIso8601String(),
-            'close' => $close?->utc()->toIso8601String(),
-            'restored' => $ticket->restored_at?->utc()->toIso8601String(),
+            'open' => $open?->copy()->utc()->toIso8601String(),
+            'close' => $close?->copy()->utc()->toIso8601String(),
+            'restored' => $ticket->restored_at?->copy()->utc()->toIso8601String(),
             'open_text' => $this->text($open),
             'close_text' => $this->text($close),
             'restored_text' => $this->text($ticket->restored_at),
@@ -93,6 +106,31 @@ class LocalTicketeraService
             'sla_seconds' => null,
             'problems' => [],
         ];
+    }
+
+    /**
+     * Hilo completo de comentarios NOC/admin (no solo el último del ticket).
+     */
+    private function detailText(ServiceTicket $ticket): string
+    {
+        $incident = $ticket->incident;
+        if ($incident instanceof Incident) {
+            // Preferir gestiones: cada comentario con fecha/hora (como Seguimiento).
+            $fromMgmt = $this->operational->operatorDetailOnly($incident);
+            if (is_string($fromMgmt) && trim($fromMgmt) !== '') {
+                return trim($fromMgmt);
+            }
+            $lista = trim((string) ($incident->lista_detalle ?? ''));
+            if ($lista !== '') {
+                return $lista;
+            }
+            $fallback = trim((string) ($incident->detail_text ?? ''));
+            if ($fallback !== '') {
+                return $fallback;
+            }
+        }
+
+        return trim((string) ($ticket->detail ?? ''));
     }
 
     private function text(?Carbon $at): string
