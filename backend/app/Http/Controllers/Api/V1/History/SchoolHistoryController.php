@@ -90,4 +90,32 @@ class SchoolHistoryController extends Controller
 
         return response()->json($caseFile->build($incident));
     }
+
+    /**
+     * Solo ADMIN: corrige categoría, causa raíz y detalle en el historial.
+     */
+    public function updateCategory(Request $request, Incident $incident): JsonResponse
+    {
+        $data = $request->validate([
+            'category' => ['required', 'string', Rule::in([
+                'caidas_normales', 'averias', 'requerimientos', 'mantenimientos', 'enlace_parcial',
+            ])],
+            'root_cause_group_code' => ['nullable', 'string', 'max:8'],
+            'root_cause_code' => ['nullable', 'string', 'max:16'],
+            'detail' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $userId = (int) ($request->user()?->id ?? 0);
+        if ($userId < 1) {
+            return response()->json(['message' => 'No autenticado.'], 401);
+        }
+
+        try {
+            $result = $this->history->reclassifyCategory($incident, $data, $userId);
+        } catch (\InvalidArgumentException $e) {
+            return response()->json(['message' => $e->getMessage()], 422);
+        }
+
+        return response()->json(['data' => $result]);
+    }
 }

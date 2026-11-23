@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { keepPreviousData, useQuery } from '@tanstack/react-query'
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import {
   ArrowLeft,
   CircleCheck,
@@ -10,6 +10,7 @@ import {
   History,
   ImageDown,
   MapPin,
+  Pencil,
   Radio,
   RefreshCw,
   TriangleAlert,
@@ -28,17 +29,22 @@ import {
 } from '../../../components/ui/MarcoTablaDatos'
 import { FormField, Input, Select } from '../../../components/ui/ControlesFormulario'
 import { BarraPaginacion } from '../../../components/ui/BarraPaginacion'
+import { useAuth } from '../../auth/context/ContextoAuth'
 import { useManualSync } from '../../dashboard/hooks/useDashboard'
 import { InsigniaDesajusteUbicacion } from '../../locations/components/InsigniaDesajusteUbicacion'
-import { statusTone, techBadgeClass, type StatusTone } from '../../../lib/tokensUi'
 import { formatRelativeDateTime } from '../../../lib/fechaHora'
+import { inputClassName, statusTone, techBadgeClass, type StatusTone } from '../../../lib/tokensUi'
 import { downloadTicketImageFromIncidentId } from '../../incidents/lib/imagenTicket'
+import { SelectorCausaRaiz } from '../../incidents/components/SelectorCausaRaiz'
 import {
   fetchSchoolHistoryIncidents,
   fetchSchoolHistoryOverview,
   incidentCaseFilePath,
+  updateHistoryIncidentCategory,
 } from '../api/apiHistorial'
 import type { SchoolHistoryCategory, SchoolHistoryIncidentRow } from '../types/historial'
+
+const detailTextareaClass = `${inputClassName} !h-auto min-h-24 resize-y py-2`
 
 const HISTORY_TABS: Array<{
   id: SchoolHistoryCategory
@@ -56,6 +62,9 @@ export function PaginaHistorialColegioDetalle() {
   const { schoolId } = useParams()
   const id = Number(schoolId)
   const navigate = useNavigate()
+  const { user } = useAuth()
+  const isAdmin = user?.role === 'ADMIN'
+  const client = useQueryClient()
   const { prtg } = useManualSync()
 
   const [dateFrom, setDateFrom] = useState('')
@@ -66,6 +75,14 @@ export function PaginaHistorialColegioDetalle() {
   const [category, setCategory] = useState<SchoolHistoryCategory>('caidas_normales')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(10)
+  const [editRow, setEditRow] = useState<SchoolHistoryIncidentRow | null>(null)
+  const [editCategory, setEditCategory] = useState<SchoolHistoryCategory>('caidas_normales')
+  const [editCauseGroup, setEditCauseGroup] = useState('')
+  const [editCauseCode, setEditCauseCode] = useState('')
+  const [editDetail, setEditDetail] = useState('')
+  const [editError, setEditError] = useState<string | null>(null)
+  const [pngBusyId, setPngBusyId] = useState<number | null>(null)
+  const [pngError, setPngError] = useState<string | null>(null)
 
   const overview = useQuery({
     queryKey: ['history', 'school', id, 'overview'],
@@ -117,8 +134,28 @@ export function PaginaHistorialColegioDetalle() {
   const titleCid = cid ? `CID ${cid}` : `Colegio #${id}`
   const place = [school?.provincia, school?.distrito].filter(Boolean).join(' · ')
   const hasActive = (statistics?.caidas_activas ?? 0) > 0
-  const [pngBusyId, setPngBusyId] = useState<number | null>(null)
-  const [pngError, setPngError] = useState<string | null>(null)
+
+  const reclassify = useMutation({
+    mutationFn: () => {
+      if (!editRow) throw new Error('Sin caso seleccionado.')
+      if ((editCauseGroup && !editCauseCode) || (!editCauseGroup && editCauseCode)) {
+        throw new Error('Completa grupo y causa raíz, o déjalos vacíos.')
+      }
+      return updateHistoryIncidentCategory(editRow.id, {
+        category: editCategory,
+        root_cause_group_code: editCauseGroup || null,
+        root_cause_code: editCauseCode || null,
+        detail: editDetail.trim() || null,
+      })
+    },
+    onSuccess: async () => {
+      setEditError(null)
+      setEditRow(null)
+      await client.invalidateQueries({ queryKey: ['history', 'school', id] })
+    },
+    onError: (err: unknown) =>
+      setEditError(err instanceof Error ? err.message : 'No se pudo guardar la corrección.'),
+  })
 
   const refreshAll = async () => {
     await Promise.all([overview.refetch(), incidents.refetch()])
@@ -573,6 +610,24 @@ export function PaginaHistorialColegioDetalle() {
                             </td>
                             <td className="sticky right-0 z-10 bg-white px-3 py-3 text-right group-hover:bg-blue-50/40 dark:bg-slate-900 dark:group-hover:bg-slate-800/50">
                               <div className="inline-flex items-center justify-end gap-1">
+                                {isAdmin ? (
+                                  <button
+                                    type="button"
+                                    title="Editar categoría (solo admin)"
+                                    aria-label={`Editar categoría ${row.ticket_code ?? row.id}`}
+                                    className="inline-flex h-8 w-8 items-center justify-center rounded-lg border border-transparent text-slate-700 transition hover:border-slate-200 hover:bg-slate-100 dark:text-slate-200 dark:hover:border-slate-700 dark:hover:bg-slate-800"
+                                    onClick={() => {
+                                      setEditError(null)
+                                      setEditRow(row)
+                                      setEditCategory(row.category ?? 'caidas_normales')
+                                      setEditCauseGroup(row.root_cause_group_code ?? '')
+                                      setEditCauseCode(row.root_cause_code ?? '')
+                                      setEditDetail(row.detail_text ?? '')
+                                    }}
+                                  >
+                                    <Pencil className="h-4 w-4" aria-hidden />
+                                  </button>
+                                ) : null}
                                 {row.ticket_code ? (
                                   <button
                                     type="button"
@@ -630,6 +685,69 @@ export function PaginaHistorialColegioDetalle() {
               ) : null}
             </div>
           </section>
+        </div>
+      ) : null}
+
+      {editRow ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/50 p-4">
+          <form
+            className="max-h-[90vh] w-full max-w-xl overflow-y-auto rounded-2xl bg-white p-5 shadow-xl dark:bg-slate-900"
+            onSubmit={(e) => {
+              e.preventDefault()
+              reclassify.mutate()
+            }}
+          >
+            <h2 className="text-lg font-semibold text-slate-900 dark:text-slate-100">Editar caso</h2>
+            <p className="mt-1 text-sm text-slate-500">
+              Solo administradores. Corrige categoría, causa raíz y detalle
+              {editRow.ticket_code ? ` · ${editRow.ticket_code}` : ''}.
+            </p>
+            <div className="mt-4 space-y-4">
+              <FormField label="Categoría">
+                <Select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value as SchoolHistoryCategory)}
+                >
+                  {HISTORY_TABS.map((tab) => (
+                    <option key={tab.id} value={tab.id}>
+                      {tab.label}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              <SelectorCausaRaiz
+                groupCode={editCauseGroup}
+                causeCode={editCauseCode}
+                onGroupChange={(next) => {
+                  setEditCauseGroup(next)
+                  setEditCauseCode('')
+                }}
+                onCauseChange={(next) => setEditCauseCode(next)}
+              />
+              <FormField label="Detalle / comentario">
+                <textarea
+                  className={detailTextareaClass}
+                  value={editDetail}
+                  onChange={(e) => setEditDetail(e.target.value)}
+                  placeholder="Reemplaza el texto incorrecto (ej. comentario de ONU / led rojo)"
+                />
+              </FormField>
+            </div>
+            {editError ? <p className="mt-3 text-sm text-red-600">{editError}</p> : null}
+            <div className="mt-4 flex justify-end gap-2">
+              <Boton
+                type="button"
+                variant="secondary"
+                disabled={reclassify.isPending}
+                onClick={() => setEditRow(null)}
+              >
+                Cancelar
+              </Boton>
+              <Boton type="submit" loading={reclassify.isPending}>
+                Guardar
+              </Boton>
+            </div>
+          </form>
         </div>
       ) : null}
     </DisenoApp>

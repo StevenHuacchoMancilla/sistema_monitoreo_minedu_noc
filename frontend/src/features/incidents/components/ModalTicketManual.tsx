@@ -239,13 +239,21 @@ export function ModalTicketManual({
             </p>
             {found.open_case ? (
               <div
-                className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 text-sm text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100"
+                className={`rounded-lg border px-3 py-2 text-sm ${
+                  found.open_case.is_maintenance
+                    ? 'border-orange-400 bg-orange-50 text-orange-950 dark:border-orange-600 dark:bg-orange-950/40 dark:text-orange-100'
+                    : 'border-amber-300 bg-amber-50 text-amber-950 dark:border-amber-700 dark:bg-amber-950/40 dark:text-amber-100'
+                }`}
                 role="status"
               >
-                <p className="font-semibold">Ya está en {found.open_case.location}</p>
+                <p className="font-semibold">
+                  {found.open_case.is_maintenance
+                    ? 'Advertencia: ya hay un mantenimiento abierto'
+                    : `Ya está en ${found.open_case.location}`}
+                </p>
                 <p className="mt-0.5 text-[13px] leading-snug">{found.open_case.message}</p>
                 {found.open_case.followup_label ? (
-                  <p className="mt-1 text-[12px] text-amber-800 dark:text-amber-200">
+                  <p className="mt-1 text-[12px] opacity-90">
                     Estado actual: {found.open_case.followup_label}
                     {found.open_case.ticket_code ? ` · ${found.open_case.ticket_code}` : ''}
                   </p>
@@ -261,7 +269,11 @@ export function ModalTicketManual({
             <Boton type="submit" loading={lookup.isPending}>Buscar colegio</Boton>
           ) : (
             <Boton type="submit" loading={create.isPending}>
-              {found.open_case ? 'Continuar en el caso abierto' : 'Generar ticket'}
+              {found.open_case?.is_maintenance
+                ? 'Continuar mantenimiento existente'
+                : found.open_case
+                  ? 'Continuar en el caso abierto'
+                  : 'Generar ticket'}
             </Boton>
           )}
         </div>

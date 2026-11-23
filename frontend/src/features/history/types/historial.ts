@@ -152,7 +152,9 @@ export type SchoolHistoryIncidentRow = {
   minedu_reason?: string | null
   category?: SchoolHistoryCategory
   category_label?: string | null
+  root_cause_group_code?: string | null
   root_cause_code?: string | null
+  detail_text?: string | null
   detection_source?: string | null
   display_code?: string | null
   started_at: string | null

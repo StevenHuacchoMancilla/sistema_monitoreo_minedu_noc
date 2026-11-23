@@ -154,6 +154,23 @@ class ServiceTicketService
     }
 
     /**
+     * Mantenimiento abierto (preventivo o correctivo GS01) para un colegio.
+     * Incluye casos ya recuperados en Ping cuyo ticket sigue ABIERTO en la cola.
+     */
+    public function findOpenMaintenanceIncident(int $assignmentId): ?Incident
+    {
+        return Incident::query()
+            ->with('serviceTicket')
+            ->where('network_assignment_id', $assignmentId)
+            ->whereHas('serviceTicket', function ($q) {
+                $q->where('is_maintenance', true)
+                    ->where('status', ServiceTicket::STATUS_OPEN);
+            })
+            ->orderByDesc('id')
+            ->first();
+    }
+
+    /**
      * Asegura TGS en un incidente existente y aplica tipo + campos de detalle de evento.
      *
      * @param  array<string, mixed>  $payload
@@ -313,14 +330,9 @@ class ServiceTicketService
             throw new InvalidArgumentException('Ya hay una caída abierta para este colegio. Continúa esa gestión.');
         }
 
-        $openPreventive = Incident::query()
-            ->where('network_assignment_id', $assignment->id)
-            ->where('detection_source', Incident::DETECTION_PREVENTIVE)
-            ->whereNull('recovered_at')
-            ->whereHas('serviceTicket', fn ($q) => $q->where('status', ServiceTicket::STATUS_OPEN))
-            ->exists();
-        if ($openPreventive) {
-            throw new InvalidArgumentException('Ya hay un mantenimiento preventivo abierto para este colegio.');
+        $existingMaint = $this->findOpenMaintenanceIncident($assignment->id);
+        if ($existingMaint !== null) {
+            return $existingMaint;
         }
 
         $school = $assignment->school;
@@ -385,14 +397,9 @@ class ServiceTicketService
             return $openFall->fresh() ?? $openFall;
         }
 
-        $openMaint = Incident::query()
-            ->where('network_assignment_id', $assignment->id)
-            ->where('detection_source', Incident::DETECTION_MAINTENANCE)
-            ->whereNull('recovered_at')
-            ->whereHas('serviceTicket', fn ($q) => $q->where('status', ServiceTicket::STATUS_OPEN))
-            ->exists();
-        if ($openMaint) {
-            throw new InvalidArgumentException('Ya hay un mantenimiento correctivo abierto para este colegio.');
+        $openMaint = $this->findOpenMaintenanceIncident($assignment->id);
+        if ($openMaint !== null) {
+            return $openMaint;
         }
 
         $school = $assignment->school;

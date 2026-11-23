@@ -1,6 +1,7 @@
-import { apiGet } from '../../../api/clienteHttp'
+import { apiGet, apiPut } from '../../../api/clienteHttp'
 import type {
   IncidentCaseFile,
+  SchoolHistoryCategory,
   SchoolHistoryIndexResponse,
   SchoolHistoryIncidentsResponse,
   SchoolHistoryOverview,
@@ -32,6 +33,28 @@ export function fetchSchoolHistoryIncidents(
 
 export function fetchIncidentCaseFile(incidentId: number) {
   return apiGet<IncidentCaseFile>(`/history/incidents/${incidentId}`)
+}
+
+export function updateHistoryIncidentCategory(
+  incidentId: number,
+  body: {
+    category: SchoolHistoryCategory
+    root_cause_group_code?: string | null
+    root_cause_code?: string | null
+    detail?: string | null
+  },
+) {
+  return apiPut<{
+    data: {
+      incident_id: number
+      category: SchoolHistoryCategory
+      category_label: string
+      root_cause_group_code?: string | null
+      root_cause_code?: string | null
+      detail_text?: string | null
+      unchanged?: boolean
+    }
+  }>(`/history/incidents/${incidentId}/category`, body)
 }
 
 /** Ruta de la página de expediente completo de una incidencia. */

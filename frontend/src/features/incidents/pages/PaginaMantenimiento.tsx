@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useSearchParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, ImageDown, RefreshCw, Search, Wrench } from 'lucide-react'
+import { Download, ImageDown, RefreshCw, Search, Trash2, Wrench } from 'lucide-react'
 import { DisenoApp } from '../../../layouts/DisenoApp'
 import { EncabezadoPagina } from '../../../components/ui/EncabezadoPagina'
 import { TarjetaFiltro } from '../../../components/ui/TarjetaFiltro'
 import { Boton } from '../../../components/ui/Boton'
+import { DialogoConfirmar } from '../../../components/ui/DialogoConfirmar'
 import { FormField, Input, Select } from '../../../components/ui/ControlesFormulario'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/Estados'
 import { DataTableContainer } from '../../../components/ui/MarcoTablaDatos'
@@ -43,6 +44,7 @@ export function PaginaMantenimiento() {
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState(25)
   const [manageId, setManageId] = useState<number | null>(null)
+  const [deleteRow, setDeleteRow] = useState<MaintenanceTicket | null>(null)
   const [pngBusy, setPngBusy] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
@@ -78,6 +80,17 @@ export function PaginaMantenimiento() {
       await client.invalidateQueries({ queryKey: ['dashboard'] })
     },
     onError: (err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo cerrar el ticket.'),
+  })
+
+  const deleteTicket = useMutation({
+    mutationFn: (incidentId: number) => endpoints.deleteIncidentMaintenance(incidentId),
+    onSuccess: async () => {
+      setError(null)
+      setDeleteRow(null)
+      await client.invalidateQueries({ queryKey: ['maintenance'] })
+      await client.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+    onError: (err: unknown) => setError(err instanceof Error ? err.message : 'No se pudo eliminar el mantenimiento.'),
   })
 
   const applySearch = () => {
@@ -302,6 +315,18 @@ export function PaginaMantenimiento() {
                                 Cerrar
                               </Boton>
                             ) : null}
+                            {canManage && row.incident_id ? (
+                              <Boton
+                                type="button"
+                                size="sm"
+                                variant="danger"
+                                loading={deleteTicket.isPending && deleteTicket.variables === row.incident_id}
+                                onClick={() => setDeleteRow(row)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                                Eliminar
+                              </Boton>
+                            ) : null}
                           </div>
                         </td>
                       </tr>
@@ -343,6 +368,29 @@ export function PaginaMantenimiento() {
           }}
         />
       ) : null}
+
+      <DialogoConfirmar
+        open={deleteRow !== null}
+        title="Eliminar mantenimiento"
+        description={
+          deleteRow
+            ? `Se eliminará el ticket ${deleteRow.ticket_code}${
+                deleteRow.cid ? ` · CID ${deleteRow.cid}` : ''
+              }${deleteRow.tss ? ` · TSS ${deleteRow.tss}` : ''}. Úsalo para quitar duplicados o altas por error. Esta acción no se puede deshacer.`
+            : undefined
+        }
+        confirmLabel="Eliminar"
+        cancelLabel="Cancelar"
+        tone="danger"
+        loading={deleteTicket.isPending}
+        onClose={() => {
+          if (!deleteTicket.isPending) setDeleteRow(null)
+        }}
+        onConfirm={() => {
+          if (!deleteRow?.incident_id) return
+          deleteTicket.mutate(deleteRow.incident_id)
+        }}
+      />
     </DisenoApp>
   )
 }

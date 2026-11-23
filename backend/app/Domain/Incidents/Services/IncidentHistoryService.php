@@ -3,18 +3,24 @@
 namespace App\Domain\Incidents\Services;
 
 use App\Domain\Incidents\Support\IncidentCaseStatus;
-use App\Domain\Incidents\Support\RootCauseLegend;
 use App\Domain\Incidents\Support\OutageDuration;
+use App\Domain\Incidents\Support\RootCauseLegend;
+use App\Models\IncidentManagement;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
+use App\Enums\AuditModule;
+use App\Enums\AuditSource;
+use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Enums\MineduReason;
 use App\Enums\MonitoringStatus;
 use App\Models\Incident;
+use App\Models\IncidentUpdate;
 use App\Models\PrtgSensor;
 use App\Models\School;
 use App\Models\ServiceTicket;
 use App\Models\TrackingRecord;
+use App\Services\AuditLogger;
 use App\Support\OperationalTime;
 use Carbon\Carbon;
 use Illuminate\Contracts\Pagination\LengthAwarePaginator;
@@ -22,6 +28,7 @@ use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use InvalidArgumentException;
 
 class IncidentHistoryService
 {
@@ -453,7 +460,9 @@ class IncidentHistoryService
                     'enlace_parcial' => 'Enlace parcial',
                     default => 'Caída normal',
                 },
+                'root_cause_group_code' => $incident->root_cause_group_code,
                 'root_cause_code' => $incident->root_cause_code,
+                'detail_text' => $incident->detail_text,
                 'detection_source' => $incident->detection_source,
                 'display_code' => $ticket?->ticket_code ?: 'Sin ticket',
                 'started_at' => $incident->started_at?->toIso8601String(),
@@ -558,6 +567,289 @@ class IncidentHistoryService
                 ->values()
                 ->all(),
         ];
+    }
+
+    /**
+     * Reclasifica / corrige un caso en el historial (solo ADMIN vía API).
+     * Categoría, causa raíz y detalle de gestión.
+     *
+     * @param  array{category: string, root_cause_group_code?: ?string, root_cause_code?: ?string, detail?: ?string}  $payload
+     * @return array<string, mixed>
+     */
+    public function reclassifyCategory(Incident $incident, array $payload, int $userId): array
+    {
+        $category = (string) ($payload['category'] ?? '');
+        $allowed = ['caidas_normales', 'averias', 'requerimientos', 'mantenimientos', 'enlace_parcial'];
+        if (! in_array($category, $allowed, true)) {
+            throw new InvalidArgumentException('Categoría de historial inválida.');
+        }
+
+        $incident->loadMissing('serviceTicket');
+        $beforeCategory = $this->resolveHistoryCategory($incident);
+        $beforeDetail = (string) ($incident->detail_text ?? '');
+        $beforeCause = (string) ($incident->root_cause_code ?? '');
+
+        $groupIn = array_key_exists('root_cause_group_code', $payload)
+            ? trim((string) ($payload['root_cause_group_code'] ?? ''))
+            : null;
+        $codeIn = array_key_exists('root_cause_code', $payload)
+            ? trim((string) ($payload['root_cause_code'] ?? ''))
+            : null;
+        $detailProvided = array_key_exists('detail', $payload);
+        $detailIn = $detailProvided ? trim((string) ($payload['detail'] ?? '')) : null;
+
+        $rootRow = null;
+        if ($groupIn !== null || $codeIn !== null) {
+            if (($groupIn ?? '') === '' && ($codeIn ?? '') === '') {
+                $rootRow = false; // clear
+            } elseif (($groupIn ?? '') === '' || ($codeIn ?? '') === '') {
+                throw new InvalidArgumentException('Completa grupo y causa raíz, o déjalos vacíos.');
+            } else {
+                $rootRow = RootCauseLegend::requirePair((string) $groupIn, (string) $codeIn);
+            }
+        }
+
+        $categoryChanged = $beforeCategory !== $category;
+        $causeChanged = $rootRow !== null;
+        $detailChanged = $detailProvided && $detailIn !== $beforeDetail;
+
+        if (! $categoryChanged && ! $causeChanged && ! $detailChanged) {
+            return [
+                'incident_id' => $incident->id,
+                'category' => $category,
+                'category_label' => $this->categoryLabel($category),
+                'unchanged' => true,
+            ];
+        }
+
+        DB::transaction(function () use (
+            $incident,
+            $category,
+            $userId,
+            $beforeCategory,
+            $beforeDetail,
+            $beforeCause,
+            $categoryChanged,
+            $causeChanged,
+            $detailChanged,
+            $rootRow,
+            $detailIn,
+            $detailProvided,
+        ): void {
+            $ticket = $incident->serviceTicket;
+            $now = now();
+            $isClosed = $incident->followup_status === FollowupStatus::Cerrado
+                || ($ticket !== null && $ticket->status === ServiceTicket::STATUS_CLOSED);
+
+            $fill = $categoryChanged ? match ($category) {
+                'averias' => [
+                    'is_grave_incident' => true,
+                    'grave_opened_at' => $incident->grave_opened_at ?? $now,
+                    'grave_opened_by_user_id' => $incident->grave_opened_by_user_id ?? ($userId > 0 ? $userId : null),
+                    'grave_closed_at' => $isClosed ? ($incident->grave_closed_at ?? $now) : null,
+                    'is_requirement_case' => false,
+                    'requirement_opened_at' => null,
+                    'requirement_opened_by_user_id' => null,
+                    'requirement_closed_at' => null,
+                    'minedu_reason' => $incident->minedu_reason instanceof MineduReason
+                        && in_array($incident->minedu_reason, [MineduReason::Queja, MineduReason::CaidaEnlace], true)
+                        ? $incident->minedu_reason
+                        : MineduReason::CaidaEnlace,
+                    'detection_source' => $incident->detection_source === Incident::DETECTION_MANUAL_PARTIAL
+                        || $incident->detection_source === Incident::DETECTION_PREVENTIVE
+                        || $incident->detection_source === Incident::DETECTION_MAINTENANCE
+                        ? 'MANUAL'
+                        : $incident->detection_source,
+                ],
+                'requerimientos' => [
+                    'is_grave_incident' => false,
+                    'grave_opened_at' => null,
+                    'grave_opened_by_user_id' => null,
+                    'grave_closed_at' => null,
+                    'is_requirement_case' => true,
+                    'requirement_opened_at' => $incident->requirement_opened_at ?? $now,
+                    'requirement_opened_by_user_id' => $incident->requirement_opened_by_user_id ?? ($userId > 0 ? $userId : null),
+                    'requirement_closed_at' => $isClosed ? ($incident->requirement_closed_at ?? $now) : null,
+                    'minedu_reason' => MineduReason::Requerimiento,
+                    'detection_source' => $incident->detection_source === Incident::DETECTION_MANUAL_PARTIAL
+                        || $incident->detection_source === Incident::DETECTION_PREVENTIVE
+                        || $incident->detection_source === Incident::DETECTION_MAINTENANCE
+                        ? 'MANUAL'
+                        : $incident->detection_source,
+                ],
+                'mantenimientos' => [
+                    'is_grave_incident' => false,
+                    'grave_opened_at' => null,
+                    'grave_opened_by_user_id' => null,
+                    'grave_closed_at' => null,
+                    'is_requirement_case' => false,
+                    'requirement_opened_at' => null,
+                    'requirement_opened_by_user_id' => null,
+                    'requirement_closed_at' => null,
+                    'minedu_reason' => null,
+                    'detection_source' => $incident->detection_source === Incident::DETECTION_PREVENTIVE
+                        || $incident->detection_source === Incident::DETECTION_MAINTENANCE
+                        ? $incident->detection_source
+                        : Incident::DETECTION_MAINTENANCE,
+                ],
+                'enlace_parcial' => [
+                    'is_grave_incident' => false,
+                    'grave_opened_at' => null,
+                    'grave_opened_by_user_id' => null,
+                    'grave_closed_at' => null,
+                    'is_requirement_case' => false,
+                    'requirement_opened_at' => null,
+                    'requirement_opened_by_user_id' => null,
+                    'requirement_closed_at' => null,
+                    'minedu_reason' => null,
+                    'detection_source' => Incident::DETECTION_MANUAL_PARTIAL,
+                ],
+                default => [ // caidas_normales
+                    'is_grave_incident' => false,
+                    'grave_opened_at' => null,
+                    'grave_opened_by_user_id' => null,
+                    'grave_closed_at' => null,
+                    'is_requirement_case' => false,
+                    'requirement_opened_at' => null,
+                    'requirement_opened_by_user_id' => null,
+                    'requirement_closed_at' => null,
+                    'minedu_reason' => null,
+                    'detection_source' => in_array($incident->detection_source, [
+                        Incident::DETECTION_MANUAL_PARTIAL,
+                        Incident::DETECTION_PREVENTIVE,
+                        Incident::DETECTION_MAINTENANCE,
+                    ], true)
+                        ? 'MANUAL'
+                        : $incident->detection_source,
+                ],
+            } : [];
+
+            if ($rootRow === false) {
+                $fill['root_cause_group_code'] = null;
+                $fill['root_cause_code'] = null;
+                $fill['cause'] = null;
+            } elseif (is_array($rootRow)) {
+                $fill['root_cause_group_code'] = $rootRow['group_code'];
+                $fill['root_cause_code'] = $rootRow['code'];
+                $fill['cause'] = $rootRow['cause'];
+            }
+
+            if ($detailProvided) {
+                $fill['detail_text'] = $detailIn !== '' ? $detailIn : null;
+            }
+
+            if ($fill !== []) {
+                $incident->forceFill($fill)->save();
+            }
+
+            if ($ticket !== null) {
+                if ($categoryChanged) {
+                    $ticket->is_maintenance = $category === 'mantenimientos';
+                    if ($category === 'caidas_normales' || $category === 'enlace_parcial') {
+                        $ticket->minedu = null;
+                    } elseif ($category === 'averias') {
+                        $ticket->minedu = 'Caída de enlace';
+                    } elseif ($category === 'requerimientos') {
+                        $ticket->minedu = 'Requerimiento';
+                    } elseif ($category === 'mantenimientos') {
+                        $ticket->minedu = null;
+                    }
+                }
+                if (is_array($rootRow)) {
+                    $ticket->cause_code = $rootRow['code'];
+                    $ticket->cause = $rootRow['cause'];
+                    $ticket->segment = $rootRow['segment'] ?? $ticket->segment;
+                    $ticket->attention = $rootRow['attention'] ?? $ticket->attention;
+                } elseif ($rootRow === false) {
+                    $ticket->cause_code = null;
+                    $ticket->cause = null;
+                }
+                if ($detailProvided) {
+                    $ticket->detail = $detailIn !== '' ? $detailIn : null;
+                }
+                $ticket->save();
+            }
+
+            if ($detailProvided) {
+                $mgmtQuery = IncidentManagement::query()->where('incident_id', $incident->id);
+                if ($beforeDetail !== '') {
+                    $mgmtQuery->where('detail', $beforeDetail);
+                } else {
+                    $mgmtQuery->where(function ($q) {
+                        $q->whereNull('detail')->orWhere('detail', '');
+                    });
+                }
+                $mgmtQuery->update(['detail' => $detailIn !== '' ? $detailIn : null]);
+            }
+
+            $notes = [];
+            if ($categoryChanged) {
+                $notes[] = sprintf(
+                    'categoría %s → %s',
+                    $this->categoryLabel($beforeCategory),
+                    $this->categoryLabel($category)
+                );
+            }
+            if ($causeChanged) {
+                $afterCause = is_array($rootRow) ? (string) $rootRow['code'] : '—';
+                $notes[] = sprintf('causa %s → %s', $beforeCause !== '' ? $beforeCause : '—', $afterCause);
+            }
+            if ($detailChanged) {
+                $notes[] = 'detalle de gestión actualizado';
+            }
+
+            IncidentUpdate::query()->create([
+                'incident_id' => $incident->id,
+                'type' => 'SYSTEM',
+                'status_before' => $incident->followup_status?->value,
+                'status_after' => $incident->followup_status?->value,
+                'observation' => 'Admin corrigió historial: '.implode('; ', $notes).'.',
+                'user_id' => $userId > 0 ? $userId : null,
+                'created_at' => $now,
+            ]);
+
+            app(AuditLogger::class)->record(
+                $incident,
+                'HISTORY_CASE_CORRECTED',
+                [
+                    'category' => $beforeCategory,
+                    'root_cause_code' => $beforeCause !== '' ? $beforeCause : null,
+                    'detail_text' => $beforeDetail !== '' ? $beforeDetail : null,
+                ],
+                [
+                    'category' => $category,
+                    'root_cause_code' => is_array($rootRow) ? $rootRow['code'] : ($rootRow === false ? null : $incident->root_cause_code),
+                    'detail_text' => $detailProvided ? ($detailIn !== '' ? $detailIn : null) : $incident->detail_text,
+                ],
+                AuditModule::Incidents,
+                AuditSource::Api,
+                $userId > 0 ? $userId : null,
+            );
+        });
+
+        $fresh = $incident->fresh(['serviceTicket']) ?? $incident;
+        $resolved = $this->resolveHistoryCategory($fresh);
+
+        return [
+            'incident_id' => $fresh->id,
+            'category' => $resolved,
+            'category_label' => $this->categoryLabel($resolved),
+            'root_cause_group_code' => $fresh->root_cause_group_code,
+            'root_cause_code' => $fresh->root_cause_code,
+            'detail_text' => $fresh->detail_text,
+            'unchanged' => false,
+        ];
+    }
+
+    private function categoryLabel(string $category): string
+    {
+        return match ($category) {
+            'averias' => 'Avería',
+            'requerimientos' => 'Requerimiento',
+            'mantenimientos' => 'Mantenimiento',
+            'enlace_parcial' => 'Enlace parcial',
+            default => 'Caída normal',
+        };
     }
 
     /**

@@ -613,6 +613,23 @@ class IncidentController extends Controller
             return $this->storePreventive($request);
         }
 
+        // Correctivo GS01: no crear otro si ya hay mantenimiento abierto del mismo colegio.
+        $willMaintenance = \App\Models\ServiceTicket::isMaintenanceCause($data['root_cause_code'] ?? null);
+        if ($willMaintenance) {
+            $existingMaint = $this->serviceTickets->findOpenMaintenanceIncident((int) $assignment->id);
+            if ($existingMaint !== null) {
+                $this->applyOpeningGestion($existingMaint, $data, $request->user()?->name);
+                $this->serviceTickets->ensureTicketForIncident(
+                    $existingMaint->fresh() ?? $existingMaint,
+                    array_merge($data, ['kind' => $kind]),
+                    $request->user()?->name,
+                );
+                $this->serviceTickets->markMaintenance($existingMaint->fresh() ?? $existingMaint);
+
+                return $this->show($existingMaint->fresh() ?? $existingMaint);
+            }
+        }
+
         try {
             $incident = $this->incidents->openManualReported($assignment, $userId, $data['detail'] ?? null);
         } catch (InvalidArgumentException $e) {
@@ -694,6 +711,7 @@ class IncidentController extends Controller
             array_merge($data, ['kind' => \App\Models\ServiceTicket::KIND_PREVENTIVE]),
             $request->user()?->name,
         );
+        $this->serviceTickets->markMaintenance($incident->fresh() ?? $incident);
 
         return $this->show($incident->fresh() ?? $incident);
     }
@@ -1306,6 +1324,36 @@ class IncidentController extends Controller
             ]);
         }
 
+        $this->purgeIncidentCase($incident);
+
+        return response()->json(['ok' => true, 'deleted_incident_id' => $incident->id]);
+    }
+
+    /**
+     * Elimina un mantenimiento erróneo (p. ej. duplicado en la cola).
+     */
+    public function destroyMaintenance(Request $request, Incident $incident): JsonResponse
+    {
+        $incident->loadMissing('serviceTicket');
+        $isMaint = $incident->isOpenMaintenance()
+            || (bool) $incident->serviceTicket?->is_maintenance
+            || $incident->detection_source === Incident::DETECTION_PREVENTIVE
+            || $incident->detection_source === Incident::DETECTION_MAINTENANCE;
+
+        if (! $isMaint) {
+            throw \Illuminate\Validation\ValidationException::withMessages([
+                'incident' => 'Solo se pueden eliminar casos de mantenimiento (preventivo o correctivo GS01).',
+            ]);
+        }
+
+        $deletedId = $incident->id;
+        $this->purgeIncidentCase($incident);
+
+        return response()->json(['ok' => true, 'deleted_incident_id' => $deletedId]);
+    }
+
+    private function purgeIncidentCase(Incident $incident): void
+    {
         \Illuminate\Support\Facades\DB::transaction(function () use ($incident): void {
             $incident->loadMissing(['serviceTicket', 'attachments', 'trackingRecords']);
 
@@ -1323,8 +1371,6 @@ class IncidentController extends Controller
             $incident->serviceTicket?->delete();
             $incident->delete();
         });
-
-        return response()->json(['ok' => true, 'deleted_incident_id' => $incident->id]);
     }
 
     /** Cierre operativo unificado: Tracking (si existe) + incidencia CERRADO. */
@@ -1582,7 +1628,8 @@ class IncidentController extends Controller
      */
     private function openCaseSummaryForAssignment(int $assignmentId): ?array
     {
-        $incident = $this->incidents->findManualTicketReuseTarget($assignmentId);
+        $incident = $this->incidents->findManualTicketReuseTarget($assignmentId)
+            ?? $this->serviceTickets->findOpenMaintenanceIncident($assignmentId);
 
         if ($incident === null) {
             return null;
@@ -1603,18 +1650,26 @@ class IncidentController extends Controller
             $location = 'Caídas totales / En gestión';
         }
 
+        $isMaintenance = $incident->isOpenMaintenance();
+        $ticketCode = $incident->serviceTicket?->ticket_code;
+        $message = $isMaintenance
+            ? 'Este colegio ya tiene un mantenimiento abierto'
+                .($ticketCode ? ' ('.$ticketCode.')' : '')
+                .'. Si generas Preventivo o Correctivo GS01 se continúa ese ticket; no se crea otro mantenimiento.'
+            : 'Este colegio ya tiene un caso abierto en '.$location
+                .($ticketCode ? ' ('.$ticketCode.')' : '')
+                .'. Al generar se reutiliza ese ticket; no se crea uno nuevo.';
+
         return [
             'incident_id' => $incident->id,
             'followup_status' => $incident->followup_status?->value,
             'followup_label' => $incident->followup_status?->label(),
-            'ticket_code' => $incident->serviceTicket?->ticket_code,
+            'ticket_code' => $ticketCode,
             'location' => $location,
             'is_grave' => $incident->isOpenGrave(),
             'is_requirement' => $incident->isOpenRequirement(),
-            'is_maintenance' => $incident->isOpenMaintenance(),
-            'message' => 'Este colegio ya tiene un caso abierto en '.$location
-                .($incident->serviceTicket?->ticket_code ? ' ('.$incident->serviceTicket->ticket_code.')' : '')
-                .'. Al generar se reutiliza ese ticket; no se crea uno nuevo.',
+            'is_maintenance' => $isMaintenance,
+            'message' => $message,
         ];
     }
 

@@ -153,6 +153,40 @@ class MaintenanceStickyWorkflowTest extends TestCase
         $this->assertSame(1, Incident::query()->count());
     }
 
+    public function test_second_preventive_reuses_open_maintenance_instead_of_duplicating(): void
+    {
+        [$assignment] = $this->seedSchool('258912');
+        $user = $this->actingAsUser();
+        $tickets = app(ServiceTicketService::class);
+
+        $first = $tickets->openPreventive($assignment, $user->id, now(), 'Primero');
+        $tickets->markMaintenance($first);
+        $this->assertTrue($first->fresh()->isOpenMaintenance());
+
+        $second = $tickets->openPreventive($assignment, $user->id, now(), 'Segundo intento');
+        $this->assertSame($first->id, $second->id);
+        $this->assertSame(1, Incident::query()->count());
+        $this->assertSame(
+            1,
+            ServiceTicket::query()->where('is_maintenance', true)->where('status', ServiceTicket::STATUS_OPEN)->count()
+        );
+    }
+
+    public function test_destroy_maintenance_removes_duplicate_case(): void
+    {
+        [$assignment] = $this->seedSchool('258913');
+        $user = $this->actingAsUser();
+        $maint = app(ServiceTicketService::class)->openPreventive($assignment, $user->id, now(), 'Borrar');
+        app(ServiceTicketService::class)->markMaintenance($maint);
+
+        $this->deleteJson('/api/incidents/'.$maint->id.'/maintenance')
+            ->assertOk()
+            ->assertJson(['ok' => true, 'deleted_incident_id' => $maint->id]);
+
+        $this->assertSame(0, Incident::query()->count());
+        $this->assertSame(0, ServiceTicket::query()->count());
+    }
+
     public function test_mark_maintenance_leaves_pendiente_cierre_like_incidencias(): void
     {
         [$assignment, $sensor] = $this->seedSchool('258815');

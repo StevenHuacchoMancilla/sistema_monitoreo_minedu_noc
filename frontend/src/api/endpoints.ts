@@ -262,6 +262,8 @@ export const endpoints = {
     apiPost(`/incidents/${id}/close-requirement`, { observation }),
   deleteIncidentRequirement: (id: number) =>
     apiDelete<{ ok: boolean; deleted_incident_id: number }>(`/incidents/${id}/requirement`),
+  deleteIncidentMaintenance: (id: number) =>
+    apiDelete<{ ok: boolean; deleted_incident_id: number }>(`/incidents/${id}/maintenance`),
   keepIncidentManaging: (id: number, observation?: string) =>
     apiPost(`/incidents/${id}/keep-managing`, { observation }),
   closeIncidentTicket: (id: number, observation?: string) =>

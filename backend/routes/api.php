@@ -64,6 +64,10 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             ->where('ticketCode', 'TGS_[A-Za-z0-9_]+');
     });
 
+    Route::middleware('permission:'.PermissionCatalog::ADMIN_VIEW)->group(function () {
+        Route::put('/history/incidents/{incident}/category', [SchoolHistoryController::class, 'updateCategory']);
+    });
+
     Route::middleware('permission:'.PermissionCatalog::SCHOOLS_VIEW)->group(function () {
         Route::get('/schools', [SchoolController::class, 'index']);
         Route::get('/schools/{school}', [SchoolController::class, 'show']);
@@ -161,6 +165,7 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
             Route::post('/incidents/{incident}/close-grave', [IncidentController::class, 'closeGrave']);
             Route::post('/incidents/{incident}/close-requirement', [IncidentController::class, 'closeRequirement']);
             Route::delete('/incidents/{incident}/requirement', [IncidentController::class, 'destroyRequirement']);
+            Route::delete('/incidents/{incident}/maintenance', [IncidentController::class, 'destroyMaintenance']);
             Route::post('/incidents/{incident}/keep-managing', [IncidentController::class, 'keepManaging']);
             Route::post('/incidents/{incident}/close-ticket', [IncidentController::class, 'closeTicket']);
             Route::post('/incidents/{incident}/clock-stop', [IncidentController::class, 'clockStop']);
