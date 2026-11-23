@@ -8,6 +8,7 @@ import {
   Eye,
   FileText,
   History,
+  Hourglass,
   ImageDown,
   Images,
   ListFilter,
@@ -15,6 +16,7 @@ import {
   SquarePen,
   Ticket,
   Trash2,
+  Undo2,
   Zap,
 } from 'lucide-react'
 import { descargarReporteServicioPng } from '../lib/descargarReporteServicioPng'
@@ -205,8 +207,10 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   )
   const showingClosedGraves = kind === 'graves' && gravesTab === 'closed'
   const isGraves = kind === 'graves'
-  const showEnergyCol = kind === 'pendiente-cierre' || isGraves
-  const showQueueFilters = kind === 'pendiente-cierre'
+  const isPendienteCierre = kind === 'pendiente-cierre'
+  const isPolished = isGraves || isPendienteCierre
+  const showEnergyCol = isPendienteCierre || isGraves
+  const showQueueFilters = isPendienteCierre
 
   useEffect(() => {
     setSelectedIds(new Set())
@@ -308,6 +312,14 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
     return { red, panel, other, none }
   }, [allRows])
 
+  const pendienteStats = useMemo(() => {
+    let lista = 0
+    for (const row of allRows) {
+      if (row.gestion_lista) lista += 1
+    }
+    return { lista, pendiente: Math.max(0, allRows.length - lista) }
+  }, [allRows])
+
   const clearQueueFilters = () => {
     setSearch('')
     setNodoPop('')
@@ -340,10 +352,10 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
     ? 'Registro de incidencias ya cerradas. Abre el expediente para ver gestiones y las fotos de evidencia.'
     : meta.description
 
-  const thCell = isGraves ? gravesTh : thClassName
-  const tdCell = isGraves ? gravesTd : queueTd
-  const tdIdCell = isGraves ? gravesIdTd : idTd
-  const tdActionCell = isGraves ? gravesActionTd : actionTd
+  const thCell = isPolished ? gravesTh : thClassName
+  const tdCell = isPolished ? gravesTd : queueTd
+  const tdIdCell = isPolished ? gravesIdTd : idTd
+  const tdActionCell = isPolished ? gravesActionTd : actionTd
   const recordsLabel = `${rows.length} registro${rows.length === 1 ? '' : 's'}${
     (hasQueueFilters || hasGravesSearch) && rows.length !== allRows.length ? ` de ${allRows.length}` : ''
   }`
@@ -482,6 +494,130 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             </div>
           </section>
         </div>
+      ) : isPendienteCierre ? (
+        <div className="mb-5 space-y-4">
+          <section className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+            <div
+              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(245,158,11,0.12),_transparent_55%),linear-gradient(180deg,_rgba(248,250,252,0.95),_transparent_42%)] dark:bg-[radial-gradient(ellipse_at_top_right,_rgba(245,158,11,0.16),_transparent_55%),linear-gradient(180deg,_rgba(15,23,42,0.55),_transparent_45%)]"
+              aria-hidden
+            />
+            <div className="relative flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-start md:justify-between md:p-6">
+              <div className="min-w-0">
+                <p className="text-[11px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
+                  Operación · recuperación
+                </p>
+                <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
+                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                    <Hourglass className="h-5 w-5" aria-hidden />
+                  </span>
+                  <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl dark:text-slate-50">
+                    {pageTitle}
+                  </h1>
+                  <Insignia tone="warning">
+                    {allRows.length} {allRows.length === 1 ? 'ticket' : 'tickets'}
+                  </Insignia>
+                </div>
+                <p className="mt-2 max-w-2xl text-[13px] leading-relaxed text-slate-600 sm:text-[14px] dark:text-slate-300">
+                  {pageDescription}
+                </p>
+              </div>
+              <div className="flex shrink-0 flex-wrap items-center gap-2">
+                <Boton type="button" variant="secondary" size="sm" onClick={() => navigate('/incidents/managing')}>
+                  Ir a En gestión
+                </Boton>
+                <Boton type="button" variant="secondary" size="sm" onClick={() => void query.refetch()}>
+                  <RefreshCw className="h-3.5 w-3.5" aria-hidden />
+                  Refrescar
+                </Boton>
+              </div>
+            </div>
+          </section>
+
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <GravesStatCard label="En esta cola" value={allRows.length} hint="Pendientes de cierre" tone="amber" />
+            <GravesStatCard
+              label="Gestión lista"
+              value={pendienteStats.lista}
+              hint="Listos para cerrar"
+              tone="success"
+            />
+            <GravesStatCard
+              label="Sin cerrar aún"
+              value={pendienteStats.pendiente}
+              hint="Falta gestión o cierre"
+              tone="neutral"
+            />
+            <GravesStatCard label="Panel solar" value={energyStats.panel} hint="Colegios con panel" tone="amber" />
+          </div>
+
+          <section className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm md:p-5 dark:border-slate-800 dark:bg-slate-900">
+            <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
+                  <ListFilter className="h-4 w-4 text-slate-500" aria-hidden />
+                  Filtros
+                </h2>
+                <p className="mt-0.5 text-[12px] text-slate-500">
+                  Busca por CID/TSS o acota por nodo, energía, ubicación y estado
+                </p>
+              </div>
+              <Boton type="button" size="sm" variant="ghost" disabled={!hasQueueFilters} onClick={clearQueueFilters}>
+                Limpiar
+              </Boton>
+            </div>
+            <div className="grid min-w-0 grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-6">
+              <SearchField
+                className="sm:col-span-2"
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="CID o TSS"
+              />
+              <FormField label="Nodo / POP">
+                <Select value={nodoPop} onChange={(e) => setNodoPop(e.target.value)}>
+                  <option value="">Todos</option>
+                  {nodoOptions.map((nodo) => (
+                    <option key={nodo} value={nodo}>
+                      {nodo}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              <FormField label="Tipo de energía">
+                <Select value={energy} onChange={(e) => setEnergy(e.target.value)}>
+                  <option value="">Todas</option>
+                  {energyOptions.map((opt) => (
+                    <option key={opt.value} value={opt.value}>
+                      {opt.label}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              <CamposFiltroUbicacionPrtg
+                province={provincia}
+                district={distrito}
+                onProvinceChange={setProvincia}
+                onDistrictChange={setDistrito}
+              />
+              <FormField label="Tecnología">
+                <Select value={tecnologia} onChange={(e) => setTecnologia(e.target.value)}>
+                  <option value="">Todas</option>
+                  {tecnologiaOptions.map((item) => (
+                    <option key={item} value={item}>
+                      {item}
+                    </option>
+                  ))}
+                </Select>
+              </FormField>
+              <FormField label="Estado">
+                <Select value={estadoCola} onChange={(e) => setEstadoCola(e.target.value)}>
+                  <option value="">Todos</option>
+                  <option value="gestion_lista">Gestión lista</option>
+                  <option value="pendiente">Pendiente de cierre</option>
+                </Select>
+              </FormField>
+            </div>
+          </section>
+        </div>
       ) : (
         <>
           <EncabezadoPagina
@@ -489,11 +625,6 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             description={pageDescription}
             actions={
               <div className="flex flex-wrap items-center gap-2">
-                {kind === 'pendiente-cierre' ? (
-                  <Boton variant="secondary" onClick={() => navigate('/incidents/managing')}>
-                    Ir a En gestión
-                  </Boton>
-                ) : null}
                 <Boton variant="secondary" onClick={() => void query.refetch()}>
                   Refrescar
                 </Boton>
@@ -502,68 +633,13 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
           />
 
           <div className="mb-4">
-            <TarjetaFiltro
-              actions={
-                showQueueFilters ? (
-                  <Boton type="button" size="sm" variant="ghost" disabled={!hasQueueFilters} onClick={clearQueueFilters}>
-                    Limpiar
-                  </Boton>
-                ) : null
-              }
-            >
+            <TarjetaFiltro>
               <SearchField
                 className="sm:col-span-2 xl:col-span-2"
                 value={search}
                 onChange={(e) => setSearch(e.target.value)}
                 placeholder="CID o TSS"
               />
-              {showQueueFilters ? (
-                <>
-                  <FormField label="Nodo / POP">
-                    <Select value={nodoPop} onChange={(e) => setNodoPop(e.target.value)}>
-                      <option value="">Todos</option>
-                      {nodoOptions.map((nodo) => (
-                        <option key={nodo} value={nodo}>
-                          {nodo}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                  <FormField label="Tipo de energía">
-                    <Select value={energy} onChange={(e) => setEnergy(e.target.value)}>
-                      <option value="">Todas</option>
-                      {energyOptions.map((opt) => (
-                        <option key={opt.value} value={opt.value}>
-                          {opt.label}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                  <CamposFiltroUbicacionPrtg
-                    province={provincia}
-                    district={distrito}
-                    onProvinceChange={setProvincia}
-                    onDistrictChange={setDistrito}
-                  />
-                  <FormField label="Tecnología">
-                    <Select value={tecnologia} onChange={(e) => setTecnologia(e.target.value)}>
-                      <option value="">Todas</option>
-                      {tecnologiaOptions.map((item) => (
-                        <option key={item} value={item}>
-                          {item}
-                        </option>
-                      ))}
-                    </Select>
-                  </FormField>
-                  <FormField label="Estado">
-                    <Select value={estadoCola} onChange={(e) => setEstadoCola(e.target.value)}>
-                      <option value="">Todos</option>
-                      <option value="gestion_lista">Gestión lista</option>
-                      <option value="pendiente">Pendiente de cierre</option>
-                    </Select>
-                  </FormField>
-                </>
-              ) : null}
             </TarjetaFiltro>
           </div>
         </>
@@ -665,24 +741,24 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
         ) : null}
 
         {rows.length > 0 ? (
-          <DataTableContainer className={isGraves ? 'rounded-xl border-slate-200/80 shadow-none dark:border-slate-800' : ''}>
+          <DataTableContainer className={isPolished ? 'rounded-xl border-slate-200/80 shadow-none dark:border-slate-800' : ''}>
             <table
-              className={`${tableClassName}${kind === 'pendiente-cierre' ? ' table-fixed' : ''}${isGraves ? ' min-w-[1080px]' : ''}`}
-              style={kind === 'pendiente-cierre' ? { minWidth: canSelectMany ? 1320 : 1220 } : undefined}
+              className={`${tableClassName}${isPendienteCierre ? ' table-fixed' : ''}${isPolished ? ' min-w-[1080px]' : ''}`}
+              style={isPendienteCierre ? { minWidth: canSelectMany ? 1280 : 1180 } : undefined}
             >
-              {kind === 'pendiente-cierre' ? (
+              {isPendienteCierre ? (
                 <colgroup>
                   {canSelectMany ? <col className="w-10" /> : null}
                   <col className="w-[7.5rem]" />
                   <col className="w-[4.25rem]" />
-                  <col className="w-[7rem]" />
+                  <col className="w-[7.5rem]" />
                   <col />
                   <col className="w-[8.5rem]" />
-                  <col className="w-[8rem]" />
                   <col className="w-[7.5rem]" />
-                  <col className="w-[6.75rem]" />
-                  <col className="w-[6.75rem]" />
-                  <col className="w-[17rem]" />
+                  <col className="w-[7.5rem]" />
+                  <col className="w-[7rem]" />
+                  <col className="w-[7rem]" />
+                  <col className="w-[9.5rem]" />
                 </colgroup>
               ) : isGraves ? (
                 <colgroup>
@@ -696,7 +772,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                   <col className="w-[12rem]" />
                 </colgroup>
               ) : null}
-              <thead className={isGraves ? 'border-b border-slate-200 bg-slate-50/90 dark:border-slate-800 dark:bg-slate-950/50' : theadClassName}>
+              <thead className={isPolished ? 'border-b border-slate-200 bg-slate-50/90 dark:border-slate-800 dark:bg-slate-950/50' : theadClassName}>
                 <tr>
                   {canSelectMany ? (
                     <th className={thCell}>
@@ -728,19 +804,22 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                   ) : null}
                   <th className={thCell}>Local</th>
                   <th className={thCell}>Ubicación</th>
-                  {kind === 'pendiente-cierre' ? (
+                  {isPendienteCierre ? (
                     <th className={thCell} title="Nodo o POP del colegio">
                       Nodo/POP
                     </th>
                   ) : null}
                   <th className={thCell}>Estado</th>
-                  {kind === 'pendiente-cierre' ? (
+                  {isPendienteCierre ? (
                     <th className={thCell} title="Inicio de la caída">
-                      Caída
+                      <span className="block">Caída</span>
+                      <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">
+                        fecha · hora
+                      </span>
                     </th>
                   ) : null}
                   <th className={thCell}>
-                    {isGraves ? (
+                    {isPolished ? (
                       <>
                         <span className="block">{markedLabel}</span>
                         <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">
@@ -751,12 +830,12 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                       markedLabel
                     )}
                   </th>
-                  <th className={`${thCell} ${isGraves ? 'sticky right-0 z-10 bg-slate-50/95 text-right dark:bg-slate-950/80' : 'text-right'}`}>
+                  <th className={`${thCell} ${isPolished ? 'sticky right-0 z-10 bg-slate-50/95 text-right dark:bg-slate-950/80' : 'text-right'}`}>
                     Acción
                   </th>
                 </tr>
               </thead>
-              <tbody className={isGraves ? 'divide-y divide-slate-100 dark:divide-slate-800/80' : undefined}>
+              <tbody className={isPolished ? 'divide-y divide-slate-100 dark:divide-slate-800/80' : undefined}>
                 {rows.map((row) => {
                   const localSub = [row.ticket_code, row.codigo_local, row.tecnologia]
                     .filter(Boolean)
@@ -769,7 +848,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                       ? row.grave_opened_at ?? null
                       : kind === 'requerimientos'
                         ? row.requirement_opened_at ?? null
-                        : kind === 'pendiente-cierre'
+                        : isPendienteCierre
                           ? row.recuperada_en ?? row.recovered_at ?? null
                           : row.recovered_at ?? null
 
@@ -777,7 +856,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                     <tr
                       key={row.incident_id}
                       className={
-                        isGraves
+                        isPolished
                           ? 'group transition-colors hover:bg-blue-50/40 dark:hover:bg-slate-800/50'
                           : `${trClassName} group`
                       }
@@ -832,14 +911,14 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           {row.distrito ?? '—'}
                         </Truncate>
                       </td>
-                      {kind === 'pendiente-cierre' ? (
+                      {isPendienteCierre ? (
                         <td className={tdCell}>
                           <Truncate title={row.nodo_pop ?? undefined}>{row.nodo_pop?.trim() || '—'}</Truncate>
                         </td>
                       ) : null}
                       <td className={tdCell}>
                         <div className="flex min-w-0 flex-col items-start gap-1">
-                          {kind === 'pendiente-cierre' && row.gestion_lista ? (
+                          {isPendienteCierre && row.gestion_lista ? (
                             <Insignia tone="success" title="Gestión guardada. Cierra el ticket cuando termines.">
                               Gestión lista
                             </Insignia>
@@ -859,46 +938,43 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           ) : null}
                         </div>
                       </td>
-                      {kind === 'pendiente-cierre' ? (
-                        <td className={`${isGraves ? gravesIdTd : tdDateClassName} ${isGraves ? '' : '!align-top'}`}>
+                      {isPendienteCierre ? (
+                        <td className={isPolished ? gravesIdTd : `${tdDateClassName} !align-top`}>
                           <IsoDateTimeCell
                             value={row.current_down_started_at ?? row.started_at ?? null}
                           />
                         </td>
                       ) : null}
-                      <td className={`${isGraves ? gravesIdTd : `${tdDateClassName} !align-top`}`}>
+                      <td className={isPolished ? gravesIdTd : `${tdDateClassName} !align-top`}>
                         <IsoDateTimeCell value={markedAt} />
                       </td>
                       <td className={tdActionCell}>
-                        <div className="inline-flex flex-wrap items-center justify-end gap-0.5">
-                          {kind === 'pendiente-cierre' ? (
+                        <div className="inline-flex flex-nowrap items-center justify-end gap-1">
+                          {isPendienteCierre ? (
                             <>
-                              <Boton
-                                size="sm"
-                                variant="primary"
-                                className="!h-8 !px-2.5 !text-[11px]"
+                              <BotonIcono
+                                label="Seguir caso"
                                 onClick={() => setManageId(row.incident_id)}
+                                className="!size-8 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
                               >
-                                Seguir caso
-                              </Boton>
+                                <SquarePen className="h-4 w-4" aria-hidden />
+                              </BotonIcono>
                               {canManage ? (
                                 <>
-                                  <Boton
-                                    size="sm"
-                                    variant="secondary"
-                                    className="!h-8 !px-2.5 !text-[11px]"
+                                  <BotonIcono
+                                    label="Mantener en gestión"
                                     onClick={() => setKeepRow(row)}
+                                    className="!size-8 text-cyan-700 focus-visible:ring-2 focus-visible:ring-cyan-500 focus-visible:outline-none dark:text-cyan-300"
                                   >
-                                    Mantener en gestión
-                                  </Boton>
-                                  <Boton
-                                    size="sm"
-                                    variant="secondary"
-                                    className="!h-8 !px-2.5 !text-[11px]"
+                                    <Undo2 className="h-4 w-4" aria-hidden />
+                                  </BotonIcono>
+                                  <BotonIcono
+                                    label="Cerrar ticket"
                                     onClick={() => setCloseRow(row)}
+                                    className="!size-8 text-red-600 focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:outline-none dark:text-red-400"
                                   >
-                                    Cerrar ticket
-                                  </Boton>
+                                    <CircleX className="h-4 w-4" aria-hidden />
+                                  </BotonIcono>
                                 </>
                               ) : null}
                             </>
@@ -1000,23 +1076,25 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
           </>
         )
 
-        return isGraves ? (
+        return isPolished ? (
           <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-4 dark:border-slate-800">
-              <div>
+            <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5 dark:border-slate-800">
+              <div className="min-w-0">
                 <h2 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">
                   {pageTitle}
                   <span className="ml-2 text-sm font-medium text-slate-400">· listado</span>
                 </h2>
                 <p className="mt-1 text-[13px] text-slate-500 dark:text-slate-400">
-                  Incluye tipo de energía del colegio para priorizar atención en campo.
+                  {isPendienteCierre
+                    ? 'Iconos: seguir caso, mantener en gestión y cerrar ticket.'
+                    : 'Incluye tipo de energía del colegio para priorizar atención en campo.'}
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-semibold text-slate-600 tabular-nums dark:bg-slate-800 dark:text-slate-300">
                 {recordsLabel}
               </span>
             </div>
-            <div className="p-4 md:p-5">{listBody}</div>
+            <div className="p-3 sm:p-4 md:p-5">{listBody}</div>
           </section>
         ) : (
           <SectionCard
