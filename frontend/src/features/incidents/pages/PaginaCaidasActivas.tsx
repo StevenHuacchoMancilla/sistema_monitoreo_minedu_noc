@@ -9,8 +9,10 @@ import {
   Hourglass,
   ImageDown,
   ListFilter,
+  MessageSquareText,
   Network,
   RefreshCw,
+  ScrollText,
   Sparkles,
   SquarePen,
   Ticket,
@@ -51,6 +53,10 @@ import { useDashboardSummary, useManualSync, useOutages } from '../../dashboard/
 import { CamposFiltroUbicacionPrtg } from '../../locations/components/CamposFiltroUbicacionPrtg'
 import { InsigniaDesajusteUbicacion } from '../../locations/components/InsigniaDesajusteUbicacion'
 import { ModalGestionIncidente } from '../components/ModalGestionIncidente'
+import {
+  PanelComentariosIncidente,
+  type ComentariosPanelState,
+} from '../components/PanelComentariosIncidente'
 import { ModalRegistrarCaidaEnlace } from '../components/ModalRegistrarCaidaEnlace'
 import { ModalTicketManual } from '../components/ModalTicketManual'
 import {
@@ -223,6 +229,7 @@ export function PaginaCaidasActivas({
   const [toDate, setToDate] = useState('')
   const [duration, setDuration] = useState<DurationBucket>('')
   const [manageId, setManageId] = useState<number | null>(null)
+  const [comentariosPanel, setComentariosPanel] = useState<ComentariosPanelState | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [reportKeys, setReportKeys] = useState<Set<string>>(new Set())
   const [reportBusy, setReportBusy] = useState(false)
@@ -365,16 +372,17 @@ export function PaginaCaidasActivas({
   const showEnergy = title === 'Pendientes de gestión' || title === 'Caídas totales'
   const canSelectReport = title === 'Caídas totales'
   const showSelect = canSelectMany || canSelectReport
+  // En gestión: Acción sticky con 6 iconos (~14.5rem) → más ancho mínimo.
   const tableMinWidth = showSelect
     ? showEnergy
-      ? 1380
+      ? 1480
       : isManaging
-        ? 1360
+        ? 1480
         : 1220
     : showEnergy
-      ? 1320
+      ? 1420
       : isManaging
-        ? 1320
+        ? 1420
         : 1180
   const pageReportKeys = pageRows.map(reportKey).filter((key): key is string => key != null)
   const allReportPageSelected = pageReportKeys.length > 0 && pageReportKeys.every((key) => reportKeys.has(key))
@@ -776,7 +784,7 @@ export function PaginaCaidasActivas({
                   ) : (
                     <col className="w-[9rem]" />
                   )}
-                  <col className={isManaging ? 'w-[9.5rem]' : 'w-[7.5rem]'} />
+                  <col className={isManaging ? 'w-[14.5rem]' : 'w-[7.5rem]'} />
                 </colgroup>
                 <thead className={theadClassName}>
                   <tr>
@@ -853,7 +861,7 @@ export function PaginaCaidasActivas({
                       <th className={thClassName}>Nodo/POP</th>
                     )}
                     <th
-                      className={`${thClassName} sticky right-0 z-10 bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}
+                      className={`${thClassName} sticky right-0 z-30 bg-slate-50 text-right shadow-[-10px_0_12px_-10px_rgba(15,23,42,0.18)] dark:bg-slate-950`}
                     >
                       Acción
                     </th>
@@ -896,8 +904,19 @@ export function PaginaCaidasActivas({
                       showGenerateTicket={source === 'managing'}
                       showListaOption={isManaging}
                       showAmbitoSla={isManaging}
+                      showComentarios={isManaging}
                       pngBusy={row.incident_id != null && pngBusyId === row.incident_id}
                       onManage={setManageId}
+                      onOpenComentarios={(kind) => {
+                        if (row.incident_id == null) return
+                        setComentariosPanel({
+                          incidentId: row.incident_id,
+                          kind,
+                          cid: row.cid,
+                          local: row.local_educativo,
+                          ticket: row.ticket_code,
+                        })
+                      }}
                       onGenerateTicket={setTicketRow}
                       onDownloadTicketImage={(id) => {
                         setActionError(null)
@@ -938,7 +957,7 @@ export function PaginaCaidasActivas({
                   <span className="ml-2 text-sm font-medium text-slate-400">· listado</span>
                 </h2>
                 <p className="mt-1 text-[13px] text-slate-500 dark:text-slate-400">
-                  Usa los iconos de la derecha: historial, ticket, imagen y gestionar.
+                  Iconos: ver comentarios, detalle de evento, historial, ticket, imagen y gestionar.
                 </p>
               </div>
               <span className="rounded-full bg-slate-100 px-3 py-1 text-[12px] font-semibold text-slate-600 tabular-nums dark:bg-slate-800 dark:text-slate-300">
@@ -987,6 +1006,10 @@ export function PaginaCaidasActivas({
             void client.invalidateQueries({ queryKey: ['dashboard'], refetchType: 'active' })
           }}
         />
+      ) : null}
+
+      {comentariosPanel ? (
+        <PanelComentariosIncidente panel={comentariosPanel} onClose={() => setComentariosPanel(null)} />
       ) : null}
 
       <ModalRegistrarCaidaEnlace
@@ -1041,8 +1064,10 @@ function OutageTableRow({
   showGenerateTicket = false,
   showListaOption = false,
   showAmbitoSla = false,
+  showComentarios = false,
   pngBusy = false,
   onManage,
+  onOpenComentarios,
   onGenerateTicket,
   onDownloadTicketImage,
 }: {
@@ -1062,8 +1087,11 @@ function OutageTableRow({
   showListaOption?: boolean
   /** Solo En gestión: Ámbito (urbano/rural) + SLA 08:00–16:00. */
   showAmbitoSla?: boolean
+  /** Solo En gestión: Ver detalle / Detalle de evento (hilo completo). */
+  showComentarios?: boolean
   pngBusy?: boolean
   onManage: (id: number) => void
+  onOpenComentarios?: (kind: 'detalle' | 'evento') => void
   onGenerateTicket?: (row: OutageRow) => void
   onDownloadTicketImage?: (incidentId: number) => void
 }) {
@@ -1272,8 +1300,26 @@ function OutageTableRow({
           </Truncate>
         </td>
       )}
-      <td className="sticky right-0 z-10 overflow-visible bg-white/95 px-2 py-2 !align-top text-right shadow-[-10px_0_12px_-10px_rgba(15,23,42,0.14)] backdrop-blur group-hover:bg-blue-50/60 dark:bg-slate-900/95 dark:group-hover:bg-slate-800/80">
+      <td className="sticky right-0 z-20 overflow-hidden bg-white px-2 py-2 !align-top text-right shadow-[-10px_0_12px_-10px_rgba(15,23,42,0.18)] group-hover:bg-blue-50/80 dark:bg-slate-900 dark:group-hover:bg-slate-800">
         <div className="inline-flex flex-nowrap items-center justify-end gap-1">
+          {showComentarios && row.incident_id != null && onOpenComentarios ? (
+            <>
+              <BotonIcono
+                label="Ver detalle (todos los comentarios)"
+                onClick={() => onOpenComentarios('detalle')}
+                className="!size-8 text-sky-700 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none dark:text-sky-300"
+              >
+                <MessageSquareText className="h-4 w-4" aria-hidden />
+              </BotonIcono>
+              <BotonIcono
+                label="Detalle de evento"
+                onClick={() => onOpenComentarios('evento')}
+                className="!size-8 text-violet-700 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:outline-none dark:text-violet-300"
+              >
+                <ScrollText className="h-4 w-4" aria-hidden />
+              </BotonIcono>
+            </>
+          ) : null}
           {row.school_id ? (
             <Link
               to={`/history/schools/${row.school_id}`}

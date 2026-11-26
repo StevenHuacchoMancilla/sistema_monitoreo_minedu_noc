@@ -12,7 +12,9 @@ import {
   ImageDown,
   Images,
   ListFilter,
+  MessageSquareText,
   RefreshCw,
+  ScrollText,
   SquarePen,
   Ticket,
   Trash2,
@@ -48,6 +50,10 @@ import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/ContextoAuth'
 import { incidentCaseFilePath } from '../../history/api/apiHistorial'
 import { ModalGestionIncidente } from '../components/ModalGestionIncidente'
+import {
+  PanelComentariosIncidente,
+  type ComentariosPanelState,
+} from '../components/PanelComentariosIncidente'
 import { ModalGenerarTicket } from '../components/ModalGenerarTicket'
 import { downloadTicketImageFromIncidentId } from '../lib/imagenTicket'
 import { LISTA_ESTADO_BADGE } from '../../reports/types/reporteOperativo'
@@ -180,6 +186,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   const navigate = useNavigate()
   const [searchParams, setSearchParams] = useSearchParams()
   const [manageId, setManageId] = useState<number | null>(null)
+  const [comentariosPanel, setComentariosPanel] = useState<ComentariosPanelState | null>(null)
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [bulkIds, setBulkIds] = useState<number[] | null>(null)
   const [bulkCloseOpen, setBulkCloseOpen] = useState(false)
@@ -970,6 +977,36 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           {isPendienteCierre ? (
                             <>
                               <BotonIcono
+                                label="Ver detalle (todos los comentarios)"
+                                onClick={() =>
+                                  setComentariosPanel({
+                                    incidentId: row.incident_id,
+                                    kind: 'detalle',
+                                    cid: row.cid,
+                                    local: row.local_educativo,
+                                    ticket: row.ticket_code,
+                                  })
+                                }
+                                className="!size-8 text-sky-700 focus-visible:ring-2 focus-visible:ring-sky-500 focus-visible:outline-none dark:text-sky-300"
+                              >
+                                <MessageSquareText className="h-4 w-4" aria-hidden />
+                              </BotonIcono>
+                              <BotonIcono
+                                label="Detalle de evento"
+                                onClick={() =>
+                                  setComentariosPanel({
+                                    incidentId: row.incident_id,
+                                    kind: 'evento',
+                                    cid: row.cid,
+                                    local: row.local_educativo,
+                                    ticket: row.ticket_code,
+                                  })
+                                }
+                                className="!size-8 text-violet-700 focus-visible:ring-2 focus-visible:ring-violet-500 focus-visible:outline-none dark:text-violet-300"
+                              >
+                                <ScrollText className="h-4 w-4" aria-hidden />
+                              </BotonIcono>
+                              <BotonIcono
                                 label="Seguir caso"
                                 onClick={() => setManageId(row.incident_id)}
                                 className="!size-8 text-blue-700 focus-visible:ring-2 focus-visible:ring-blue-500 focus-visible:outline-none dark:text-blue-300"
@@ -1103,7 +1140,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                 </h2>
                 <p className="mt-1 text-[13px] text-slate-500 dark:text-slate-400">
                   {isPendienteCierre
-                    ? 'Iconos: seguir caso, mantener en gestión y cerrar ticket.'
+                    ? 'Iconos: ver comentarios, detalle de evento, seguir caso, mantener en gestión y cerrar ticket.'
                     : 'Incluye tipo de energía del colegio para priorizar atención en campo.'}
                 </p>
               </div>
@@ -1141,6 +1178,10 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
           }}
           onApplied={() => setSelectedIds(new Set())}
         />
+      ) : null}
+
+      {comentariosPanel ? (
+        <PanelComentariosIncidente panel={comentariosPanel} onClose={() => setComentariosPanel(null)} />
       ) : null}
 
       {manageId !== null && bulkIds === null ? (
