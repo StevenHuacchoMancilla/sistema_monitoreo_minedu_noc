@@ -4,8 +4,8 @@ namespace App\Http\Controllers\Api\V1\Reports;
 
 use App\Domain\Reports\Services\ClosingReportService;
 use App\Domain\Reports\Services\GeneralReportService;
-use App\Domain\Reports\Services\InternetUsageReportService;
 use App\Domain\Reports\Services\ListaLleeDayService;
+use App\Domain\Reports\Services\SolicitudesEnlaceService;
 use App\Domain\Reports\Services\MineduAttendanceReportService;
 use App\Domain\Reports\Services\OperationalReportService;
 use App\Enums\ListaLleeEstado;
@@ -27,7 +27,6 @@ class ReportController extends Controller
         private readonly ClosingReportService $closing,
         private readonly GeneralReportService $general,
         private readonly MineduAttendanceReportService $minedu,
-        private readonly InternetUsageReportService $usage,
     ) {}
 
     public function operational(Request $request): JsonResponse
@@ -165,21 +164,13 @@ class ReportController extends Controller
         return $this->minedu->downloadXlsx();
     }
 
-    public function usagePreview(Request $request): JsonResponse
+    public function solicitudes(SolicitudesEnlaceService $solicitudes): JsonResponse
     {
-        $data = $request->validate([
-            'search' => ['nullable', 'string', 'max:120'],
-        ]);
-
-        return response()->json($this->usage->preview($data['search'] ?? null));
+        return response()->json($solicitudes->build());
     }
 
-    public function usageXlsx(Request $request): StreamedResponse
+    public function solicitudesXlsx(SolicitudesEnlaceService $solicitudes): StreamedResponse
     {
-        $data = $request->validate([
-            'search' => ['nullable', 'string', 'max:120'],
-        ]);
-
-        return $this->usage->downloadXlsx($data['search'] ?? null);
+        return $solicitudes->downloadXlsx();
     }
 }

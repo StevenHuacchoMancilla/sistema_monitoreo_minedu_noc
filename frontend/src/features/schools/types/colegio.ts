@@ -12,7 +12,11 @@ export type SchoolListRow = {
   location_source?: 'prtg' | 'admin' | 'none'
   location_mismatch?: boolean
   tecnologia: string | null
+  energy_type?: string | null
+  ambito?: string | null
   capacidad_mbps: string | number | null
+  capacidad_tx_mbps?: number | null
+  capacidad_rx_mbps?: number | null
   nodo_pop: string | null
   active: boolean
   prtg_device_name: string | null

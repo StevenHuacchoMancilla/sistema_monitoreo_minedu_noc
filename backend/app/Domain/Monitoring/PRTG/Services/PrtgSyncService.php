@@ -1045,7 +1045,9 @@ class PrtgSyncService
                 return ['created' => 0, 'updated' => 0];
             }
             $existing->fill($payload)->save();
-            $this->recordTrafficSample($existing->fresh() ?? $existing);
+            $fresh = $existing->fresh() ?? $existing;
+            $this->recordTrafficSample($fresh);
+            app(PrtgCapacitySyncService::class)->syncFromSensor($fresh);
 
             return ['created' => 0, 'updated' => 1];
         }
@@ -1057,6 +1059,7 @@ class PrtgSyncService
             $this->sensorIndex?->put($sensorId, $created);
         }
         $this->recordTrafficSample($created);
+        app(PrtgCapacitySyncService::class)->syncFromSensor($created);
 
         return ['created' => 1, 'updated' => 0];
     }

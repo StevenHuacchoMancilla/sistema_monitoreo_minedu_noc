@@ -126,6 +126,24 @@ function isRecentFullDown(row: OutageRow, nowMs: number): boolean {
   return seconds !== null && seconds < RECENT_DOWN_MINUTES * 60
 }
 
+function ambitoLabel(ambito?: string | null): 'Urbano' | 'Rural' | null {
+  const value = (ambito ?? '').toUpperCase()
+  if (value.includes('URBAN')) return 'Urbano'
+  if (value.includes('RURAL')) return 'Rural'
+  return null
+}
+
+/** Horas SLA en “2 h 15 min” (ventana 08:00–16:00). */
+function formatSlaConsumed(seconds: number | null | undefined): string {
+  if (seconds == null || !Number.isFinite(seconds) || seconds < 0) return '—'
+  const total = Math.floor(seconds)
+  const h = Math.floor(total / 3600)
+  const m = Math.floor((total % 3600) / 60)
+  if (h <= 0 && m <= 0) return '0 min'
+  if (h <= 0) return `${m} min`
+  return `${h} h ${String(m).padStart(2, '0')} min`
+}
+
 function isPartialRow(row: OutageRow): boolean {
   return row.estado_prtg === 'PARCIAL' || Boolean(row.is_intermittent_watch) || Boolean(row.is_link_outage)
 }
@@ -351,12 +369,12 @@ export function PaginaCaidasActivas({
     ? showEnergy
       ? 1380
       : isManaging
-        ? 1280
+        ? 1360
         : 1220
     : showEnergy
       ? 1320
       : isManaging
-        ? 1240
+        ? 1320
         : 1180
   const pageReportKeys = pageRows.map(reportKey).filter((key): key is string => key != null)
   const allReportPageSelected = pageReportKeys.length > 0 && pageReportKeys.every((key) => reportKeys.has(key))
@@ -750,7 +768,14 @@ export function PaginaCaidasActivas({
                   <col className="w-[6.5rem]" />
                   <col className="w-[6.5rem]" />
                   <col className="w-[10.5rem]" />
-                  <col className="w-[9rem]" />
+                  {isManaging ? (
+                    <>
+                      <col className="w-[6.5rem]" />
+                      <col className="w-[7.5rem]" />
+                    </>
+                  ) : (
+                    <col className="w-[9rem]" />
+                  )}
                   <col className={isManaging ? 'w-[9.5rem]' : 'w-[7.5rem]'} />
                 </colgroup>
                 <thead className={theadClassName}>
@@ -809,7 +834,24 @@ export function PaginaCaidasActivas({
                       </span>
                     </th>
                     <th className={thClassName}>Seguimiento</th>
-                    <th className={thClassName}>Nodo/POP</th>
+                    {isManaging ? (
+                      <>
+                        <th className={thClassName} title="Ámbito del colegio (IMPLEMENTACION)">
+                          <span className="block">Ámbito</span>
+                          <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">
+                            urbano / rural
+                          </span>
+                        </th>
+                        <th className={thClassName} title="Horas efectivas SLA solo 08:00–16:00">
+                          <span className="block">SLA consumido</span>
+                          <span className="block text-[10px] font-normal normal-case tracking-normal text-slate-400">
+                            08:00–16:00
+                          </span>
+                        </th>
+                      </>
+                    ) : (
+                      <th className={thClassName}>Nodo/POP</th>
+                    )}
                     <th
                       className={`${thClassName} sticky right-0 z-10 bg-slate-50 text-right shadow-[-8px_0_8px_-8px_rgba(15,23,42,0.12)] dark:bg-slate-900`}
                     >
@@ -853,6 +895,7 @@ export function PaginaCaidasActivas({
                       }}
                       showGenerateTicket={source === 'managing'}
                       showListaOption={isManaging}
+                      showAmbitoSla={isManaging}
                       pngBusy={row.incident_id != null && pngBusyId === row.incident_id}
                       onManage={setManageId}
                       onGenerateTicket={setTicketRow}
@@ -997,6 +1040,7 @@ function OutageTableRow({
   onToggleReport,
   showGenerateTicket = false,
   showListaOption = false,
+  showAmbitoSla = false,
   pngBusy = false,
   onManage,
   onGenerateTicket,
@@ -1016,6 +1060,8 @@ function OutageTableRow({
   onToggleReport?: (key: string) => void
   showGenerateTicket?: boolean
   showListaOption?: boolean
+  /** Solo En gestión: Ámbito (urbano/rural) + SLA 08:00–16:00. */
+  showAmbitoSla?: boolean
   pngBusy?: boolean
   onManage: (id: number) => void
   onGenerateTicket?: (row: OutageRow) => void
@@ -1193,11 +1239,39 @@ function OutageTableRow({
           )}
         </div>
       </td>
-      <td className={outageTd}>
-        <Truncate title={row.nodo_pop ?? undefined} className="text-[12px] font-medium text-slate-700 dark:text-slate-200">
-          {row.nodo_pop?.trim() ? row.nodo_pop : '—'}
-        </Truncate>
-      </td>
+      {showAmbitoSla ? (
+        <>
+          <td className={outageTd}>
+            {(() => {
+              const label = ambitoLabel(row.ambito)
+              if (!label) return <span className="text-slate-400">—</span>
+              return (
+                <span
+                  className={`inline-flex rounded-md px-2 py-0.5 text-[11px] font-bold ${
+                    label === 'Urbano'
+                      ? 'bg-sky-100 text-sky-800 dark:bg-sky-950/50 dark:text-sky-200'
+                      : 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-200'
+                  }`}
+                  title={row.ambito ?? label}
+                >
+                  {label}
+                </span>
+              )
+            })()}
+          </td>
+          <td className={`${outageTd} font-semibold tabular-nums text-indigo-700 dark:text-indigo-300`}>
+            <span title="Solo horario 08:00–16:00 (menos parada de reloj)">
+              {formatSlaConsumed(row.sla_effective_seconds)}
+            </span>
+          </td>
+        </>
+      ) : (
+        <td className={outageTd}>
+          <Truncate title={row.nodo_pop ?? undefined} className="text-[12px] font-medium text-slate-700 dark:text-slate-200">
+            {row.nodo_pop?.trim() ? row.nodo_pop : '—'}
+          </Truncate>
+        </td>
+      )}
       <td className="sticky right-0 z-10 overflow-visible bg-white/95 px-2 py-2 !align-top text-right shadow-[-10px_0_12px_-10px_rgba(15,23,42,0.14)] backdrop-blur group-hover:bg-blue-50/60 dark:bg-slate-900/95 dark:group-hover:bg-slate-800/80">
         <div className="inline-flex flex-nowrap items-center justify-end gap-1">
           {row.school_id ? (

@@ -24,7 +24,12 @@ class SchoolCrudService
      */
     public function list(array $filters): LengthAwarePaginator
     {
-        $query = School::query()->with(['activeAssignment', 'contacts']);
+        $query = School::query()->with([
+            'activeAssignment.sensors' => fn ($q) => $q
+                ->whereIn('sensor_role', ['TRANSMISION', 'RECEPCION'])
+                ->select(['id', 'network_assignment_id', 'name', 'sensor_role']),
+            'contacts',
+        ]);
 
         if (DB::getDriverName() === 'sqlite') {
             $query->orderByRaw('CASE WHEN current_sequence IS NULL THEN 1 ELSE 0 END')
@@ -50,6 +55,21 @@ class SchoolCrudService
         if (! empty($filters['tecnologia'])) {
             $tech = '%'.mb_strtolower((string) $filters['tecnologia']).'%';
             $query->whereHas('activeAssignment', fn ($a) => $a->whereRaw('LOWER(tecnologia_acceso) like ?', [$tech]));
+        }
+        if (! empty($filters['energia'])) {
+            $energy = mb_strtoupper(trim((string) $filters['energia']));
+            if ($energy === 'PANEL') {
+                $query->where(function ($q) {
+                    $q->whereRaw("UPPER(COALESCE(energy_type, '')) LIKE '%PANEL%'")
+                        ->orWhereRaw("UPPER(COALESCE(energy_type, '')) LIKE '%SOLAR%'");
+                });
+            } elseif ($energy === 'RED') {
+                $query->whereRaw("UPPER(COALESCE(energy_type, '')) LIKE '%RED%'");
+            } elseif ($energy === 'SIN') {
+                $query->where(function ($q) {
+                    $q->whereNull('energy_type')->orWhere('energy_type', '');
+                });
+            }
         }
 
         if (! empty($filters['q'])) {

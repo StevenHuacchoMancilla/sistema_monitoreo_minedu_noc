@@ -111,6 +111,8 @@ export type OutageRow = {
   duracion: string | null
   duration_seconds?: number | null
   duration_label?: string | null
+  /** Horas efectivas SLA 08:00–16:00 (En gestión). */
+  sla_effective_seconds?: number | null
   prtg_down_since_raw?: string | null
   started_at: string | null
   /** Inicio del downtime actual en PRTG (la caída de ahora, no el historial de la incidencia). */

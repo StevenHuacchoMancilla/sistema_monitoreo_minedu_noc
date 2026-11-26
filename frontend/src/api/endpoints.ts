@@ -16,6 +16,7 @@ import type {
   OperationalReportResponse,
 } from '../features/reports/types/reporteOperativo'
 import type { GeneralReportResponse } from '../features/reports/types/reporteGeneral'
+import type { SolicitudesEnlaceResponse } from '../features/reports/types/solicitudes'
 import type { TicketeraPayload, TicketeraTimeline } from '../features/ticketera/types/ticketera'
 import type { ExcelGoogleComparacion } from '../features/excel-google/types'
 import type {
@@ -235,25 +236,10 @@ export const endpoints = {
       groups: Array<{ key: string; label: string; total: number }>
       rows: Array<Record<string, string | number | null>>
     }>('/reports/minedu'),
-  usageReport: (search = '') =>
-    apiGet<{
-      total: number
-      rows: Array<Record<string, string | number | null>>
-      top?: {
-        period_label: string
-        rural: Array<Record<string, string | number | null>>
-        urbano: Array<Record<string, string | number | null>>
-      }
-      top_caballococha?: {
-        period_label: string
-        rural: Array<Record<string, string | number | null>>
-        urbano: Array<Record<string, string | number | null>>
-      }
-    }>(`/reports/usage${search ? `?search=${encodeURIComponent(search)}` : ''}`),
+  solicitudesEnlace: () => apiGet<SolicitudesEnlaceResponse>('/reports/solicitudes', { timeoutMs: 120_000 }),
+  solicitudesXlsxUrl: () => `${API_URL}/reports/solicitudes.xlsx`,
   closingXlsxUrl: () => `${API_URL}/reports/closing.xlsx`,
   mineduXlsxUrl: () => `${API_URL}/reports/minedu.xlsx`,
-  usageXlsxUrl: (search = '') =>
-    `${API_URL}/reports/usage.xlsx${search ? `?search=${encodeURIComponent(search)}` : ''}`,
   generalReportXlsxUrl: (params: Record<string, string | undefined | null> = {}) =>
     `${API_URL}/reports/general.xlsx${toQuery(params)}`,
   ticketera: (fresh = false) => apiGet<TicketeraPayload>(`/ticketera${fresh ? '?fresh=1' : ''}`),
@@ -285,8 +271,8 @@ export const endpoints = {
     apiDelete<{ ok: boolean; deleted_incident_id: number }>(`/incidents/${id}/maintenance`),
   keepIncidentManaging: (id: number, observation?: string) =>
     apiPost(`/incidents/${id}/keep-managing`, { observation }),
-  closeIncidentTicket: (id: number, observation?: string) =>
-    apiPost(`/incidents/${id}/close-ticket`, { observation }),
+  closeIncidentTicket: (id: number, observation?: string, listaActivo = true) =>
+    apiPost(`/incidents/${id}/close-ticket`, { observation, lista_activo: listaActivo }),
   assignmentPrtgSensors: (assignmentId: number) =>
     apiGet<{
       assignment_id: number

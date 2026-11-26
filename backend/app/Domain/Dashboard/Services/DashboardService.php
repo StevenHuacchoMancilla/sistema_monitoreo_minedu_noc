@@ -2,6 +2,7 @@
 
 namespace App\Domain\Dashboard\Services;
 
+use App\Domain\Incidents\Services\SlaClockService;
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
 use App\Domain\Monitoring\Support\SyncCoordinator;
 use App\Enums\CidStatus;
@@ -23,6 +24,8 @@ use Throwable;
 
 class DashboardService
 {
+    public function __construct(private readonly SlaClockService $sla) {}
+
     /**
      * @return array<string, mixed>
      */
@@ -735,7 +738,7 @@ class DashboardService
             ->unique('incident_id')
             ->keyBy('incident_id');
 
-        $rows = $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds, $requirementCountsBySchool, $escalatedAtByIncident) {
+        $rows = $incidents->map(function (Incident $incident) use ($reincidenteCounts, $graveSchoolIds, $requirementCountsBySchool, $escalatedAtByIncident, $openManagement) {
             $school = $incident->school;
             $assignment = $incident->networkAssignment;
             $sensor = $incident->sensor;
@@ -752,6 +755,9 @@ class DashboardService
             $estadoPrtg = $incident->isManualPartial()
                 ? MonitoringStatus::Parcial->value
                 : ($sensor?->normalized_status?->value ?? $incident->current_status);
+
+            // Solo En gestión: horas SLA 08:00–16:00 (menos parada de reloj).
+            $slaEffective = $openManagement ? $this->sla->effectiveSeconds($incident) : null;
 
             return [
                 'incident_id' => $incident->id,
@@ -783,6 +789,7 @@ class DashboardService
                 'duracion' => $downClock?->diffForHumans(now(), true),
                 'duration_seconds' => $durationSeconds,
                 'duration_label' => $durationSeconds !== null ? $this->formatTss($durationSeconds) : null,
+                'sla_effective_seconds' => $slaEffective,
                 'prtg_down_since_raw' => $sensor?->down_since,
                 'started_at' => $incident->started_at?->toIso8601String(),
                 'current_down_started_at' => $downClock?->toIso8601String(),

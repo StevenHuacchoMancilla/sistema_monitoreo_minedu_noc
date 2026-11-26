@@ -50,6 +50,7 @@ import { incidentCaseFilePath } from '../../history/api/apiHistorial'
 import { ModalGestionIncidente } from '../components/ModalGestionIncidente'
 import { ModalGenerarTicket } from '../components/ModalGenerarTicket'
 import { downloadTicketImageFromIncidentId } from '../lib/imagenTicket'
+import { LISTA_ESTADO_BADGE } from '../../reports/types/reporteOperativo'
 
 type GravesTab = 'open' | 'closed'
 
@@ -95,6 +96,7 @@ type QueueRow = {
   tecnologia?: string | null
   followup_status?: string | null
   gestion_lista?: boolean
+  lista_llee_estado?: string | null
   root_cause_code?: string | null
   root_cause_label?: string | null
   started_at?: string | null
@@ -181,6 +183,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
   const [bulkIds, setBulkIds] = useState<number[] | null>(null)
   const [bulkCloseOpen, setBulkCloseOpen] = useState(false)
+  const [bulkListaActivo, setBulkListaActivo] = useState(true)
   const [bulkClosing, setBulkClosing] = useState(false)
   const [reportBusy, setReportBusy] = useState(false)
   const [ticketRow, setTicketRow] = useState<QueueRow | null>(null)
@@ -696,7 +699,10 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
               variant="danger"
               size="sm"
               disabled={selectedIds.size === 0 || bulkClosing}
-              onClick={() => setBulkCloseOpen(true)}
+              onClick={() => {
+                setBulkListaActivo(true)
+                setBulkCloseOpen(true)
+              }}
             >
               Cerrar selección
             </Boton>
@@ -925,6 +931,17 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                           ) : (
                             <FollowupBadge status={row.followup_status} />
                           )}
+                          {isPendienteCierre && row.lista_llee_estado ? (
+                            <span
+                              className={`inline-flex rounded-md px-1.5 py-0.5 text-[10px] font-bold ${
+                                LISTA_ESTADO_BADGE[row.lista_llee_estado] ??
+                                'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200'
+                              }`}
+                              title="Opción Lista (igual que en En gestión / Lista para reporte)"
+                            >
+                              {row.lista_llee_estado}
+                            </span>
+                          ) : null}
                           {attachmentsCount > 0 ? (
                             <Insignia
                               tone="info"
@@ -1162,10 +1179,10 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
           closeRow
             ? `Se cerrará el caso${closeRow.cid ? ` CID ${closeRow.cid}` : ''}${
                 closeRow.tss != null ? ` · TSS ${closeRow.tss}` : ''
-              }${closeRow.local_educativo ? ` · ${closeRow.local_educativo}` : ''}. El ticket sale de Pendiente de cierre.`
+              }${closeRow.local_educativo ? ` · ${closeRow.local_educativo}` : ''}. Sale de Pendiente de cierre y su opción Lista queda en Activo. Si el mismo CID ya tiene una caída más nueva, esa conserva su propia opción de lista.`
             : undefined
         }
-        confirmLabel="Cerrar ticket"
+        confirmLabel="Cerrar y marcar Activo"
         cancelLabel="Cancelar"
         tone="danger"
         loading={closing}
@@ -1177,7 +1194,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
           setClosing(true)
           setActionError(null)
           void endpoints
-            .closeIncidentTicket(closeRow.incident_id)
+            .closeIncidentTicket(closeRow.incident_id, undefined, true)
             .then(() => {
               setCloseRow(null)
               refresh()
@@ -1198,7 +1215,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                 selectedRows.length - selectedWithGestion > 0
                   ? `; ${selectedRows.length - selectedWithGestion} todavía no.`
                   : '.'
-              }`
+              } Una caída más nueva del mismo CID conserva su opción de lista.`
             : undefined
         }
         confirmLabel={`Cerrar ${selectedRows.length || ''}`.trim()}
@@ -1217,10 +1234,11 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             let done = 0
             try {
               for (const id of ids) {
-                await endpoints.closeIncidentTicket(id)
+                await endpoints.closeIncidentTicket(id, undefined, bulkListaActivo)
                 done += 1
               }
               setBulkCloseOpen(false)
+              setBulkListaActivo(true)
               setSelectedIds(new Set())
               refresh()
             } catch (err: unknown) {
@@ -1234,7 +1252,23 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             }
           })()
         }}
-      />
+      >
+        <label className="flex cursor-pointer items-start gap-2 rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-[13px] text-slate-700 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-200">
+          <input
+            type="checkbox"
+            className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+            checked={bulkListaActivo}
+            disabled={bulkClosing}
+            onChange={(e) => setBulkListaActivo(e.target.checked)}
+          />
+          <span>
+            <span className="font-semibold">Poner a todos como Activo en la Lista</span>
+            <span className="mt-0.5 block text-[12px] text-slate-500 dark:text-slate-400">
+              Recomendado. Solo afecta a estos tickets que cierras; no pisa la opción de una caída nueva del mismo CID.
+            </span>
+          </span>
+        </label>
+      </DialogoConfirmar>
 
       <DialogoConfirmar
         open={keepRow !== null}

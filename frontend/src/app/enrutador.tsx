@@ -21,7 +21,7 @@ import { PaginaListaColegios } from '../features/schools/pages/PaginaListaColegi
 import { PaginaReporteOperativo } from '../features/reports/pages/PaginaReporteOperativo'
 import { PaginaReporteGeneral } from '../features/reports/pages/PaginaReporteGeneral'
 import { PaginaReporteMinedu } from '../features/reports/pages/PaginaReporteMinedu'
-import { PaginaReporteUsoInternet } from '../features/reports/pages/PaginaReporteUsoInternet'
+import { PaginaSolicitudes } from '../features/reports/pages/PaginaSolicitudes'
 import { PaginaTicketera } from '../features/ticketera/pages/PaginaTicketera'
 import { PaginaExcelGoogle } from '../features/excel-google/pages/PaginaExcelGoogle'
 import { PaginaInicioSesion } from '../features/auth/pages/PaginaInicioSesion'
@@ -170,7 +170,8 @@ export function AppRouter() {
             <Route path="/reports" element={<Navigate to="/reports/operational" replace />} />
             <Route path="/reports/operational" element={<PaginaReporteOperativo />} />
             <Route path="/reports/minedu" element={<PaginaReporteMinedu />} />
-            <Route path="/reports/usage" element={<PaginaReporteUsoInternet />} />
+            <Route path="/reports/solicitudes" element={<PaginaSolicitudes />} />
+            <Route path="/reports/usage" element={<Navigate to="/reports/solicitudes" replace />} />
             <Route path="/reports/general" element={<PaginaReporteGeneral />} />
             <Route path="/reports/ticketera" element={<PaginaTicketera />} />
           </Route>

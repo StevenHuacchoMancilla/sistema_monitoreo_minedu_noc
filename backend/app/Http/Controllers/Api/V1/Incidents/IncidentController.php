@@ -1445,6 +1445,9 @@ class IncidentController extends Controller
     {
         $data = $request->validate([
             'observation' => ['nullable', 'string', 'max:5000'],
+            // Por defecto true: al cerrar desde Pendiente de cierre, opción Lista = Activo
+            // solo en este ticket. Una caída más nueva del mismo CID conserva su propia opción.
+            'lista_activo' => ['nullable', 'boolean'],
         ]);
 
         $userId = (int) ($request->user()?->id ?? 0);
@@ -1457,7 +1460,10 @@ class IncidentController extends Controller
         // Caída normal / Pendiente de cierre → Activo en Lista LLEE.
         // Restablecido solo al cerrar desde Incidencias (closeGrave).
         $closed = $result['incident']->fresh() ?? $result['incident'];
-        if (! $closed->isOpenGrave()) {
+        $markActivo = array_key_exists('lista_activo', $data)
+            ? (bool) $data['lista_activo']
+            : true;
+        if ($markActivo && ! $closed->isOpenGrave()) {
             $this->listaDays->markActivo($closed);
         }
 
@@ -1509,6 +1515,9 @@ class IncidentController extends Controller
             'tecnologia' => $assignment?->tecnologia_acceso,
             'followup_status' => $incident->followup_status?->value,
             'gestion_lista' => $gestionLista,
+            'lista_llee_estado' => $incident->lista_llee_estado instanceof \App\Enums\ListaLleeEstado
+                ? $incident->lista_llee_estado->value
+                : (is_string($incident->lista_llee_estado) ? $incident->lista_llee_estado : null),
             'root_cause_code' => $incident->root_cause_code,
             'root_cause_label' => \App\Domain\Incidents\Support\RootCauseLegend::display(
                 $incident->root_cause_code,

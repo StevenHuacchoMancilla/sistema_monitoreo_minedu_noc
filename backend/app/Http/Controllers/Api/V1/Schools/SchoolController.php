@@ -3,7 +3,9 @@
 namespace App\Http\Controllers\Api\V1\Schools;
 
 use App\Domain\Monitoring\PRTG\Support\PrtgOperationalLocation;
+use App\Domain\Monitoring\PRTG\Support\PrtgPlanCapacity;
 use App\Domain\Schools\Services\SchoolCrudService;
+use App\Enums\PrtgSensorRole;
 use App\Http\Controllers\Controller;
 use App\Models\Incident;
 use App\Models\NetworkAssignment;
@@ -24,6 +26,7 @@ class SchoolController extends Controller
             'provincia' => ['nullable', 'string', 'max:120'],
             'distrito' => ['nullable', 'string', 'max:120'],
             'tecnologia' => ['nullable', 'string', 'max:120'],
+            'energia' => ['nullable', 'string', Rule::in(['PANEL', 'RED', 'SIN'])],
             'active' => ['nullable', 'string', Rule::in(['1', '0', 'true', 'false', 'all'])],
             'per_page' => ['nullable', 'integer', 'min:10', 'max:200'],
         ]);
@@ -207,6 +210,27 @@ class SchoolController extends Controller
         $a = $school->activeAssignment;
         $location = PrtgOperationalLocation::apiFields($a, $school);
 
+        $txMbps = null;
+        $rxMbps = null;
+        if ($a && $a->relationLoaded('sensors')) {
+            foreach ($a->sensors as $sensor) {
+                $mbps = PrtgPlanCapacity::mbpsFromName($sensor->name);
+                if ($mbps === null) {
+                    continue;
+                }
+                if ((string) $sensor->sensor_role === PrtgSensorRole::Transmision->value) {
+                    $txMbps = $mbps;
+                } elseif ((string) $sensor->sensor_role === PrtgSensorRole::Recepcion->value) {
+                    $rxMbps = $mbps;
+                }
+            }
+        }
+
+        $plan = $txMbps ?? $rxMbps;
+        if ($txMbps !== null && $rxMbps !== null) {
+            $plan = max($txMbps, $rxMbps);
+        }
+
         return [
             'id' => $school->id,
             'n' => $school->current_sequence,
@@ -221,8 +245,12 @@ class SchoolController extends Controller
             'location_source' => $location['location_source'],
             'location_mismatch' => $location['location_mismatch'],
             'tecnologia' => $a?->tecnologia_acceso,
-            'capacidad_mbps' => $a?->capacidad_mbps,
+            'energy_type' => $school->energy_type,
+            'capacidad_mbps' => $a?->capacidad_mbps ?: PrtgPlanCapacity::label($plan),
+            'capacidad_tx_mbps' => $txMbps,
+            'capacidad_rx_mbps' => $rxMbps,
             'nodo_pop' => $a?->nodo_pop,
+            'ambito' => $school->ambito,
             'active' => $school->active,
             'prtg_device_name' => $a?->prtg_device_name,
         ];

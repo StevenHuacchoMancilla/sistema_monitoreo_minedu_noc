@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from 'react'
+import { useEffect, useId, useRef, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { TriangleAlert } from 'lucide-react'
 import { Boton } from './Boton'
@@ -7,6 +7,7 @@ export function DialogoConfirmar({
   open,
   title,
   description,
+  children,
   confirmLabel = 'Confirmar',
   cancelLabel = 'Cancelar',
   tone = 'danger',
@@ -17,6 +18,7 @@ export function DialogoConfirmar({
   open: boolean
   title: string
   description?: string
+  children?: ReactNode
   confirmLabel?: string
   cancelLabel?: string
   tone?: 'danger' | 'primary'
@@ -78,6 +80,7 @@ export function DialogoConfirmar({
             {description ? (
               <p className="mt-1.5 text-[13px] leading-snug text-slate-600 dark:text-slate-300">{description}</p>
             ) : null}
+            {children ? <div className="mt-3">{children}</div> : null}
           </div>
         </div>
         <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-950/60">

@@ -144,8 +144,8 @@ async function request<T>(path: string, init?: RequestOptions): Promise<T> {
   }
 }
 
-export function apiGet<T>(path: string): Promise<T> {
-  return request<T>(path)
+export function apiGet<T>(path: string, options?: { timeoutMs?: number }): Promise<T> {
+  return request<T>(path, { timeoutMs: options?.timeoutMs })
 }
 
 export function apiPost<T>(path: string, body?: unknown, options?: { timeoutMs?: number }): Promise<T> {

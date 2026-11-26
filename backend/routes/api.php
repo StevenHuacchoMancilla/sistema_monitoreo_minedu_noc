@@ -103,14 +103,14 @@ Route::middleware(['auth:sanctum', 'active'])->group(function () {
         Route::get('/reports/general', [ReportController::class, 'general']);
         Route::get('/reports/closing-preview', [ReportController::class, 'closingPreview']);
         Route::get('/reports/minedu', [ReportController::class, 'mineduPreview']);
-        Route::get('/reports/usage', [ReportController::class, 'usagePreview']);
+        Route::get('/reports/solicitudes', [ReportController::class, 'solicitudes']);
     });
 
     Route::middleware('permission:'.PermissionCatalog::REPORTS_EXPORT)->group(function () {
         Route::get('/reports/closing.xlsx', [ReportController::class, 'closingXlsx']);
         Route::get('/reports/general.xlsx', [ReportController::class, 'generalXlsx']);
         Route::get('/reports/minedu.xlsx', [ReportController::class, 'mineduXlsx']);
-        Route::get('/reports/usage.xlsx', [ReportController::class, 'usageXlsx']);
+        Route::get('/reports/solicitudes.xlsx', [ReportController::class, 'solicitudesXlsx']);
     });
 
     Route::middleware('permission:'.PermissionCatalog::TRACKING_VIEW)->group(function () {
