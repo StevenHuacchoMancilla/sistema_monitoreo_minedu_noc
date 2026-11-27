@@ -1,5 +1,10 @@
 import { Fragment, useEffect, useMemo, useState } from 'react'
+import { MessageSquareText, ScrollText } from 'lucide-react'
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
+import {
+  PanelComentariosIncidente,
+  type ComentariosPanelState,
+} from '../../incidents/components/PanelComentariosIncidente'
 import { formatDateTime24 } from '../../../lib/fechaHora'
 import { FormField, Input, Select } from '../../../components/ui/ControlesFormulario'
 import { Boton } from '../../../components/ui/Boton'
@@ -81,6 +86,7 @@ export function PanelSla({
   const [rankSearch, setRankSearch] = useState('')
   const [rankMin, setRankMin] = useState('1')
   const [selectedCid, setSelectedCid] = useState('')
+  const [comentariosPanel, setComentariosPanel] = useState<ComentariosPanelState | null>(null)
 
   useEffect(() => {
     const above = fold(topMinedu)
@@ -404,7 +410,7 @@ export function PanelSla({
           <span className="text-xs text-slate-500">{num(parts.length)} tramos · {num(counts.total)} tickets · {num(counts.cids)} colegios</span>
         </div>
         <div className="max-h-[610px] overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
-          <table className="min-w-[2100px] w-full border-collapse text-xs">
+          <table className="min-w-[1880px] w-full border-collapse text-xs">
             <thead className="sticky top-0 z-10 bg-[#254269] text-left text-[10px] uppercase tracking-wide text-slate-100">
               <tr>
                 {['CID / Institución', 'Mes SLA', 'Ticket', 'Apertura', 'Cierre', 'Área', 'Cupo', 'Saldo antes', 'Total 24h', 'Horas 08–16', 'Horas SLA', 'Saldo después', 'SLA en curso', 'Estado', 'Resultado', 'Código / causa', 'Detalle'].map((label) => (
@@ -459,7 +465,46 @@ export function PanelSla({
                       <strong>{part.row.codigo || '—'}</strong>
                       <span className="block text-[11px] text-slate-500">{part.row.causa || 'Sin causa raíz'}</span>
                     </td>
-                    <td className="max-w-[360px] whitespace-pre-wrap px-3 py-3">{part.row.detalle || part.row.event_detail || 'Sin detalle'}</td>
+                    <td className="min-w-[9.5rem] px-3 py-3">
+                      {part.row.incident_id ? (
+                        <div className="flex flex-col items-stretch gap-1">
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] font-semibold text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
+                            onClick={() =>
+                              setComentariosPanel({
+                                incidentId: part.row.incident_id as number,
+                                kind: 'detalle',
+                                cid: part.row.cid,
+                                local: part.row.nombre,
+                                ticket: part.row.ticket,
+                              })
+                            }
+                          >
+                            <MessageSquareText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            Ver detalle
+                          </button>
+                          <button
+                            type="button"
+                            className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                            onClick={() =>
+                              setComentariosPanel({
+                                incidentId: part.row.incident_id as number,
+                                kind: 'evento',
+                                cid: part.row.cid,
+                                local: part.row.nombre,
+                                ticket: part.row.ticket,
+                              })
+                            }
+                          >
+                            <ScrollText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                            Detalle de evento
+                          </button>
+                        </div>
+                      ) : (
+                        <span className="text-[11px] text-slate-400">Sin incidencia</span>
+                      )}
+                    </td>
                   </tr>
                 )
               }) : (
@@ -542,6 +587,42 @@ export function PanelSla({
                                 </div>
                                 <p className="mt-2 text-[11px] text-slate-500">Apertura: {row.open_text || '—'} · Cierre: {row.close_text || 'Sin cierre'}</p>
                                 <p className="mt-1 text-xs">{row.codigo || 'Sin código'} · {row.causa || 'Sin causa raíz'}</p>
+                                {row.incident_id ? (
+                                  <div className="mt-3 flex flex-wrap gap-1.5">
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
+                                      onClick={() =>
+                                        setComentariosPanel({
+                                          incidentId: row.incident_id as number,
+                                          kind: 'detalle',
+                                          cid: row.cid,
+                                          local: row.nombre,
+                                          ticket: row.ticket,
+                                        })
+                                      }
+                                    >
+                                      <MessageSquareText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                      Ver detalle
+                                    </button>
+                                    <button
+                                      type="button"
+                                      className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2.5 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                                      onClick={() =>
+                                        setComentariosPanel({
+                                          incidentId: row.incident_id as number,
+                                          kind: 'evento',
+                                          cid: row.cid,
+                                          local: row.nombre,
+                                          ticket: row.ticket,
+                                        })
+                                      }
+                                    >
+                                      <ScrollText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                      Detalle de evento
+                                    </button>
+                                  </div>
+                                ) : null}
                               </article>
                             ))}
                           </div>
@@ -557,6 +638,13 @@ export function PanelSla({
           </table>
         </div>
       </section>
+      {comentariosPanel ? (
+        <PanelComentariosIncidente
+          panel={comentariosPanel}
+          showEvidence
+          onClose={() => setComentariosPanel(null)}
+        />
+      ) : null}
     </div>
   )
 }

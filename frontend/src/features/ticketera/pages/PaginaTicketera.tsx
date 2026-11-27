@@ -1,9 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, RefreshCw, Ticket } from 'lucide-react'
+import { Download, MessageSquareText, RefreshCw, ScrollText, Ticket } from 'lucide-react'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/ContextoAuth'
 import { ModalGestionIncidente } from '../../incidents/components/ModalGestionIncidente'
+import {
+  PanelComentariosIncidente,
+  type ComentariosPanelState,
+} from '../../incidents/components/PanelComentariosIncidente'
 import { ApiError } from '../../../api/clienteHttp'
 import { DisenoApp } from '../../../layouts/DisenoApp'
 import { EncabezadoPagina } from '../../../components/ui/EncabezadoPagina'
@@ -32,9 +36,34 @@ import {
   type FilterField,
   type PreparedRow,
 } from '../lib/modelo'
-import type { TicketeraFilters, TicketeraStatus, TicketeraView } from '../types/ticketera'
+import type { TicketeraFilters, TicketeraRow, TicketeraStatus, TicketeraView } from '../types/ticketera'
 
 const PAGE = 25
+const DAY_MS = 86_400_000
+
+function limaDayStart(key: string): number | null {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(key)) return null
+  const value = Date.parse(`${key}T00:00:00-05:00`)
+  return Number.isFinite(value) ? value : null
+}
+
+/** Misma regla que Disponibilidad del colegio: solapa el rango de fechas, día completo. */
+function overlapsReportRange(row: TicketeraRow, from: string, to: string, nowIso: string): boolean {
+  const rangeStart = limaDayStart(from)
+  const rangeEndDay = limaDayStart(to)
+  if (rangeStart == null || rangeEndDay == null) return false
+  const rangeEnd = rangeEndDay + DAY_MS
+  const openMs = row.open ? Date.parse(row.open) : Number.NaN
+  if (!Number.isFinite(openMs)) return false
+  const closeMs = row.close ? Date.parse(row.close) : Number.NaN
+  const hasClose = Number.isFinite(closeMs)
+  if (row.close_text.trim() && !hasClose) return false
+  if (hasClose && closeMs < openMs) return false
+  const nowMs = Date.parse(nowIso)
+  const endMs = hasClose ? closeMs : (Number.isFinite(nowMs) ? nowMs : Date.now())
+  if (endMs <= openMs) return false
+  return openMs < rangeEnd && endMs > rangeStart
+}
 const cell = 'px-2.5 py-2 align-top text-[13px] leading-snug text-slate-700 dark:text-slate-300'
 
 const STATUS_CLASS: Record<TicketeraStatus, string> = {
@@ -116,6 +145,7 @@ export function PaginaTicketera() {
   const { user } = useAuth()
   const canManage = Boolean(user?.permissions?.includes('incidents.manage'))
   const [manageId, setManageId] = useState<number | null>(null)
+  const [comentariosPanel, setComentariosPanel] = useState<ComentariosPanelState | null>(null)
   const query = useQuery({
     queryKey: ['ticketera'],
     queryFn: () => endpoints.ticketera(),
@@ -178,8 +208,24 @@ export function PaginaTicketera() {
   }, [prepared, rankLimit, rankMetric, rankOrder, rankSearch])
 
   const detailRows = useMemo(() => {
-    const source = rankCid ? ranking.find((group) => group.cid === rankCid)?.rows ?? [] : ranking.flatMap((group) => group.rows)
+    if (rankCid && query.data && filters) {
+      return query.data.rows
+        .filter((row) => row.cid.trim() === rankCid && overlapsReportRange(row, filters.from, filters.to, query.data.now))
+        .sort((a, b) => {
+          const aOpen = a.open ? Date.parse(a.open) : 0
+          const bOpen = b.open ? Date.parse(b.open) : 0
+          return (Number.isFinite(bOpen) ? bOpen : 0) - (Number.isFinite(aOpen) ? aOpen : 0) || a.row - b.row
+        })
+    }
+    const source = ranking.flatMap((group) => group.rows)
     return [...source].sort((a, b) => (b.openMs ?? 0) - (a.openMs ?? 0) || a.row - b.row)
+  }, [ranking, rankCid, query.data, filters])
+
+  const rankingKeys = useMemo(() => {
+    const keys = new Set<number>()
+    const group = rankCid ? ranking.find((item) => item.cid === rankCid) : null
+    for (const row of group?.rows ?? []) keys.add(row.row)
+    return keys
   }, [ranking, rankCid])
 
   const tickets = useMemo(() => {
@@ -464,26 +510,77 @@ export function PaginaTicketera() {
                       ))}
                     </Select>
                   </FormField>
-                  <p className="mt-2 text-xs text-slate-500">{detailRows.length.toLocaleString('es-PE')} incidencias en el detalle.</p>
+                  <p className="mt-2 text-xs text-slate-500">
+                    {rankCid
+                      ? `${detailRows.length.toLocaleString('es-PE')} incidencias en el periodo, las mismas de Disponibilidad. El ranking cuenta ${rankingKeys.size.toLocaleString('es-PE')}: solo entran las que abrieron dentro del filtro.`
+                      : `${detailRows.length.toLocaleString('es-PE')} incidencias en el detalle.`}
+                  </p>
                 </div>
                 <div className="mt-3">
                   <DataTableContainer>
                     <table className={tableClassName}>
                       <thead className={theadClassName}>
                         <tr>
-                          {['Ticket', 'CID', 'Código', 'Apertura', 'Situación'].map((label) => (
+                          {['Ticket', 'CID', 'Código', 'Apertura', 'Situación', 'Acciones'].map((label) => (
                             <th key={label} className={thClassName}>{label}</th>
                           ))}
                         </tr>
                       </thead>
                       <tbody>
-                        {detailRows.slice(0, 20).map((row) => (
+                        {(rankCid ? detailRows : detailRows.slice(0, 20)).map((row) => (
                           <tr key={`${row.row}-${row.ticket}`} className={trClassName}>
-                            <td className={cell}>{row.ticket || 'Sin ticket'}</td>
+                            <td className={cell}>
+                              {row.ticket || 'Sin ticket'}
+                              {rankCid && !rankingKeys.has(row.row) ? (
+                                <span className="mt-1 block text-[11px] font-medium text-amber-700 dark:text-amber-300">
+                                  No entra al ranking: quedó fuera del filtro de apertura u horario.
+                                </span>
+                              ) : null}
+                            </td>
                             <td className={cell}>{row.cid}</td>
                             <td className={cell}>{row.codigo || '—'}</td>
                             <td className={`${cell} whitespace-nowrap`}>{row.open_text || '—'}</td>
                             <td className={cell}><StatusPill status={row.status} /></td>
+                            <td className={cell}>
+                              {row.incident_id ? (
+                                <div className="flex flex-col items-stretch gap-1">
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] font-semibold text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
+                                    onClick={() =>
+                                      setComentariosPanel({
+                                        incidentId: row.incident_id as number,
+                                        kind: 'detalle',
+                                        cid: row.cid,
+                                        local: row.nombre,
+                                        ticket: row.ticket,
+                                      })
+                                    }
+                                  >
+                                    <MessageSquareText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                    Ver detalle
+                                  </button>
+                                  <button
+                                    type="button"
+                                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                                    onClick={() =>
+                                      setComentariosPanel({
+                                        incidentId: row.incident_id as number,
+                                        kind: 'evento',
+                                        cid: row.cid,
+                                        local: row.nombre,
+                                        ticket: row.ticket,
+                                      })
+                                    }
+                                  >
+                                    <ScrollText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                    Detalle de evento
+                                  </button>
+                                </div>
+                              ) : (
+                                <span className="text-[11px] text-slate-400">Sin incidencia</span>
+                              )}
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -532,7 +629,7 @@ export function PaginaTicketera() {
                 <table className={tableClassName}>
                   <thead className={theadClassName}>
                     <tr>
-                      {['Fila', 'Ticket', 'Tipo', 'TSS / ubicación', 'Código', 'Razón', 'Apertura', 'Restablecimiento', 'Cierre', 'Situación', 'Duración', 'En el periodo', 'SLA', 'Detalle de evento'].map((label) => (
+                      {['Fila', 'Ticket', 'Tipo', 'TSS / ubicación', 'Código', 'Razón', 'Apertura', 'Restablecimiento', 'Cierre', 'Situación', 'Duración', 'En el periodo', 'SLA', 'Acciones'].map((label) => (
                         <th key={label} className={thClassName}>{label}</th>
                       ))}
                     </tr>
@@ -568,7 +665,46 @@ export function PaginaTicketera() {
                         <td className={`${cell} whitespace-nowrap tabular-nums`}>{clock(row.totalSeconds)}</td>
                         <td className={`${cell} whitespace-nowrap tabular-nums`}>{clock(row.periodSeconds)}</td>
                         <td className={`${cell} whitespace-nowrap tabular-nums`}>{clock(row.sla_seconds)}</td>
-                        <td className={`${cell} max-w-[18rem] whitespace-pre-line`}>{row.event_detail || '—'}</td>
+                        <td className={cell}>
+                          {row.incident_id ? (
+                            <div className="flex flex-col items-stretch gap-1">
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2 py-1.5 text-[11px] font-semibold whitespace-nowrap text-sky-800 hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200"
+                                onClick={() =>
+                                  setComentariosPanel({
+                                    incidentId: row.incident_id as number,
+                                    kind: 'detalle',
+                                    cid: row.cid,
+                                    local: row.nombre,
+                                    ticket: row.ticket,
+                                  })
+                                }
+                              >
+                                <MessageSquareText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                Ver detalle
+                              </button>
+                              <button
+                                type="button"
+                                className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-slate-200 bg-white px-2 py-1.5 text-[11px] font-semibold whitespace-nowrap text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200"
+                                onClick={() =>
+                                  setComentariosPanel({
+                                    incidentId: row.incident_id as number,
+                                    kind: 'evento',
+                                    cid: row.cid,
+                                    local: row.nombre,
+                                    ticket: row.ticket,
+                                  })
+                                }
+                              >
+                                <ScrollText className="h-3.5 w-3.5 shrink-0" aria-hidden />
+                                Detalle de evento
+                              </button>
+                            </div>
+                          ) : (
+                            <span className="text-[11px] text-slate-400">Sin incidencia</span>
+                          )}
+                        </td>
                       </tr>
                     )) : (
                       <tr><td className={cell} colSpan={14}>Sin tickets para estos filtros.</td></tr>
@@ -625,6 +761,13 @@ export function PaginaTicketera() {
             </div>
           ) : null}
         </div>
+      ) : null}
+      {comentariosPanel ? (
+        <PanelComentariosIncidente
+          panel={comentariosPanel}
+          showEvidence
+          onClose={() => setComentariosPanel(null)}
+        />
       ) : null}
       {manageId !== null ? (
         <ModalGestionIncidente

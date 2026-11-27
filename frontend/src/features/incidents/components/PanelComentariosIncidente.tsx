@@ -1,10 +1,10 @@
-import { useEffect } from 'react'
+import { useEffect, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Clock3, MessageSquareText, ScrollText, X } from 'lucide-react'
+import { Clock3, ImagePlus, MessageSquareText, ScrollText, X } from 'lucide-react'
 import { endpoints } from '../../../api/endpoints'
 import { formatDateTime } from '../../../lib/fechaHora'
-import type { IncidentDetail } from '../../../types/api'
+import type { IncidentAttachment, IncidentDetail } from '../../../types/api'
 
 export type ComentariosPanelKind = 'detalle' | 'evento'
 
@@ -71,9 +71,12 @@ function MetaChip({ label }: { label?: string | null }) {
 export function PanelComentariosIncidente({
   panel,
   onClose,
+  showEvidence = false,
 }: {
   panel: ComentariosPanelState
   onClose: () => void
+  /** Histórico de tickets: fotos subidas como evidencia, en la misma franja. */
+  showEvidence?: boolean
 }) {
   const detail = useQuery({
     queryKey: ['incidents', 'detail', panel.incidentId, 'comentarios-panel'],
@@ -182,6 +185,7 @@ export function PanelComentariosIncidente({
               hint="Este caso aún no tiene Detalle de evento (visita técnica / informe)."
             />
           )}
+          {showEvidence && data ? <EvidenceStrip attachments={data.attachments ?? []} /> : null}
         </div>
 
         {data?.gestion?.cause ? (
@@ -193,6 +197,63 @@ export function PanelComentariosIncidente({
       </aside>
     </div>,
     document.body,
+  )
+}
+
+function EvidenceStrip({ attachments }: { attachments: IncidentAttachment[] }) {
+  const [preview, setPreview] = useState<IncidentAttachment | null>(null)
+  const photos = attachments.filter((item) => !item.mime || item.mime.startsWith('image/'))
+
+  return (
+    <section className="mt-6 border-t border-slate-200 pt-5 dark:border-slate-800">
+      <h3 className="mb-3 inline-flex items-center gap-1.5 text-[12px] font-bold tracking-wide text-slate-500 uppercase">
+        <ImagePlus className="h-3.5 w-3.5" aria-hidden />
+        Evidencias
+        <span className="rounded-full bg-slate-200 px-1.5 py-0.5 text-[10px] font-bold text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+          {photos.length}
+        </span>
+      </h3>
+      {photos.length === 0 ? (
+        <p className="rounded-xl border border-dashed border-slate-300 px-3 py-4 text-[13px] text-slate-500 dark:border-slate-700">
+          No se subieron imágenes en este ticket.
+        </p>
+      ) : (
+        <ul className="grid grid-cols-2 gap-2">
+          {photos.map((item) => (
+            <li key={item.id} className="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                className="block w-full bg-slate-100 text-left dark:bg-slate-900"
+                onClick={() => setPreview(item)}
+              >
+                <img src={item.url} alt={item.original_name} className="h-28 w-full object-cover" loading="lazy" />
+              </button>
+              <p className="truncate px-2 py-1.5 text-[11px] text-slate-600 dark:text-slate-300" title={item.original_name}>
+                {item.original_name}
+              </p>
+            </li>
+          ))}
+        </ul>
+      )}
+      {preview ? (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center bg-slate-950/80 p-4" onClick={() => setPreview(null)}>
+          <button
+            type="button"
+            className="absolute top-4 right-4 rounded-lg bg-white/10 p-2 text-white"
+            aria-label="Cerrar imagen"
+            onClick={() => setPreview(null)}
+          >
+            <X className="h-4 w-4" />
+          </button>
+          <img
+            src={preview.url}
+            alt={preview.original_name}
+            className="max-h-[85vh] max-w-full rounded-lg object-contain"
+            onClick={(event) => event.stopPropagation()}
+          />
+        </div>
+      ) : null}
+    </section>
   )
 }
 

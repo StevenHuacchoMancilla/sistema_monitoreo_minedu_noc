@@ -12,7 +12,7 @@ import {
 } from 'recharts'
 import { SectionCard } from '../../../components/ui/Tarjeta'
 import type { FilterField, GroupBar, Interval, PreparedRow } from '../lib/modelo'
-import { dailyPoints, grouped, reasonSlices } from '../lib/modelo'
+import { classify, dailyPoints, fold, grouped, optionLabel, reasonSlices } from '../lib/modelo'
 import type { TicketeraFilters } from '../types/ticketera'
 
 const tooltipStyle = {
@@ -20,6 +20,53 @@ const tooltipStyle = {
   border: '1px solid #e2e8f0',
   fontSize: 12,
   fontWeight: 600,
+}
+
+function CodeCauseBars({
+  groups,
+  active,
+  onPick,
+}: {
+  groups: Array<GroupBar & { cause: string; extra: number }>
+  active: string
+  onPick: (key: string) => void
+}) {
+  const max = groups[0]?.count ?? 1
+  if (!groups.length) {
+    return <p className="py-8 text-center text-sm text-slate-500">Sin datos para estos filtros.</p>
+  }
+  return (
+    <div className="max-h-80 space-y-1 overflow-y-auto pr-1">
+      {groups.map((group) => {
+        const cause = group.extra > 0 ? `${group.cause} · y ${group.extra} más` : group.cause
+        return (
+          <button
+            key={group.key}
+            type="button"
+            onClick={() => onPick(group.key)}
+            title={`${group.label}: ${cause}`}
+            className={`grid w-full grid-cols-[minmax(0,1.6fr)_minmax(0,1fr)_2.5rem] items-center gap-2 rounded-lg px-2 py-1.5 text-left ${
+              active === group.key ? 'bg-indigo-50 ring-1 ring-indigo-400 dark:bg-indigo-950/40' : 'hover:bg-slate-50 dark:hover:bg-slate-800'
+            }`}
+          >
+            <span className="min-w-0">
+              <span className="block truncate text-xs font-semibold text-slate-800 dark:text-slate-100">{group.label}</span>
+              <span className="block truncate text-[11px] text-slate-500 dark:text-slate-400">{cause}</span>
+            </span>
+            <span className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
+              <span
+                className="block h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-500"
+                style={{ width: `${(group.count / max) * 100}%` }}
+              />
+            </span>
+            <span className="text-right text-xs font-bold tabular-nums text-slate-900 dark:text-slate-100">
+              {group.count.toLocaleString('es-PE')}
+            </span>
+          </button>
+        )
+      })}
+    </div>
+  )
 }
 
 function Bars({
@@ -58,6 +105,37 @@ function Bars({
       ))}
     </div>
   )
+}
+
+function causaDeCodigo(row: PreparedRow): string {
+  const causa = row.causa.trim()
+  if (!causa || causa.startsWith('#') || fold(causa) === 'NINGUNO') return ''
+  return causa
+}
+
+function codigosConCausa(rows: PreparedRow[]): Array<GroupBar & { cause: string; extra: number }> {
+  const map = new Map<string, { key: string; count: number; causes: Map<string, number> }>()
+  for (const row of rows) {
+    const key = classify(row, 'codigo')
+    const current = map.get(key) ?? { key, count: 0, causes: new Map<string, number>() }
+    current.count += 1
+    const cause = causaDeCodigo(row)
+    if (cause) current.causes.set(cause, (current.causes.get(cause) ?? 0) + 1)
+    map.set(key, current)
+  }
+  return [...map.values()]
+    .map((group) => {
+      const ranked = [...group.causes.entries()].sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0], 'es'))
+      return {
+        key: group.key,
+        label: optionLabel(group.key),
+        count: group.count,
+        cids: 0,
+        cause: ranked[0]?.[0] ?? 'Sin causa raíz',
+        extra: Math.max(0, ranked.length - 1),
+      }
+    })
+    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label, 'es'))
 }
 
 export function GraficosTicketera({
@@ -174,8 +252,12 @@ export function GraficosTicketera({
         <SectionCard title="Razones MINEDU" action={<span className="text-xs text-slate-500">{total.toLocaleString('es-PE')} incidencias</span>}>
           <Bars groups={grouped(rows, 'minedu')} onPick={(key) => onFilter('minedu', filters.minedu === key ? '' : key)} />
         </SectionCard>
-        <SectionCard title="Códigos de la razón filtrada">
-          <Bars groups={grouped(rows, 'codigo')} onPick={(key) => onFilter('codigo', filters.codigo === key ? '' : key)} />
+        <SectionCard title="Códigos y causa raíz">
+          <CodeCauseBars
+            groups={codigosConCausa(rows)}
+            active={filters.codigo}
+            onPick={(key) => onFilter('codigo', filters.codigo === key ? '' : key)}
+          />
         </SectionCard>
       </div>
     </div>
