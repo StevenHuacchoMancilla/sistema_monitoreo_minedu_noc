@@ -202,34 +202,34 @@ export const LISTA_ESTADO_CARD: Record<
 }
 
 export const CLASSIFICATION_BADGE_CLASS: Record<string, string> = {
-  red: 'bg-red-600 text-white ring-1 ring-red-700/30',
-  orange: 'bg-orange-500 text-white ring-1 ring-orange-700/30',
-  yellow: 'bg-yellow-400 text-yellow-950 ring-1 ring-yellow-600/40',
-  amber: 'bg-amber-400 text-amber-950 ring-1 ring-amber-600/40',
-  blue: 'bg-blue-100 text-blue-800',
-  violet: 'bg-violet-100 text-violet-800',
-  cyan: 'bg-cyan-100 text-cyan-800',
-  green: 'bg-emerald-100 text-emerald-800',
-  slate: 'bg-slate-100 text-slate-700',
+  red: 'text-noc-danger',
+  orange: 'text-noc-warning',
+  yellow: 'text-noc-warning',
+  amber: 'text-noc-warning',
+  blue: 'text-noc-info',
+  violet: 'text-noc-info',
+  cyan: 'text-noc-info',
+  green: 'text-noc-success',
+  slate: 'text-noc-muted',
 }
 
 export const LISTA_ESTADO_BADGE: Record<string, string> = {
-  Averias: 'bg-red-100 text-red-800 dark:bg-red-500/20 dark:text-red-300',
-  'Descartes en curso': 'bg-amber-100 text-amber-900 dark:bg-amber-500/20 dark:text-amber-300',
-  'Sin respuesta': 'bg-sky-100 text-sky-900 dark:bg-sky-500/20 dark:text-sky-200',
-  'Equipos apagados': 'bg-violet-100 text-violet-900 dark:bg-violet-500/20 dark:text-violet-200',
-  Energia: 'bg-orange-100 text-orange-950 dark:bg-orange-500/25 dark:text-orange-100',
-  Restablecido: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-500/20 dark:text-emerald-300',
-  Requerimiento: 'bg-slate-100 text-slate-800 dark:bg-slate-500/20 dark:text-slate-200',
-  'Enlace parcial': 'bg-stone-700 text-stone-50 dark:bg-stone-600 dark:text-stone-50',
-  Activo: 'bg-white text-slate-800 ring-1 ring-slate-200 dark:bg-slate-900 dark:text-slate-100 dark:ring-slate-700',
+  Averias: 'text-noc-danger',
+  'Descartes en curso': 'text-noc-warning',
+  'Sin respuesta': 'text-noc-info',
+  'Equipos apagados': 'text-noc-info',
+  Energia: 'text-noc-warning',
+  Restablecido: 'text-noc-success',
+  Requerimiento: 'text-noc-muted',
+  'Enlace parcial': 'text-noc-warning',
+  Activo: 'text-noc-text',
 }
 
 export function techTypeBadgeClass(tipo?: string | null): string {
   const t = (tipo ?? '').toUpperCase()
-  if (t === 'GPON') return 'bg-cyan-50 text-cyan-700 ring-1 ring-cyan-600/20'
-  if (t === 'P2P') return 'bg-indigo-50 text-indigo-700 ring-1 ring-indigo-600/20'
-  return 'bg-slate-100 text-slate-700 ring-1 ring-slate-500/15'
+  if (t === 'GPON') return 'text-noc-info'
+  if (t === 'P2P') return 'text-noc-copper-2'
+  return 'text-noc-muted'
 }
 
 export function formatOutageDisplay(row: Pick<ReportRow, 'outage_at' | 'caida'>): { date: string; time?: string } {

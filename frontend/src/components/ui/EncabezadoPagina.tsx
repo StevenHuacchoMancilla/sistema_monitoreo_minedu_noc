@@ -18,12 +18,12 @@ export function EncabezadoPagina({
   breadcrumb?: ReactNode
 }) {
   return (
-    <header className="mb-5 flex min-w-0 flex-col gap-3 border-b border-slate-200 pb-4 lg:flex-row lg:items-start lg:justify-between dark:border-slate-800">
+    <header className="mb-4 flex min-w-0 flex-col gap-3 border-b border-noc-line pb-4 lg:flex-row lg:items-start lg:justify-between">
       <div className="min-w-0">
         {breadcrumb ? <div className="mb-2">{breadcrumb}</div> : null}
         <div className="flex items-start gap-3">
           {icon ? (
-            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-blue-50 text-blue-600 sm:h-10 sm:w-10 dark:bg-blue-950/50 dark:text-blue-300">
+            <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center overflow-hidden rounded-md bg-noc-raised text-noc-faint">
               <span className="pointer-events-none inline-flex h-5 w-5 shrink-0 items-center justify-center [&>svg]:!h-5 [&>svg]:!w-5 [&>svg]:!max-h-5 [&>svg]:!max-w-5">
                 {icon}
               </span>
@@ -31,13 +31,13 @@ export function EncabezadoPagina({
           ) : null}
           <div className="min-w-0">
             <div className="flex flex-wrap items-center gap-2">
-              <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl dark:text-slate-50">
+              <h1 className="text-xl font-semibold tracking-tight text-noc-text">
                 {title}
               </h1>
               {badges}
             </div>
             {description ? (
-              <p className="mt-0.5 max-w-2xl text-[13px] font-medium text-slate-500 dark:text-slate-400">{description}</p>
+              <p className="mt-0.5 max-w-2xl text-[13px] leading-relaxed text-noc-muted">{description}</p>
             ) : null}
           </div>
         </div>

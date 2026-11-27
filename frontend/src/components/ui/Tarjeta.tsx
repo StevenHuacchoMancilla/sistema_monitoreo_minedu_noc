@@ -9,19 +9,9 @@ export function Tarjeta({
   className?: string
   tone?: 'default' | 'ok' | 'danger' | 'warn' | 'info' | 'cyan'
 }) {
-  const tones = {
-    default: 'border-slate-200 dark:border-slate-800',
-    ok: 'border-noc-success/30',
-    danger: 'border-noc-danger/30',
-    warn: 'border-noc-warning/30',
-    info: 'border-noc-info/30',
-    cyan: 'border-noc-cyan/30',
-  } as const
-
+  void tone
   return (
-    <div
-      className={`rounded-xl border bg-white p-4 shadow-sm md:p-5 dark:bg-slate-900 ${tones[tone]} ${className}`}
-    >
+    <div className={`noc-card rounded-xl border border-noc-border p-4 md:p-5 ${className}`}>
       {children}
     </div>
   )
@@ -38,17 +28,14 @@ export function SectionCard({
   action?: ReactNode
   accent?: 'prtg'
 }) {
-  const bar =
-    accent === 'prtg'
-      ? 'border-l-blue-500'
-      : 'border-l-slate-200 dark:border-l-slate-700'
+  const bar = accent === 'prtg' ? 'before:bg-noc-copper' : 'before:bg-transparent'
 
   return (
     <section
-      className={`min-w-0 rounded-xl border border-slate-200 border-l-4 bg-white p-4 shadow-sm md:p-5 dark:border-slate-800 dark:bg-slate-900 ${bar}`}
+      className={`noc-card relative min-w-0 overflow-hidden rounded-xl border border-noc-border p-4 before:absolute before:inset-x-0 before:top-0 before:h-px md:p-5 ${bar}`}
     >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-        <h2 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">{title}</h2>
+        <h2 className="text-[15px] font-semibold tracking-tight text-noc-text">{title}</h2>
         {action}
       </div>
       <div className="min-w-0">{children}</div>

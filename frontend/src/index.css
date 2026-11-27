@@ -7,33 +7,62 @@
 /* Class-based dark mode (html.dark) — not media-only */
 @custom-variant dark (&:where(.dark, .dark *));
 
+/*
+  Midnight Blue
+  70 % superficies navy, 20 % azul de identidad, 10 % estados.
+  --color-noc-copper conserva el nombre del token de acento y ahora es Apple Blue.
+*/
 @theme {
-  --color-noc-bg: #f8fafc;
+  --color-noc-bg: #eef2f7;
+  --color-noc-nav: #f7f9fc;
   --color-noc-surface: #ffffff;
-  --color-noc-surface-2: #f1f5f9;
-  --color-noc-border: #e2e8f0;
-  --color-noc-text: #0f172a;
-  --color-noc-muted: #64748b;
-  --color-noc-success: #059669;
-  --color-noc-danger: #dc2626;
-  --color-noc-warning: #f59e0b;
-  --color-noc-info: #2563eb;
-  --color-noc-cyan: #0891b2;
+  --color-noc-surface-2: #e7eef6;
+  --color-noc-raised: #f4f7fb;
+  --color-noc-interactive: #e3ebf5;
+  --color-noc-border: #d3deeb;
+  --color-noc-border-2: #e4ebf3;
+  --color-noc-line: #e4ebf3;
+  --color-noc-text: #0e1729;
+  --color-noc-muted: #4e6078;
+  --color-noc-faint: #6c7e96;
+  --color-noc-disabled: #93a3b8;
+  --color-noc-copper: #1576e0;
+  --color-noc-copper-2: #2997ff;
+  --color-noc-amber: #b7791f;
+  --color-noc-copper-deep: #0b5fbf;
+  --color-noc-success: #1f8a4c;
+  --color-noc-danger: #c43838;
+  --color-noc-warning: #b7791f;
+  --color-noc-info: #1576e0;
+  --color-noc-cyan: #1576e0;
   --font-sans: "Inter", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, "Cascadia Mono", "Segoe UI Mono", monospace;
+  --radius-noc: 0.75rem;
 }
 
 html.dark {
-  --color-noc-bg: #020617;
-  --color-noc-surface: #0f172a;
-  --color-noc-surface-2: #1e293b;
-  --color-noc-border: #1e293b;
-  --color-noc-text: #f1f5f9;
-  --color-noc-muted: #94a3b8;
-  --color-noc-success: #34d399;
-  --color-noc-danger: #f87171;
-  --color-noc-warning: #fbbf24;
-  --color-noc-info: #60a5fa;
-  --color-noc-cyan: #22d3ee;
+  --color-noc-bg: #080e1b;
+  --color-noc-nav: #0e1729;
+  --color-noc-surface: #17243b;
+  --color-noc-surface-2: #14213a;
+  --color-noc-raised: #1c2b45;
+  --color-noc-interactive: #22334f;
+  --color-noc-border: #293a54;
+  --color-noc-border-2: #202f46;
+  --color-noc-line: #202f46;
+  --color-noc-text: #f5f7fa;
+  --color-noc-muted: #a7b4c6;
+  --color-noc-faint: #7e8da3;
+  --color-noc-disabled: #5c6d84;
+  --color-noc-copper: #2997ff;
+  --color-noc-copper-2: #64acff;
+  --color-noc-amber: #ffb340;
+  --color-noc-copper-deep: #1576e0;
+  --color-noc-success: #3ddc97;
+  --color-noc-danger: #ff6961;
+  --color-noc-warning: #ffb340;
+  --color-noc-info: #64acff;
+  --color-noc-cyan: #64acff;
 }
 
 html,
@@ -48,22 +77,178 @@ body {
   color: var(--color-noc-text);
   font-family: var(--font-sans);
   font-weight: 400;
+  letter-spacing: -0.011em;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   overflow-x: hidden;
 }
 
+::selection {
+  background: rgb(41 151 255 / 0.32);
+  color: inherit;
+}
+
 * {
   box-sizing: border-box;
   scrollbar-width: thin;
-  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-color: #c5cacd transparent;
 }
 
 html.dark * {
-  scrollbar-color: #475569 transparent;
+  scrollbar-color: #293a54 transparent;
+}
+
+/* Tarjeta: misma familia azul, con un velo superior que da profundidad. */
+.noc-card {
+  background-color: var(--color-noc-surface);
+  background-image: linear-gradient(165deg, rgb(41 151 255 / 0.13), rgb(41 151 255 / 0) 46%);
+  box-shadow: inset 0 1px 0 rgb(169 212 255 / 0.08), 0 18px 36px -28px rgb(8 14 27 / 0.9);
 }
 
 :focus-visible {
-  outline: 2px solid color-mix(in srgb, var(--color-noc-info) 70%, white);
+  outline: 2px solid var(--color-noc-copper);
   outline-offset: 2px;
+}
+
+/* Las pantallas que aún nombran slate heredan la paleta. */
+html.dark .dark\:bg-slate-900,
+html.dark .dark\:bg-slate-900\/40,
+html.dark .dark\:bg-slate-900\/60,
+html.dark .dark\:bg-slate-900\/80 {
+  background-color: var(--color-noc-surface);
+}
+
+html.dark .dark\:bg-slate-950,
+html.dark .dark\:bg-slate-950\/40,
+html.dark .dark\:bg-slate-950\/50,
+html.dark .dark\:bg-slate-950\/60,
+html.dark .dark\:bg-slate-950\/80 {
+  background-color: var(--color-noc-bg);
+}
+
+html.dark .dark\:bg-slate-800,
+html.dark .dark\:bg-slate-800\/60,
+html.dark .dark\:bg-slate-800\/80 {
+  background-color: var(--color-noc-raised);
+}
+
+html.dark .dark\:border-slate-800,
+html.dark .dark\:border-slate-700,
+html.dark .dark\:border-slate-600,
+html.dark .dark\:border-white\/8,
+html.dark .dark\:border-white\/10 {
+  border-color: var(--color-noc-border);
+}
+
+html.dark .dark\:text-slate-50,
+html.dark .dark\:text-slate-100,
+html.dark .dark\:text-white {
+  color: var(--color-noc-text);
+}
+
+html.dark .dark\:text-slate-200,
+html.dark .dark\:text-slate-300 {
+  color: var(--color-noc-muted);
+}
+
+html.dark .dark\:text-slate-400,
+html.dark .dark\:text-slate-500 {
+  color: var(--color-noc-faint);
+}
+
+/* El azul eléctrico deja de ser acento. El cobre marca interacción. */
+html.dark .text-sky-200,
+html.dark .text-sky-300,
+html.dark .text-sky-400,
+html.dark .text-sky-500,
+html.dark .text-sky-600,
+html.dark .text-sky-700,
+html.dark .text-sky-800,
+html.dark .dark\:text-sky-200,
+html.dark .dark\:text-sky-300,
+html.dark .text-blue-400,
+html.dark .text-blue-500,
+html.dark .text-blue-600,
+html.dark .dark\:text-blue-300,
+html.dark .dark\:text-blue-400 {
+  color: var(--color-noc-copper-2);
+}
+
+html.dark .bg-sky-500,
+html.dark .bg-blue-500,
+html.dark .bg-blue-600 {
+  background-color: var(--color-noc-copper);
+}
+
+html.dark .border-sky-500,
+html.dark .focus\:border-sky-500:focus,
+html.dark .dark\:focus\:border-sky-500:focus {
+  border-color: var(--color-noc-copper);
+}
+
+html.dark .ring-sky-500,
+html.dark .focus\:ring-sky-500:focus,
+html.dark .focus-visible\:ring-sky-500:focus-visible {
+  --tw-ring-color: var(--color-noc-copper);
+}
+
+html.dark .dark\:bg-sky-500\/20,
+html.dark .dark\:bg-sky-950\/50,
+html.dark .dark\:bg-blue-950\/50,
+html.dark .bg-sky-100,
+html.dark .bg-blue-50,
+html.dark .bg-blue-100 {
+  background-color: rgb(41 151 255 / 0.14);
+}
+
+/* El celeste deja de ser el color de los botones de detalle, en claro y en oscuro. */
+.text-sky-700,
+.text-sky-800,
+.text-sky-900,
+.dark\:text-sky-100,
+.dark\:text-sky-200,
+.dark\:text-sky-300,
+.hover\:text-sky-800:hover {
+  color: var(--color-noc-copper-2);
+}
+
+.bg-sky-50,
+.bg-sky-100,
+.bg-sky-50\/80,
+.dark\:bg-sky-950\/30,
+.dark\:bg-sky-950\/40,
+.dark\:bg-sky-950\/50,
+.dark\:bg-sky-500\/20,
+.hover\:bg-sky-50:hover,
+.hover\:bg-sky-100:hover,
+.hover\:bg-sky-50\/60:hover,
+.dark\:hover\:bg-sky-950:hover,
+.dark\:hover\:bg-sky-950\/40:hover {
+  background-color: rgb(41 151 255 / 0.14);
+}
+
+.border-sky-200,
+.border-sky-800,
+.border-sky-900,
+.dark\:border-sky-800,
+.dark\:border-sky-900,
+.dark\:border-sky-900\/50 {
+  border-color: var(--color-noc-border);
+}
+
+.text-blue-600,
+.text-blue-700,
+.dark\:text-blue-300,
+.dark\:text-blue-400 {
+  color: var(--color-noc-copper-2);
+}
+
+.bg-blue-500,
+.bg-blue-600 {
+  background-color: var(--color-noc-copper);
+}
+
+.bg-blue-500\/10,
+.dark\:bg-blue-400\/15 {
+  background-color: rgb(41 151 255 / 0.14);
 }

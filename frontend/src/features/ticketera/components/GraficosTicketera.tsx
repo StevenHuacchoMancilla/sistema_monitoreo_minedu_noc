@@ -10,16 +10,37 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { SectionCard } from '../../../components/ui/Tarjeta'
+import type { ReactNode } from 'react'
 import type { FilterField, GroupBar, Interval, PreparedRow } from '../lib/modelo'
 import { classify, dailyPoints, fold, grouped, optionLabel, reasonSlices } from '../lib/modelo'
 import type { TicketeraFilters } from '../types/ticketera'
 
 const tooltipStyle = {
-  borderRadius: 8,
+  borderRadius: 12,
   border: '1px solid #e2e8f0',
   fontSize: 12,
   fontWeight: 600,
+  boxShadow: '0 10px 30px -18px rgba(15, 23, 42, 0.45)',
+}
+
+function Panel({
+  title,
+  action,
+  children,
+}: {
+  title: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="min-w-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_30px_-22px_rgba(15,23,42,0.7)] md:p-5 dark:border-slate-800 dark:bg-slate-900">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[15px] font-semibold tracking-tight text-slate-950 dark:text-slate-50">{title}</h2>
+        {action}
+      </div>
+      <div className="min-w-0">{children}</div>
+    </section>
+  )
 }
 
 function CodeCauseBars({
@@ -55,7 +76,7 @@ function CodeCauseBars({
             </span>
             <span className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
               <span
-                className="block h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-500"
+                className="block h-full rounded-full bg-[#2997FF]"
                 style={{ width: `${(group.count / max) * 100}%` }}
               />
             </span>
@@ -94,7 +115,7 @@ function Bars({
           </span>
           <span className="h-2 overflow-hidden rounded-full bg-slate-100 dark:bg-slate-800">
             <span
-              className="block h-full rounded-full bg-gradient-to-r from-blue-600 to-cyan-500"
+              className="block h-full rounded-full bg-[#2997FF]"
               style={{ width: `${(group.count / max) * 100}%` }}
             />
           </span>
@@ -161,7 +182,7 @@ export function GraficosTicketera({
   return (
     <div className="space-y-4">
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)]">
-        <SectionCard title="Evolución de incidencias" action={<span className="text-xs text-slate-500">{points.length} días</span>}>
+        <Panel title="Evolución de incidencias" action={<span className="text-xs text-slate-500">{points.length} días</span>}>
           <div className="h-72">
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart
@@ -171,18 +192,18 @@ export function GraficosTicketera({
                   if (key) onDay(key)
                 }}
               >
-                <CartesianGrid stroke="#e2e8f0" vertical={false} />
+                <CartesianGrid stroke="#293A54" vertical={false} />
                 <XAxis dataKey="label" tick={{ fontSize: 11 }} />
                 <YAxis allowDecimals={false} tick={{ fontSize: 11 }} width={36} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Area type="monotone" dataKey="count" name="Incidencias" stroke="#4963ee" fill="#4963ee" fillOpacity={0.16} strokeWidth={2.5} />
+                <Area type="monotone" dataKey="count" name="Incidencias" stroke="#2997FF" fill="#2997FF" fillOpacity={0.16} strokeWidth={2.5} />
               </AreaChart>
             </ResponsiveContainer>
           </div>
           <p className="mt-2 text-xs text-slate-500">Selecciona un punto para ver solo ese día.</p>
-        </SectionCard>
+        </Panel>
 
-        <SectionCard title="Distribución por razón (MINEDU)">
+        <Panel title="Distribución por razón (MINEDU)">
           {motives.length ? (
             <div className="grid items-center gap-3 sm:grid-cols-2">
               <div className="h-64">
@@ -236,29 +257,29 @@ export function GraficosTicketera({
             <p className="py-8 text-center text-sm text-slate-500">No hay incidencias con estos filtros.</p>
           )}
           <p className="mt-2 text-xs text-slate-500">Pulsa una razón para filtrar. Pulsa de nuevo para quitar el filtro.</p>
-        </SectionCard>
+        </Panel>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Incidencias por provincia">
+        <Panel title="Incidencias por provincia">
           <Bars groups={grouped(rows, 'provincia')} onPick={(key) => onFilter('provincia', key)} />
-        </SectionCard>
-        <SectionCard title="Grupos de causa">
+        </Panel>
+        <Panel title="Grupos de causa">
           <Bars groups={grouped(rows, 'grupo')} onPick={(key) => onFilter('grupo', key)} />
-        </SectionCard>
+        </Panel>
       </div>
 
       <div className="grid gap-4 lg:grid-cols-2">
-        <SectionCard title="Razones MINEDU" action={<span className="text-xs text-slate-500">{total.toLocaleString('es-PE')} incidencias</span>}>
+        <Panel title="Razones MINEDU" action={<span className="text-xs text-slate-500">{total.toLocaleString('es-PE')} incidencias</span>}>
           <Bars groups={grouped(rows, 'minedu')} onPick={(key) => onFilter('minedu', filters.minedu === key ? '' : key)} />
-        </SectionCard>
-        <SectionCard title="Códigos y causa raíz">
+        </Panel>
+        <Panel title="Códigos y causa raíz">
           <CodeCauseBars
             groups={codigosConCausa(rows)}
             active={filters.codigo}
             onPick={(key) => onFilter('codigo', filters.codigo === key ? '' : key)}
           />
-        </SectionCard>
+        </Panel>
       </div>
     </div>
   )

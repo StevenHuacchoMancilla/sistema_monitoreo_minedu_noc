@@ -1,6 +1,18 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Download, MessageSquareText, RefreshCw, ScrollText, Ticket } from 'lucide-react'
+import {
+  CircleAlert,
+  CircleCheck,
+  CircleHelp,
+  Download,
+  MessageSquareText,
+  RefreshCw,
+  School,
+  ScrollText,
+  Ticket,
+  Unplug,
+  ClipboardList,
+} from 'lucide-react'
 import { endpoints } from '../../../api/endpoints'
 import { useAuth } from '../../auth/context/ContextoAuth'
 import { ModalGestionIncidente } from '../../incidents/components/ModalGestionIncidente'
@@ -16,7 +28,6 @@ import { FormField, Input, Select } from '../../../components/ui/ControlesFormul
 import { Boton } from '../../../components/ui/Boton'
 import { TarjetaMetrica } from '../../../components/ui/TarjetaMetrica'
 import { GrillaMetricas } from '../../../components/ui/GrillaMetricas'
-import { SectionCard } from '../../../components/ui/Tarjeta'
 import { DataTableContainer, tableClassName, thClassName, theadClassName, trClassName } from '../../../components/ui/MarcoTablaDatos'
 import { EmptyState, ErrorState, LoadingState } from '../../../components/ui/Estados'
 import { formatDateTime24 } from '../../../lib/fechaHora'
@@ -72,6 +83,26 @@ const STATUS_CLASS: Record<TicketeraStatus, string> = {
   REVISAR: 'bg-rose-100 text-rose-800 dark:bg-rose-950/60 dark:text-rose-200',
 }
 
+function HistoricoPanel({
+  title,
+  action,
+  children,
+}: {
+  title: string
+  action?: ReactNode
+  children: ReactNode
+}) {
+  return (
+    <section className="min-w-0 rounded-2xl border border-slate-200/80 bg-white p-4 shadow-[0_10px_30px_-22px_rgba(15,23,42,0.7)] md:p-5 dark:border-slate-800 dark:bg-slate-900">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="text-[15px] font-semibold tracking-tight text-slate-950 dark:text-slate-50">{title}</h2>
+        {action}
+      </div>
+      <div className="min-w-0">{children}</div>
+    </section>
+  )
+}
+
 function StatusPill({ status }: { status: TicketeraStatus }) {
   return (
     <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${STATUS_CLASS[status]}`}>
@@ -90,18 +121,77 @@ function clock(seconds: number | null) {
 }
 
 const SUMMARY_CARDS = [
-  { key: 'total', label: 'Incidencias', hint: 'Una fila es una incidencia', className: 'from-[#3459ce] to-[#5270f4]' },
-  { key: 'cids', label: 'CIDs afectados', hint: 'Colegios distintos', className: 'from-[#7041c7] to-[#9662dd]' },
-  { key: 'open', label: 'Abiertos', hint: 'Sin cierre confirmado', className: 'from-[#bb6b11] to-[#e5a02b]' },
-  { key: 'closed', label: 'Cerrados', hint: 'Cierre válido', className: 'from-[#09816e] to-[#21b397]' },
-  { key: 'queja', label: 'Quejas', hint: 'Razón MINEDU: Queja', className: 'from-[#ae3d76] to-[#e45c9e]' },
-  { key: 'caida', label: 'Caídas de enlace', hint: 'Razón MINEDU: Caída de Enlace', className: 'from-[#be7024] to-[#f5a83c]' },
-  { key: 'req', label: 'Requerimientos', hint: 'Incluye el texto de la hoja', className: 'from-[#197e9c] to-[#16b1c6]' },
+  {
+    key: 'total',
+    label: 'Incidencias',
+    hint: 'Una fila es una incidencia',
+    icon: Ticket,
+    value: 'text-blue-700 dark:text-blue-300',
+    chip: 'bg-blue-500/10 text-blue-600 dark:bg-blue-400/15 dark:text-blue-300',
+    bar: 'bg-blue-500',
+  },
+  {
+    key: 'cids',
+    label: 'CIDs afectados',
+    hint: 'Colegios distintos',
+    icon: School,
+    value: 'text-violet-700 dark:text-violet-300',
+    chip: 'bg-violet-500/10 text-violet-600 dark:bg-violet-400/15 dark:text-violet-300',
+    bar: 'bg-violet-500',
+  },
+  {
+    key: 'open',
+    label: 'Abiertos',
+    hint: 'Sin cierre confirmado',
+    icon: CircleAlert,
+    value: 'text-amber-700 dark:text-amber-300',
+    chip: 'bg-amber-500/10 text-amber-600 dark:bg-amber-400/15 dark:text-amber-300',
+    bar: 'bg-amber-500',
+  },
+  {
+    key: 'closed',
+    label: 'Cerrados',
+    hint: 'Cierre válido',
+    icon: CircleCheck,
+    value: 'text-emerald-700 dark:text-emerald-300',
+    chip: 'bg-emerald-500/10 text-emerald-600 dark:bg-emerald-400/15 dark:text-emerald-300',
+    bar: 'bg-emerald-500',
+  },
+  {
+    key: 'queja',
+    label: 'Quejas',
+    hint: 'Razón MINEDU: Queja',
+    icon: MessageSquareText,
+    value: 'text-rose-700 dark:text-rose-300',
+    chip: 'bg-rose-500/10 text-rose-600 dark:bg-rose-400/15 dark:text-rose-300',
+    bar: 'bg-rose-500',
+  },
+  {
+    key: 'caida',
+    label: 'Caídas de enlace',
+    hint: 'Razón MINEDU: Caída de Enlace',
+    icon: Unplug,
+    value: 'text-orange-700 dark:text-orange-300',
+    chip: 'bg-orange-500/10 text-orange-600 dark:bg-orange-400/15 dark:text-orange-300',
+    bar: 'bg-orange-500',
+  },
+  {
+    key: 'req',
+    label: 'Requerimientos',
+    hint: 'Incluye el texto de la hoja',
+    icon: ClipboardList,
+    value: 'text-cyan-700 dark:text-cyan-300',
+    chip: 'bg-cyan-500/10 text-cyan-600 dark:bg-cyan-400/15 dark:text-cyan-300',
+    bar: 'bg-cyan-500',
+  },
   {
     key: 'missing',
     label: 'Sin razón MINEDU',
     hint: 'Razón MINEDU vacía o sin clasificar',
-    className: 'from-[#516176] to-[#7384a0]',
+    icon: CircleHelp,
+    value: 'text-slate-700 dark:text-slate-200',
+    chip: 'bg-slate-500/10 text-slate-600 dark:bg-slate-400/15 dark:text-slate-300',
+    bar: 'bg-slate-400',
   },
 ] as const
 
@@ -368,40 +458,60 @@ export function PaginaTicketera() {
             </details>
           </TarjetaFiltro>
 
-          <p className="text-xs font-medium text-slate-500">
-            {filters.from === filters.to ? `Solo ${filters.from.split('-').reverse().join('/')}` : `${filters.from.split('-').reverse().join('/')} al ${filters.to.split('-').reverse().join('/')}`}
-            {' · '}
-            {filters.mode === '8' ? '08:00 a 16:00' : '24 horas'}
-            {' · '}
-            {filters.criterion === 'overlap' ? 'Activas durante el horario' : 'Iniciadas dentro del horario'}
-          </p>
+          <div className="flex flex-wrap items-center gap-2 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 text-[12px] text-slate-500 shadow-sm dark:border-slate-800 dark:bg-slate-900 dark:text-slate-400">
+            <span className="font-semibold tracking-wide text-slate-700 uppercase dark:text-slate-200">Periodo</span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              {filters.from === filters.to
+                ? filters.from.split('-').reverse().join('/')
+                : `${filters.from.split('-').reverse().join('/')} — ${filters.to.split('-').reverse().join('/')}`}
+            </span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              {filters.mode === '8' ? '08:00 a 16:00' : '24 horas'}
+            </span>
+            <span className="rounded-full bg-slate-100 px-2.5 py-1 font-medium text-slate-700 dark:bg-slate-800 dark:text-slate-200">
+              {filters.criterion === 'overlap' ? 'Activas durante el horario' : 'Iniciadas dentro del horario'}
+            </span>
+          </div>
           {prepared.error ? <ErrorState message={prepared.error} /> : null}
 
           <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-            {SUMMARY_CARDS.map((card) => (
-              <article
-                key={card.key}
-                className={`relative min-h-[108px] overflow-hidden rounded-2xl bg-gradient-to-br ${card.className} px-4 py-4 text-white shadow-sm`}
-              >
-                <span className="block text-xs font-semibold text-white/90">{card.label}</span>
-                <strong className="mt-2 block text-3xl font-semibold tabular-nums leading-none">
-                  {stats[card.key].toLocaleString('es-PE')}
-                </strong>
-                <small className="mt-2 block text-[11px] text-white/85">
-                  {card.key === 'closed' && stats.review
-                    ? `${stats.review.toLocaleString('es-PE')} por revisar`
-                    : card.hint}
-                </small>
-              </article>
-            ))}
+            {SUMMARY_CARDS.map((card) => {
+              const Icon = card.icon
+              return (
+                <article
+                  key={card.key}
+                  className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-white px-4 py-4 shadow-[0_10px_30px_-22px_rgba(15,23,42,0.7)] dark:border-slate-800 dark:bg-slate-900"
+                >
+                  <span className={`absolute inset-x-0 top-0 h-0.5 ${card.bar}`} aria-hidden />
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="text-[11px] font-semibold tracking-[0.14em] text-slate-500 uppercase dark:text-slate-400">
+                        {card.label}
+                      </p>
+                      <p className={`mt-2 text-3xl font-semibold tabular-nums tracking-tight ${card.value}`}>
+                        {stats[card.key].toLocaleString('es-PE')}
+                      </p>
+                    </div>
+                    <span className={`inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${card.chip}`}>
+                      <Icon className="h-4 w-4" aria-hidden />
+                    </span>
+                  </div>
+                  <p className="mt-3 text-[12px] text-slate-500 dark:text-slate-400">
+                    {card.key === 'closed' && stats.review
+                      ? `${stats.review.toLocaleString('es-PE')} por revisar`
+                      : card.hint}
+                  </p>
+                </article>
+              )
+            })}
           </div>
-          <p className="text-[12px] leading-snug text-slate-500 dark:text-slate-400">
-            KPIs del periodo filtrado arriba (una fila = una incidencia). Quejas / Caídas de enlace / Requerimientos /
-            Sin razón MINEDU parten de la columna razón MINEDU. Puede diferir de Seguimiento de caídas si ese reporte
-            incluye filas sin ticket o usa otros filtros.
+          <p className="rounded-2xl border border-slate-200/70 bg-slate-50/80 px-4 py-3 text-[12px] leading-relaxed text-slate-500 dark:border-slate-800 dark:bg-slate-900/70 dark:text-slate-400">
+            KPIs del periodo filtrado (una fila = una incidencia). Quejas, caídas de enlace, requerimientos y sin razón
+            MINEDU salen de esa columna. Puede diferir de Seguimiento de caídas si ese reporte incluye filas sin ticket
+            o usa otros filtros.
           </p>
 
-          <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-xl border border-slate-200 bg-white p-1 dark:border-slate-800 dark:bg-slate-900">
+          <div className="flex w-fit max-w-full flex-wrap gap-1 rounded-2xl border border-slate-200/80 bg-slate-100/80 p-1 shadow-sm dark:border-slate-800 dark:bg-slate-950">
             {(
               [
                 ['summary', 'Resumen'],
@@ -415,7 +525,11 @@ export function PaginaTicketera() {
                 key={id}
                 type="button"
                 onClick={() => setView(id)}
-                className={`rounded-lg px-3 py-2 text-xs font-semibold ${view === id ? 'bg-blue-600 text-white' : 'text-slate-600 hover:bg-slate-50 dark:text-slate-300 dark:hover:bg-slate-800'}`}
+                className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
+                  view === id
+                    ? 'bg-white text-slate-950 shadow-sm dark:bg-slate-800 dark:text-white'
+                    : 'text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-100'
+                }`}
               >
                 {label}
               </button>
@@ -432,7 +546,7 @@ export function PaginaTicketera() {
                 onDay={(key) => patch({ from: key, to: key })}
                 onFilter={(field, value) => patch({ [field]: value })}
               />
-              <SectionCard title={rankLimit === 'all' ? 'Ranking de locales' : `Ranking · Top ${rankLimit}`}>
+              <HistoricoPanel title={rankLimit === 'all' ? 'Ranking de locales' : `Ranking · Top ${rankLimit}`}>
                 <div className="mb-3 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
                   <FormField label="Mostrar">
                     <Select value={rankLimit} onChange={(event) => setRankLimit(event.target.value)}>
@@ -587,7 +701,7 @@ export function PaginaTicketera() {
                     </table>
                   </DataTableContainer>
                 </div>
-              </SectionCard>
+              </HistoricoPanel>
               <div id="school-timelines">
                 <LineasTiempoColegio
                   rows={query.data.rows}
@@ -615,7 +729,7 @@ export function PaginaTicketera() {
           ) : null}
 
           {view === 'tickets' ? (
-            <SectionCard
+            <HistoricoPanel
               title="Detalle de incidencias"
               action={
                 <Select value={ticketSort} onChange={(event) => { setTicketSort(event.target.value as typeof ticketSort); setTicketPage(1) }}>
@@ -719,7 +833,7 @@ export function PaginaTicketera() {
                   <Boton variant="secondary" disabled={page >= pages} onClick={() => setTicketPage(page + 1)}>Siguiente</Boton>
                 </div>
               </div>
-            </SectionCard>
+            </HistoricoPanel>
           ) : null}
 
           {view === 'quality' ? (
@@ -732,7 +846,7 @@ export function PaginaTicketera() {
                 <TarjetaMetrica icon={<Ticket />} label="Cierres inválidos" value={query.data.audit.invalid_close + query.data.audit.inverted_dates} />
                 <TarjetaMetrica icon={<Ticket />} label="Tickets duplicados" value={query.data.audit.duplicate_tickets} description="Se conservan las filas" />
               </GrillaMetricas>
-              <SectionCard title="Observaciones" action={<span className="text-xs text-slate-500">{query.data.warning_count.toLocaleString('es-PE')}</span>}>
+              <HistoricoPanel title="Observaciones" action={<span className="text-xs text-slate-500">{query.data.warning_count.toLocaleString('es-PE')}</span>}>
                 {query.data.warnings.length ? (
                   <DataTableContainer>
                     <table className={tableClassName}>
@@ -757,7 +871,7 @@ export function PaginaTicketera() {
                 ) : (
                   <EmptyState title="Sin observaciones" description="La hoja no reportó problemas en esta lectura." />
                 )}
-              </SectionCard>
+              </HistoricoPanel>
             </div>
           ) : null}
         </div>

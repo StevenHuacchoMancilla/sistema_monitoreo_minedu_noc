@@ -9,6 +9,7 @@ use App\Enums\FollowupStatus;
 use App\Enums\ManagementClassification;
 use App\Enums\ManagementScope;
 use App\Enums\MineduReason;
+use App\Domain\Incidents\Queries\IncidentQueueQuery;
 use App\Domain\Incidents\Services\IncidentManagementService;
 use App\Domain\Incidents\Services\IncidentOperativeCloseService;
 use App\Domain\Incidents\Services\IncidentService;
@@ -46,6 +47,7 @@ class IncidentController extends Controller
         private readonly ServiceTicketService $serviceTickets,
         private readonly ListaLleeDayService $listaDays,
         private readonly TicketeraPrtgTimelineService $prtgTimeline,
+        private readonly IncidentQueueQuery $queues,
     ) {}
 
     public function index(Request $request): JsonResponse
@@ -1044,34 +1046,7 @@ class IncidentController extends Controller
     /** Cola: recuperados en gestión → pendiente de cierre operativo. */
     public function pendienteCierre(Request $request): JsonResponse
     {
-        $rows = Incident::query()
-            ->with([
-                'school',
-                'networkAssignment',
-                'sensor',
-                'serviceTicket',
-                'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
-            ])
-            ->withCount('managements')
-            ->where('followup_status', FollowupStatus::PendienteCierre)
-            ->whereNotNull('recovered_at')
-            // Ya clasificados a Incidencias / Requerimientos / Mantenimiento no deben aparecer aquí.
-            ->whereRaw('NOT (COALESCE(is_grave_incident, false) = true AND grave_closed_at IS NULL)')
-            ->whereRaw('NOT (COALESCE(is_requirement_case, false) = true AND requirement_closed_at IS NULL)')
-            // Si el colegio ya tiene otra incidencia abierta, no mostrar tickets viejos aquí
-            // (evita remarcar y duplicar TSS en Incidencias).
-            ->withoutSchoolOpenGraveConflict()
-            ->where(function ($q) {
-                $q->where(function ($d) {
-                    $d->whereNull('detection_source')
-                        ->orWhere('detection_source', '!=', Incident::DETECTION_MAINTENANCE);
-                })->whereDoesntHave('serviceTicket', function ($t) {
-                    $t->where('is_maintenance', true)
-                        ->where('status', \App\Models\ServiceTicket::STATUS_OPEN);
-                });
-            })
-            ->orderByDesc('recovered_at')
-            ->limit(500)
+        $rows = $this->queues->pendienteCierre()
             ->get()
             ->map(fn (Incident $i) => $this->queueRow($i));
 
@@ -1146,25 +1121,7 @@ class IncidentController extends Controller
         $status = strtolower((string) $request->query('status', 'open'));
         $closed = in_array($status, ['closed', 'cerrado', 'cerrados'], true);
 
-        $query = Incident::query()
-            ->with([
-                'school',
-                'networkAssignment',
-                'sensor',
-                'serviceTicket',
-                'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
-            ])
-            ->withCount('attachments')
-            ->where('is_grave_incident', true);
-
-        if ($closed) {
-            $query->whereNotNull('grave_closed_at')->orderByDesc('grave_closed_at');
-        } else {
-            $query->whereNull('grave_closed_at')->orderByDesc('grave_opened_at');
-        }
-
-        $rows = $query
-            ->limit(500)
+        $rows = $this->queues->graves($closed)
             ->get()
             ->map(fn (Incident $i) => $this->queueRow($i));
 
@@ -1174,18 +1131,7 @@ class IncidentController extends Controller
     /** Casos con resultado Requerimiento abiertos. */
     public function requerimientos(Request $request): JsonResponse
     {
-        $rows = Incident::query()
-            ->with([
-                'school',
-                'networkAssignment',
-                'sensor',
-                'serviceTicket',
-                'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
-            ])
-            ->where('is_requirement_case', true)
-            ->whereNull('requirement_closed_at')
-            ->orderByDesc('requirement_opened_at')
-            ->limit(500)
+        $rows = $this->queues->requerimientos()
             ->get()
             ->map(fn (Incident $i) => $this->queueRow($i));
 
@@ -1195,18 +1141,7 @@ class IncidentController extends Controller
     /** Caídas de enlace parcial (doble WAN) abiertas hasta cierre manual. */
     public function enlaceParcial(Request $request): JsonResponse
     {
-        $rows = Incident::query()
-            ->with([
-                'school',
-                'networkAssignment',
-                'sensor',
-                'serviceTicket',
-                'trackingRecords' => fn ($q) => $q->orderByDesc('id'),
-            ])
-            ->where('detection_source', Incident::DETECTION_MANUAL_PARTIAL)
-            ->whereNull('recovered_at')
-            ->orderByDesc('started_at')
-            ->limit(500)
+        $rows = $this->queues->enlaceParcial()
             ->get()
             ->map(fn (Incident $i) => $this->queueRow($i));
 

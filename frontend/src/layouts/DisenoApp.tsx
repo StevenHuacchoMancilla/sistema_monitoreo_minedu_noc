@@ -96,9 +96,9 @@ export function DisenoApp({
 
   return (
     <SidebarContext.Provider value={ctx}>
-      <div className="min-h-screen overflow-x-hidden bg-slate-50 text-slate-950 dark:bg-slate-950 dark:text-slate-100">
+      <div className="min-h-screen overflow-x-hidden bg-noc-bg text-noc-text">
         <div className="flex min-h-screen min-w-0 w-full">
-          <div className={`hidden shrink-0 transition-[width] duration-200 md:block ${collapsed ? 'w-[4.5rem]' : 'w-[16.25rem]'}`}>
+          <div className={`hidden shrink-0 transition-[width] duration-200 ease-out md:block ${collapsed ? 'w-[4.25rem]' : 'w-60'}`}>
             <BarraLateral />
           </div>
 
@@ -106,18 +106,18 @@ export function DisenoApp({
             <div className="fixed inset-0 z-40 flex md:hidden">
               <button
                 type="button"
-                className="absolute inset-0 bg-black/40 backdrop-blur-[2px]"
+                className="absolute inset-0 bg-[#0b0d0f]/70"
                 aria-label="Cerrar menú"
                 onClick={() => setMobileOpen(false)}
               />
-              <div className="relative z-50 h-full w-[16.25rem] shadow-2xl">
+              <div className="relative z-50 h-full w-60 border-r border-noc-border">
                 <BarraLateral onNavigate={() => setMobileOpen(false)} forceExpanded />
               </div>
             </div>
           ) : null}
 
           <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <div className="flex shrink-0 items-center gap-3 border-b border-slate-200 bg-white px-3 py-2.5 sm:px-4 md:px-6 dark:border-slate-800 dark:bg-slate-900">
+            <div className="flex h-16 shrink-0 items-center gap-3 border-b border-noc-border-2 bg-noc-nav px-3 sm:px-4 md:px-5">
               <BotonIcono
                 label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
                 onClick={() => {
@@ -132,12 +132,12 @@ export function DisenoApp({
               </BotonIcono>
 
               <div className="min-w-0 flex-1">
-                <p className="truncate text-xs font-medium text-slate-500 dark:text-slate-400">
+                <p className="truncate text-[13px] text-noc-faint">
                   NOC Loreto
                   {title ? (
                     <>
-                      <span className="mx-1.5 text-slate-300 dark:text-slate-600">/</span>
-                      <span className="text-slate-700 dark:text-slate-200">{title}</span>
+                      <span className="mx-1.5 text-noc-disabled">/</span>
+                      <span className="text-noc-text">{title}</span>
                     </>
                   ) : null}
                 </p>
@@ -161,17 +161,17 @@ export function DisenoApp({
               </div>
             </div>
 
-            <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-6 lg:p-8">
+            <main className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden p-3 sm:p-4 md:p-5 lg:p-6">
               <div className="mx-auto min-w-0 w-full max-w-[100%]">
               {!bare && title ? (
-                <header className="mb-6 border-b border-slate-200 pb-5 dark:border-slate-800">
+                <header className="mb-5 border-b border-noc-line pb-4">
                   {subtitle ? (
-                    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">{subtitle}</p>
+                    <p className="text-[11px] font-medium tracking-[0.14em] text-noc-faint uppercase">{subtitle}</p>
                   ) : null}
-                  <h1 className="text-2xl font-bold tracking-tight text-slate-950 sm:text-3xl dark:text-slate-50">{title}</h1>
+                  <h1 className="text-xl font-semibold tracking-tight text-noc-text">{title}</h1>
                   {lastUpdated ? (
-                    <p className="mt-1 text-xs font-medium text-slate-500 dark:text-slate-400">
-                      Última actualización: {lastUpdated}
+                    <p className="mt-1 font-mono text-[11px] text-noc-faint tabular-nums">
+                      Última actualización {lastUpdated}
                     </p>
                   ) : null}
                 </header>

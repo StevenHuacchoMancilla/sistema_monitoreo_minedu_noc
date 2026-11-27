@@ -11,10 +11,10 @@ export function TarjetaFiltro({
   actions?: ReactNode
 }) {
   return (
-    <section className="min-w-0 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 dark:border-slate-800 dark:bg-slate-900">
-      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-100">
-          <ListFilter className="h-4 w-4 text-slate-500" aria-hidden />
+    <section className="noc-card min-w-0 rounded-xl border border-noc-border px-3 py-3 sm:px-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+        <div className="inline-flex items-center gap-2 text-[13px] font-medium text-noc-text">
+          <ListFilter className="h-3.5 w-3.5 text-noc-faint" aria-hidden />
           {title}
         </div>
         {actions}

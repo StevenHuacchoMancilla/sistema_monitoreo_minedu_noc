@@ -1,6 +1,5 @@
 import { useState, type FormEvent } from 'react'
 import { Navigate, useLocation, useNavigate } from 'react-router-dom'
-import { Activity } from 'lucide-react'
 import { ApiError } from '../../../api/clienteHttp'
 import { Boton } from '../../../components/ui/Boton'
 import { useAuth } from '../context/ContextoAuth'
@@ -49,32 +48,28 @@ export function PaginaInicioSesion() {
   }
 
   return (
-    <div className="relative flex min-h-screen items-center justify-center overflow-hidden bg-slate-950 px-4 py-10">
-      <div
-        className="pointer-events-none absolute inset-0 opacity-40"
-        style={{
-          background:
-            'radial-gradient(ellipse 80% 50% at 50% -20%, rgba(37,99,235,0.45), transparent), radial-gradient(ellipse 60% 40% at 100% 100%, rgba(14,165,233,0.15), transparent)',
-        }}
-      />
-      <div className="relative w-full max-w-md">
+    <div className="flex min-h-screen items-center justify-center bg-noc-bg px-4 py-10">
+      <div className="w-full max-w-md">
         <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-blue-600 text-white shadow-lg shadow-blue-900/40">
-            <Activity className="h-6 w-6" aria-hidden />
-          </div>
-          <h1 className="text-2xl font-bold tracking-tight text-white">NOC Loreto</h1>
-          <p className="mt-1 text-sm font-medium text-slate-400">Monitoreo LLEE · MINEDU</p>
+          <svg viewBox="0 0 20 20" className="mx-auto mb-4 h-8 w-8" aria-hidden>
+            <rect x="1" y="1" width="8" height="8" rx="1.2" fill="#2997FF" />
+            <rect x="11" y="1" width="8" height="8" rx="1.2" fill="none" stroke="#7E8DA3" strokeWidth="1.15" />
+            <rect x="1" y="11" width="8" height="8" rx="1.2" fill="none" stroke="#7E8DA3" strokeWidth="1.15" />
+            <rect x="11" y="11" width="8" height="8" rx="1.2" fill="#22334F" />
+          </svg>
+          <h1 className="text-[13px] font-semibold tracking-[0.2em] text-noc-text uppercase">NOC Loreto</h1>
+          <p className="mt-1 text-sm text-noc-faint">Operaciones · Loreto</p>
         </div>
 
         <form
           onSubmit={(e) => void onSubmit(e)}
-          className="rounded-2xl border border-slate-800 bg-slate-900/90 p-6 shadow-2xl backdrop-blur"
+          className="rounded-md border border-noc-border bg-noc-surface p-6"
         >
-          <h2 className="text-lg font-semibold text-white">Iniciar sesión</h2>
-          <p className="mt-1 text-sm text-slate-400">Acceso exclusivo para personal autorizado.</p>
+          <h2 className="text-lg font-semibold text-noc-text">Iniciar sesión</h2>
+          <p className="mt-1 text-sm text-noc-muted">Acceso exclusivo para personal autorizado.</p>
 
           <label className="mt-6 block">
-            <span className="mb-1.5 block text-xs font-semibold tracking-wide text-slate-400 uppercase">
+            <span className="mb-1.5 block text-[11px] font-medium tracking-[0.08em] text-noc-faint uppercase">
               Correo
             </span>
             <input
@@ -83,13 +78,13 @@ export function PaginaInicioSesion() {
               required
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              className="h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-white outline-none ring-blue-500/40 placeholder:text-slate-600 focus:border-blue-500 focus:ring-2"
+              className="h-10 w-full rounded-md border border-noc-border bg-noc-nav px-3 text-sm text-noc-text outline-none placeholder:text-noc-disabled focus:border-noc-copper focus:ring-2 focus:ring-noc-copper/20"
               placeholder="usuario@noc.loreto.local"
             />
           </label>
 
           <label className="mt-4 block">
-            <span className="mb-1.5 block text-xs font-semibold tracking-wide text-slate-400 uppercase">
+            <span className="mb-1.5 block text-[11px] font-medium tracking-[0.08em] text-noc-faint uppercase">
               Contraseña
             </span>
             <input
@@ -98,13 +93,13 @@ export function PaginaInicioSesion() {
               required
               value={password}
               onChange={(e) => setPassword(e.target.value)}
-              className="h-11 w-full rounded-lg border border-slate-700 bg-slate-950 px-3 text-sm text-white outline-none ring-blue-500/40 placeholder:text-slate-600 focus:border-blue-500 focus:ring-2"
+              className="h-10 w-full rounded-md border border-noc-border bg-noc-nav px-3 text-sm text-noc-text outline-none placeholder:text-noc-disabled focus:border-noc-copper focus:ring-2 focus:ring-noc-copper/20"
               placeholder="••••••••"
             />
           </label>
 
           {error ? (
-            <p className="mt-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+            <p className="mt-4 rounded-md border border-noc-border px-3 py-2 text-sm text-noc-danger">
               {error}
             </p>
           ) : null}

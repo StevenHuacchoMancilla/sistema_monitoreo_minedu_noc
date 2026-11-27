@@ -13,7 +13,7 @@ export function PaginaDashboardPrtg() {
   const data = query.data
 
   return (
-    <DisenoApp bare>
+    <DisenoApp bare title="Resumen PRTG">
       <DashboardHeader
         title="Resumen PRTG"
         subtitle="Monitoreo de conectividad y disponibilidad de locales educativos"

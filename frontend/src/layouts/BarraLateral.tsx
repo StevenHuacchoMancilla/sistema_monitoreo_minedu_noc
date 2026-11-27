@@ -99,11 +99,22 @@ const NAV: NavItem[] = [
 ]
 
 const toneClass: Record<NonNullable<NavItem['tone']>, string> = {
-  danger: 'bg-red-500/15 text-red-400 ring-1 ring-red-500/20',
-  warn: 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/20',
-  info: 'bg-blue-500/15 text-blue-400 ring-1 ring-blue-500/20',
-  muted: 'bg-slate-500/15 text-slate-300 ring-1 ring-slate-500/20',
-  success: 'bg-emerald-500/15 text-emerald-400 ring-1 ring-emerald-500/20',
+  danger: 'text-noc-danger',
+  warn: 'text-noc-warning',
+  info: 'text-noc-info',
+  muted: 'text-noc-faint',
+  success: 'text-noc-success',
+}
+
+function MarcaNoc() {
+  return (
+    <svg viewBox="0 0 20 20" className="h-5 w-5 shrink-0" aria-hidden>
+      <rect x="1" y="1" width="8" height="8" rx="1.2" fill="#2997FF" />
+      <rect x="11" y="1" width="8" height="8" rx="1.2" fill="none" stroke="#7E8DA3" strokeWidth="1.15" />
+      <rect x="1" y="11" width="8" height="8" rx="1.2" fill="none" stroke="#7E8DA3" strokeWidth="1.15" />
+      <rect x="11" y="11" width="8" height="8" rx="1.2" fill="#22334F" />
+    </svg>
+  )
 }
 
 export function BarraLateral({
@@ -147,15 +158,13 @@ export function BarraLateral({
   }
 
   return (
-    <aside className="flex h-full min-h-screen flex-col border-r border-slate-800 bg-slate-950 text-slate-300">
-      <div className={`flex items-center gap-3 border-b border-slate-800 ${isCollapsed ? 'justify-center px-2 py-4' : 'px-4 py-5'}`}>
-        <div className="inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-600 text-white">
-          <Activity className="h-4 w-4" aria-hidden />
-        </div>
+    <aside className="flex h-full min-h-screen flex-col border-r border-noc-border-2 bg-noc-nav text-noc-muted">
+      <div className={`flex h-16 items-center gap-3 border-b border-noc-border-2 ${isCollapsed ? 'justify-center px-2' : 'px-4'}`}>
+        <MarcaNoc />
         {!isCollapsed ? (
           <div className="min-w-0">
-            <p className="truncate text-sm font-bold tracking-tight text-white">NOC Loreto</p>
-            <p className="truncate text-[11px] font-medium text-slate-400">Monitoreo LLEE · MINEDU</p>
+            <p className="truncate text-[12px] font-semibold tracking-[0.16em] text-noc-text uppercase">NOC Loreto</p>
+            <p className="truncate text-[11px] text-noc-faint">Operaciones · Loreto</p>
           </div>
         ) : null}
       </div>
@@ -171,14 +180,14 @@ export function BarraLateral({
                   <button
                     type="button"
                     onClick={() => toggleSection(section)}
-                    className="mb-2 flex w-full items-center justify-between px-2 text-[10px] font-semibold tracking-[0.14em] text-slate-500 uppercase hover:text-slate-300"
+                    className="mb-1 flex w-full items-center justify-between rounded-md px-2 py-1 text-[10px] font-medium tracking-[0.16em] text-noc-faint uppercase transition hover:text-noc-muted"
                     aria-expanded={open}
                   >
                     {SECTION_LABEL[section]}
                     <ChevronDown className={`h-3.5 w-3.5 transition ${open ? '' : '-rotate-90'}`} aria-hidden />
                   </button>
                 ) : section !== 'operacion' ? (
-                  <div className="my-2 border-t border-slate-800" />
+                  <div className="my-2 border-t border-noc-border-2" />
                 ) : null}
                 {open ? (
                 <ul className="space-y-1">
@@ -202,21 +211,23 @@ export function BarraLateral({
                           title={item.label}
                           className={({ isActive }) =>
                             [
-                              'group flex items-center gap-2 rounded-lg text-sm font-medium transition',
-                              isCollapsed ? 'justify-center px-2 py-2.5' : 'px-2.5 py-2',
+                              'group flex items-center gap-2 rounded-md text-[13px] transition duration-150',
+                              isCollapsed ? 'justify-center px-2 py-2' : 'px-2 py-1.5',
                               isActive
-                                ? 'bg-slate-800 text-white'
-                                : 'text-slate-400 hover:bg-slate-900 hover:text-slate-100',
+                                ? 'bg-noc-interactive font-medium text-noc-text shadow-[inset_0_0_0_1px_rgb(41_151_255/0.35)]'
+                                : 'text-noc-muted hover:bg-noc-surface hover:text-noc-text',
                             ].join(' ')
                           }
                         >
-                          <item.icon className="h-4 w-4 shrink-0 opacity-80" aria-hidden />
+                          {({ isActive }) => (
+                            <>
+                          <item.icon className={`h-4 w-4 shrink-0 ${isActive ? 'text-noc-copper' : ''}`} aria-hidden />
                           {!isCollapsed ? (
                             <>
                               <span className="min-w-0 flex-1 truncate">{item.label}</span>
                               {badge !== null && badge > 0 ? (
                                 <span
-                                  className={`inline-flex min-w-[1.35rem] items-center justify-center rounded-md px-1.5 py-0.5 text-[10px] font-bold tabular-nums ${
+                                  className={`min-w-[1.25rem] text-right text-[11px] font-medium tabular-nums ${
                                     item.tone ? toneClass[item.tone] : toneClass.muted
                                   }`}
                                 >
@@ -225,6 +236,8 @@ export function BarraLateral({
                               ) : null}
                             </>
                           ) : null}
+                            </>
+                          )}
                         </NavLink>
                       </li>
                     )
@@ -238,11 +251,11 @@ export function BarraLateral({
       </div>
 
       {!forceExpanded ? (
-        <div className="border-t border-slate-800 p-2">
+        <div className="border-t border-noc-border-2 p-2">
           <button
             type="button"
             onClick={toggle}
-            className="flex w-full items-center justify-center gap-2 rounded-lg px-2 py-2 text-xs text-slate-500 hover:bg-slate-900 hover:text-slate-200"
+            className="flex w-full items-center justify-center gap-2 rounded-md px-2 py-2 text-xs text-noc-faint transition hover:bg-noc-surface hover:text-noc-text"
           >
             {isCollapsed ? <PanelLeftOpen className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             {!isCollapsed ? <span>Colapsar</span> : null}

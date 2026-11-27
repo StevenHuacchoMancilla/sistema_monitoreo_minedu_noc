@@ -18,8 +18,7 @@ function NodoCard({ item }: { item: Concentration }) {
   const nodo = item.nodo_pop || item.label
 
   return (
-    <article className="group relative flex h-full flex-col overflow-hidden rounded-2xl border border-red-500/20 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-5 shadow-[0_12px_40px_rgba(0,0,0,0.25)] ring-1 ring-white/5">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-gradient-to-r from-red-500 via-orange-400 to-transparent opacity-80" />
+    <article className="flex h-full flex-col rounded-lg border border-[#2a2724] bg-[#1c1b19] p-5">
 
       <div className="flex items-start justify-between gap-4">
         <div className="min-w-0">
@@ -46,7 +45,7 @@ function NodoCard({ item }: { item: Concentration }) {
       </div>
 
       <div className="mt-4 h-1.5 overflow-hidden rounded-full bg-slate-800">
-        <div className="h-full rounded-full bg-gradient-to-r from-red-500 to-orange-400" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
+        <div className="h-full rounded-full bg-[#8f3d3a]" style={{ width: `${Math.min(100, Math.max(0, pct))}%` }} />
       </div>
 
       {techs.length > 0 ? (

@@ -1,27 +1,27 @@
-const variants: Record<string, string> = {
-  OPERATIVO: 'bg-green-100 text-green-800',
-  CAIDO: 'bg-red-100 text-red-700',
-  PARCIAL: 'bg-amber-100 text-amber-900',
-  PAUSADO: 'bg-slate-100 text-slate-600',
-  SIN_DATOS: 'bg-slate-100 text-slate-500',
-  DESCONOCIDO: 'bg-slate-100 text-slate-500',
-  VINCULADO: 'bg-sky-100 text-sky-800',
-  OFFLINE: 'bg-red-100 text-red-700',
-  UNKNOWN: 'bg-slate-100 text-slate-500',
-  MATCHED: 'bg-green-100 text-green-800',
-  PENDIENTE_CONTACTO: 'bg-amber-100 text-amber-800',
-  EN_GESTION: 'bg-sky-100 text-sky-800',
-  EN_DESCARTE: 'bg-orange-100 text-orange-800',
-  EN_ESPERA: 'bg-violet-100 text-violet-800',
-  ESCALADO: 'bg-fuchsia-100 text-fuchsia-800',
-  TECNICO_EN_CAMPO: 'bg-cyan-100 text-cyan-800',
-  PENDIENTE_CIERRE: 'bg-teal-100 text-teal-800',
-  RECUPERADO: 'bg-green-100 text-green-800',
-  RECUPERADA: 'bg-green-100 text-green-800',
-  CERRADO: 'bg-slate-100 text-slate-600',
-  ACTIVA: 'bg-red-100 text-red-700',
-  REINCIDENTE: 'bg-amber-100 text-amber-900',
-  EN_INCIDENCIA: 'bg-rose-100 text-rose-800',
+const tones: Record<string, string> = {
+  OPERATIVO: 'text-noc-success',
+  CAIDO: 'text-noc-danger',
+  PARCIAL: 'text-noc-warning',
+  PAUSADO: 'text-noc-faint',
+  SIN_DATOS: 'text-noc-faint',
+  DESCONOCIDO: 'text-noc-faint',
+  VINCULADO: 'text-noc-info',
+  OFFLINE: 'text-noc-danger',
+  UNKNOWN: 'text-noc-faint',
+  MATCHED: 'text-noc-success',
+  PENDIENTE_CONTACTO: 'text-noc-warning',
+  EN_GESTION: 'text-noc-info',
+  EN_DESCARTE: 'text-noc-warning',
+  EN_ESPERA: 'text-noc-info',
+  ESCALADO: 'text-noc-warning',
+  TECNICO_EN_CAMPO: 'text-noc-info',
+  PENDIENTE_CIERRE: 'text-noc-warning',
+  RECUPERADO: 'text-noc-success',
+  RECUPERADA: 'text-noc-success',
+  CERRADO: 'text-noc-faint',
+  ACTIVA: 'text-noc-danger',
+  REINCIDENTE: 'text-noc-warning',
+  EN_INCIDENCIA: 'text-noc-danger',
 }
 
 export const FOLLOWUP_LABELS: Record<string, string> = {
@@ -47,9 +47,10 @@ export const PRTG_STATUS_LABELS: Record<string, string> = {
 
 export function Insignia({ value, label }: { value?: string | null; label?: string }) {
   const key = (value ?? 'UNKNOWN').toUpperCase()
-  const cls = variants[key] ?? 'bg-slate-100 text-slate-700'
+  const cls = tones[key] ?? 'text-noc-muted'
   return (
-    <span className={`inline-flex max-w-full truncate rounded-full px-2 py-0.5 text-[11px] font-semibold whitespace-nowrap ${cls}`}>
+    <span className={`inline-flex max-w-full items-center gap-1.5 truncate text-[12px] font-medium whitespace-nowrap ${cls}`}>
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden />
       {label ?? FOLLOWUP_LABELS[key] ?? PRTG_STATUS_LABELS[key] ?? value ?? '—'}
     </span>
   )

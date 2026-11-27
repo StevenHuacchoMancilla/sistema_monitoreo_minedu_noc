@@ -62,30 +62,31 @@ export function PanelCuadre({ rows, now }: { rows: PreparedRow[]; now: string })
   })
 
   return (
-    <section className="rounded-2xl border border-slate-200 border-t-[3px] border-t-indigo-400 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+    <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_10px_30px_-22px_rgba(15,23,42,0.7)] dark:border-slate-800 dark:bg-slate-900">
       <div className="flex flex-wrap items-center gap-4">
-        <div className="grid h-12 w-12 place-items-center rounded-2xl bg-gradient-to-br from-[#4667e8] to-[#8360de] text-xs font-extrabold text-white">NOC</div>
+        <div className="grid h-11 w-11 place-items-center rounded-xl bg-indigo-500/10 text-[11px] font-bold tracking-wide text-indigo-600 dark:bg-indigo-400/15 dark:text-indigo-300">NOC</div>
         <div>
-          <h2 className="text-lg font-semibold">Cuadre del día · Incidencias por apertura sin duplicaciones</h2>
+          <h2 className="text-lg font-semibold tracking-tight text-slate-950 dark:text-slate-50">Cuadre del día · Incidencias por apertura sin duplicaciones</h2>
           <p className="text-xs text-slate-500">Una incidencia por fila. Usa el periodo y los filtros de arriba. Cada ticket entra en una sola categoría.</p>
         </div>
       </div>
       <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {[
-          ['Total incidencias', classified.length, 'from-[#3c5edb] to-[#576fec]'],
-          ['Abiertos', states.ABIERTO, 'from-[#b57619] to-[#e79e32]'],
-          ['Cerrados', states.CERRADO, 'from-[#098875] to-[#17aa95]'],
-          ['Por revisar', states.REVISAR, 'from-[#914a7a] to-[#ca5a9c]'],
-        ].map(([label, value, tone]) => (
-          <article key={String(label)} className={`rounded-2xl bg-gradient-to-br ${tone} px-4 py-4 text-white`}>
-            <span className="block text-xs text-white/90">{label}</span>
-            <strong className="mt-2 block text-3xl tabular-nums">{num(Number(value))}</strong>
+          ['Total incidencias', classified.length, 'text-blue-700 dark:text-blue-300', 'bg-blue-500'],
+          ['Abiertos', states.ABIERTO, 'text-amber-700 dark:text-amber-300', 'bg-amber-500'],
+          ['Cerrados', states.CERRADO, 'text-emerald-700 dark:text-emerald-300', 'bg-emerald-500'],
+          ['Por revisar', states.REVISAR, 'text-rose-700 dark:text-rose-300', 'bg-rose-500'],
+        ].map(([label, value, tone, bar]) => (
+          <article key={String(label)} className="relative overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-4 dark:border-slate-800 dark:bg-slate-950/50">
+            <span className={`absolute inset-x-0 top-0 h-0.5 ${bar}`} aria-hidden />
+            <span className="block text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">{label}</span>
+            <strong className={`mt-2 block text-3xl font-semibold tabular-nums ${tone}`}>{num(Number(value))}</strong>
           </article>
         ))}
       </div>
       <div className="mt-4 overflow-auto rounded-xl border border-slate-200 dark:border-slate-800">
         <table className="w-full border-collapse text-sm">
-          <thead className="bg-[#244a70] text-left text-xs uppercase text-white">
+          <thead className="bg-slate-50 text-left text-[11px] font-semibold tracking-wide text-slate-500 uppercase dark:bg-slate-950 dark:text-slate-400">
             <tr>
               <th className="px-4 py-3">Clasificación exclusiva</th>
               <th className="px-4 py-3 text-right">Tickets</th>

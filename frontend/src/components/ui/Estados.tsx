@@ -12,23 +12,36 @@ export function EmptyState({
   action?: ReactNode
 }) {
   return (
-    <div className="rounded-xl border border-dashed border-slate-200 bg-white px-4 py-10 text-center dark:border-slate-800 dark:bg-slate-900">
+    <div className="rounded-md border border-dashed border-noc-border bg-noc-surface px-4 py-10 text-center">
       {icon ? (
-        <div className="mx-auto mb-3 flex h-12 w-12 items-center justify-center rounded-xl bg-violet-50 text-violet-700 dark:bg-violet-950/50 dark:text-violet-300">
+        <div className="mx-auto mb-3 flex h-10 w-10 items-center justify-center rounded-md bg-noc-raised text-noc-faint">
           {icon}
         </div>
       ) : null}
-      <p className="font-semibold text-slate-900 dark:text-slate-100">{title}</p>
-      {description ? <p className="mx-auto mt-1.5 max-w-md text-sm text-slate-500 dark:text-slate-400">{description}</p> : null}
+      <p className="font-medium text-noc-text">{title}</p>
+      {description ? <p className="mx-auto mt-1.5 max-w-md text-sm text-noc-muted">{description}</p> : null}
       {action ? <div className="mt-4 flex justify-center">{action}</div> : null}
     </div>
   )
 }
 
 export function LoadingState({ label = 'Cargando…' }: { label?: string }) {
-  return <p className="text-sm text-slate-500 dark:text-slate-400">{label}</p>
+  return (
+    <div className="space-y-3" role="status" aria-live="polite">
+      <p className="text-sm text-noc-faint">{label}</p>
+      <div className="grid gap-px overflow-hidden rounded-md border border-noc-border bg-noc-line sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }).map((_, index) => (
+          <div key={index} className="h-16 animate-pulse bg-noc-surface" />
+        ))}
+      </div>
+    </div>
+  )
 }
 
 export function ErrorState({ message }: { message: string }) {
-  return <p className="text-sm text-red-600 dark:text-red-400">{message}</p>
+  return (
+    <p className="rounded-md border border-noc-border bg-noc-surface px-3 py-2 text-sm text-noc-danger">
+      {message}
+    </p>
+  )
 }

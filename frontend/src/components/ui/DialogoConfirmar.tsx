@@ -49,7 +49,7 @@ export function DialogoConfirmar({
     <div className="fixed inset-0 z-[80] flex items-center justify-center p-4">
       <button
         type="button"
-        className="absolute inset-0 cursor-default bg-slate-950/50 backdrop-blur-[1px]"
+        className="absolute inset-0 cursor-default bg-[#0b0d0f]/72"
         aria-label="Cerrar diálogo"
         disabled={loading}
         onClick={() => {
@@ -60,30 +60,28 @@ export function DialogoConfirmar({
         role="alertdialog"
         aria-modal="true"
         aria-labelledby={titleId}
-        className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900"
+        className="relative z-10 w-full max-w-md overflow-hidden rounded-md border border-noc-border bg-noc-surface"
       >
         <div className="flex gap-3 px-5 pt-5 pb-4">
           <span
-            className={`mt-0.5 inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-xl ${
-              tone === 'danger'
-                ? 'bg-red-50 text-red-600 dark:bg-red-950/50 dark:text-red-300'
-                : 'bg-blue-50 text-blue-600 dark:bg-blue-950/50 dark:text-blue-300'
+            className={`mt-0.5 inline-flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-noc-raised ${
+              tone === 'danger' ? 'text-noc-danger' : 'text-noc-copper'
             }`}
             aria-hidden
           >
-            <TriangleAlert className="h-5 w-5" />
+            <TriangleAlert className="h-4 w-4" />
           </span>
           <div className="min-w-0">
-            <h2 id={titleId} className="text-base font-bold text-slate-950 dark:text-slate-50">
+            <h2 id={titleId} className="text-[15px] font-semibold text-noc-text">
               {title}
             </h2>
             {description ? (
-              <p className="mt-1.5 text-[13px] leading-snug text-slate-600 dark:text-slate-300">{description}</p>
+              <p className="mt-1.5 text-[13px] leading-snug text-noc-muted">{description}</p>
             ) : null}
             {children ? <div className="mt-3">{children}</div> : null}
           </div>
         </div>
-        <div className="flex flex-wrap justify-end gap-2 border-t border-slate-100 bg-slate-50 px-5 py-3.5 dark:border-slate-800 dark:bg-slate-950/60">
+        <div className="flex flex-wrap justify-end gap-2 border-t border-noc-line bg-noc-surface-2 px-5 py-3">
           <Boton variant="secondary" size="sm" disabled={loading} onClick={onClose}>
             {cancelLabel}
           </Boton>

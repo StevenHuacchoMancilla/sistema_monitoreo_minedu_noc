@@ -15,8 +15,9 @@ export function Insignia({
   return (
     <span
       title={title}
-      className={`inline-flex max-w-full min-w-0 items-center gap-1 truncate rounded-full px-2 py-0.5 text-[11px] font-semibold [&>svg]:h-3 [&>svg]:w-3 [&>svg]:shrink-0 ${statusTone[tone].badge} ${className}`}
+      className={`inline-flex max-w-full min-w-0 items-center gap-1.5 truncate text-[12px] font-medium [&>svg]:h-3 [&>svg]:w-3 [&>svg]:shrink-0 ${statusTone[tone].badge} ${className}`}
     >
+      <span className="h-1.5 w-1.5 shrink-0 rounded-full bg-current" aria-hidden />
       {children}
     </span>
   )

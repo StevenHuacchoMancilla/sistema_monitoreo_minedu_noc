@@ -80,6 +80,7 @@ class ReportController extends Controller
             // Filtro «Seguimiento» = estado de LISTA DE LLEE (Averias, Descartes en curso, …).
             'seguimiento' => ['nullable', 'string', Rule::in(ListaLleeEstado::values())],
             'tecnologia' => ['nullable', 'string', 'max:32'],
+            'cerrado_por' => ['nullable', 'string', 'max:120'],
             'page' => ['nullable', 'integer', 'min:1'],
             'per_page' => ['nullable', 'integer', 'min:1', 'max:200'],
             'limit' => ['nullable', 'integer', 'min:1', 'max:10000'],

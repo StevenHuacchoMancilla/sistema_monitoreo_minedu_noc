@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
@@ -13,6 +13,8 @@ import {
   RefreshCw,
   ScrollText,
   Ticket,
+  UserRound,
+  Users,
   X,
 } from 'lucide-react'
 import { incidentCaseFilePath } from '../../history/api/apiHistorial'
@@ -129,11 +131,13 @@ export function PaginaReporteGeneral() {
   const [estado, setEstado] = useState<GeneralReportEstado>('ACTIVO')
   const [seguimiento, setSeguimiento] = useState('')
   const [tecnologia, setTecnologia] = useState('')
+  const [cerradoPor, setCerradoPor] = useState('')
   const [page, setPage] = useState(1)
   const [perPage, setPerPage] = useState<(typeof PER_PAGE_OPTIONS)[number]>(50)
   const [exporting, setExporting] = useState(false)
   const [exportError, setExportError] = useState<string | null>(null)
   const [panel, setPanel] = useState<DetailPanel | null>(null)
+  const closerRail = useRef<HTMLDivElement>(null)
 
   const filterParams = useMemo(() => {
     const base: Record<string, string | undefined> = {
@@ -145,6 +149,7 @@ export function PaginaReporteGeneral() {
       estado: estado || undefined,
       seguimiento: seguimiento || undefined,
       tecnologia: tecnologia.trim() || undefined,
+      cerrado_por: cerradoPor || undefined,
     }
     if (period === 'day') base.day = day
     if (period === 'range') {
@@ -152,7 +157,7 @@ export function PaginaReporteGeneral() {
       base.to = to
     }
     return base
-  }, [period, day, from, to, search, provincia, distrito, mineduSelected, estado, seguimiento, tecnologia])
+  }, [period, day, from, to, search, provincia, distrito, mineduSelected, estado, seguimiento, tecnologia, cerradoPor])
 
   const toggleMinedu = (value: GeneralReportMinedu) => {
     setMineduSelected((prev) =>
@@ -160,9 +165,18 @@ export function PaginaReporteGeneral() {
     )
   }
 
+  const selectCloser = (name: string) => {
+    setCerradoPor(name)
+    if (name && estado === 'ACTIVO') setEstado('RECUPERADO')
+  }
+
   useEffect(() => {
     setPage(1)
   }, [filterParams, perPage])
+
+  useEffect(() => {
+    closerRail.current?.scrollTo({ left: 0, behavior: 'smooth' })
+  }, [cerradoPor])
 
   const queryParams = useMemo(
     () => ({
@@ -203,6 +217,7 @@ export function PaginaReporteGeneral() {
     setEstado('ACTIVO')
     setSeguimiento('')
     setTecnologia('')
+    setCerradoPor('')
     setPage(1)
     setPerPage(50)
   }
@@ -225,6 +240,20 @@ export function PaginaReporteGeneral() {
     }
     return { conTicket, sinTicket, abiertos, conDetalle, total: rows.length }
   }, [rows])
+
+  const closers = useMemo(() => {
+    const names = report.data?.closers ?? []
+    const seen = new Set<string>()
+    const list: string[] = []
+    for (const raw of cerradoPor ? [cerradoPor, ...names] : names) {
+      const name = raw.trim()
+      const key = name.toLocaleLowerCase('es-PE')
+      if (!name || seen.has(key)) continue
+      seen.add(key)
+      list.push(name)
+    }
+    return list
+  }, [report.data?.closers, cerradoPor])
 
   return (
     <DisenoApp bare onRefresh={() => void report.refetch()} syncing={report.isFetching}>
@@ -265,27 +294,31 @@ export function PaginaReporteGeneral() {
                 : undefined
             }
             tone="slate"
+            icon={<Users className="h-4 w-4" aria-hidden />}
           />
           <StatCard
             label="Abiertos"
             value={pageStats.abiertos.toLocaleString('es-PE')}
             hint="En esta página · caídos / en curso"
             tone="amber"
+            icon={<Clock3 className="h-4 w-4" aria-hidden />}
           />
           <StatCard
             label="Con ticket TGS"
             value={pageStats.conTicket.toLocaleString('es-PE')}
             hint={`En esta página · ${pageStats.sinTicket} sin ticket`}
             tone="sky"
+            icon={<Ticket className="h-4 w-4" aria-hidden />}
           />
           <StatCard
             label="Con comentarios"
             value={pageStats.conDetalle.toLocaleString('es-PE')}
             hint="En esta página · detalle de gestión"
             tone="emerald"
+            icon={<MessageSquareText className="h-4 w-4" aria-hidden />}
           />
         </div>
-        <p className="text-[12px] leading-snug text-slate-500 dark:text-slate-400">
+        <p className="rounded-xl border border-slate-200/80 bg-slate-50/80 px-3.5 py-2.5 text-[12px] leading-snug text-slate-500 dark:border-slate-800 dark:bg-slate-900/60 dark:text-slate-400">
           El total filtrado cuenta todos los registros del periodo/filtros (incluye sin ticket TGS). No es lo mismo que{' '}
           <span className="font-medium text-slate-700 dark:text-slate-200">Histórico de tickets</span>, que cuadrea
           incidencias de la ticketera del día y puede dar otro número.
@@ -364,7 +397,7 @@ export function PaginaReporteGeneral() {
                     onClick={() => toggleMinedu(opt.value)}
                     className={`rounded-md px-2.5 py-1 text-[11px] font-semibold transition ${
                       on
-                        ? 'bg-sky-600 text-white'
+                        ? 'bg-[#1576E0] text-white'
                         : 'bg-white text-slate-600 ring-1 ring-slate-200 hover:bg-slate-100 dark:bg-slate-900 dark:text-slate-300 dark:ring-slate-700'
                     }`}
                   >
@@ -406,6 +439,41 @@ export function PaginaReporteGeneral() {
           <FormField label="Tecnología">
             <Input value={tecnologia} onChange={(e) => setTecnologia(e.target.value)} placeholder="GPON, P2P…" />
           </FormField>
+
+          <FormField
+            label="Cerró el ticket"
+            className="col-span-full"
+            action={
+              cerradoPor ? (
+                <button
+                  type="button"
+                  className="text-[11px] font-semibold text-sky-700 underline-offset-2 hover:underline dark:text-sky-300"
+                  onClick={() => selectCloser('')}
+                >
+                  Quitar operador
+                </button>
+              ) : null
+            }
+          >
+            <div className="rounded-md border border-noc-border bg-noc-surface-2 p-2">
+              <div ref={closerRail} className="flex gap-1.5 overflow-x-auto pb-1 [scrollbar-width:thin]">
+                <CloserChip active={!cerradoPor} label="Todos" onClick={() => selectCloser('')} />
+                {closers.map((name) => (
+                  <CloserChip
+                    key={name}
+                    active={cerradoPor.toLocaleLowerCase('es-PE') === name.toLocaleLowerCase('es-PE')}
+                    label={name}
+                    initials={operatorInitials(name)}
+                    onClick={() => selectCloser(name)}
+                  />
+                ))}
+              </div>
+              <p className="px-1 pt-1 text-[11px] leading-snug text-slate-500 dark:text-slate-400">
+                Solo el operador que cerró el ticket (columna NOC DE CIERRE). Al elegir uno, el estado pasa a cerrados
+                porque un ticket abierto todavía no tiene cierre.
+              </p>
+            </div>
+          </FormField>
         </TarjetaFiltro>
 
         {exportError ? (
@@ -421,7 +489,7 @@ export function PaginaReporteGeneral() {
 
         {report.data ? (
           <section className="overflow-hidden rounded-2xl border border-slate-200/80 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-slate-100 bg-gradient-to-r from-slate-50 to-white px-4 py-3.5 dark:border-slate-800 dark:from-slate-900 dark:to-slate-900">
+            <div className="flex flex-wrap items-center justify-between gap-3 border-b border-noc-line bg-noc-surface-2 px-4 py-3">
               <div className="flex min-w-0 flex-wrap items-center gap-2">
                 <div className="inline-flex h-9 w-9 items-center justify-center rounded-lg bg-slate-900 text-white dark:bg-slate-100 dark:text-slate-900">
                   <Ticket className="h-4 w-4" aria-hidden />
@@ -479,6 +547,7 @@ export function PaginaReporteGeneral() {
               <GeneralReportTable
                 columns={columns}
                 rows={rows}
+                cerradoPor={cerradoPor}
                 onVerDetalle={(row) =>
                   setPanel({
                     kind: 'detalle',
@@ -506,28 +575,82 @@ export function PaginaReporteGeneral() {
   )
 }
 
+function operatorInitials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return '?'
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase()
+  return `${parts[0][0] ?? ''}${parts[parts.length - 1][0] ?? ''}`.toUpperCase()
+}
+
+function CloserChip({
+  label,
+  initials,
+  active,
+  onClick,
+}: {
+  label: string
+  initials?: string
+  active: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={[
+        'inline-flex shrink-0 items-center gap-2 rounded-full border px-2.5 py-1.5 text-[12px] font-semibold transition',
+        active
+          ? 'border-[#1c1915] bg-[#1c1915] text-[#f3efe8] dark:border-[#efeae2] dark:bg-[#efeae2] dark:text-[#1c1915]'
+          : 'border-noc-border bg-noc-surface text-noc-muted hover:border-noc-copper hover:text-noc-text',
+      ].join(' ')}
+    >
+      {initials ? (
+        <span
+          className={[
+            'inline-flex h-6 w-6 items-center justify-center rounded-full text-[10px] font-bold',
+            active ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-200',
+          ].join(' ')}
+        >
+          {initials}
+        </span>
+      ) : (
+        <UserRound className="h-3.5 w-3.5" aria-hidden />
+      )}
+      {label}
+    </button>
+  )
+}
+
 function StatCard({
   label,
   value,
   hint,
   tone,
+  icon,
 }: {
   label: string
   value: string
   hint?: string
   tone: 'slate' | 'amber' | 'sky' | 'emerald'
+  icon: ReactNode
 }) {
-  const tones = {
-    slate: 'border-slate-200 bg-slate-50 dark:border-slate-700 dark:bg-slate-800/60',
-    amber: 'border-amber-200/80 bg-amber-50 dark:border-amber-900/50 dark:bg-amber-950/30',
-    sky: 'border-sky-200/80 bg-sky-50 dark:border-sky-900/50 dark:bg-sky-950/30',
-    emerald: 'border-emerald-200/80 bg-emerald-50 dark:border-emerald-900/50 dark:bg-emerald-950/30',
-  }
+  const dot = {
+    slate: 'bg-noc-faint',
+    amber: 'bg-noc-warning',
+    sky: 'bg-noc-copper',
+    emerald: 'bg-noc-success',
+  }[tone]
   return (
-    <div className={`rounded-2xl border px-4 py-3 ${tones[tone]}`}>
-      <p className="text-[11px] font-semibold uppercase tracking-wide text-slate-500 dark:text-slate-400">{label}</p>
-      <p className="mt-1 text-2xl font-bold tabular-nums tracking-tight text-slate-900 dark:text-slate-50">{value}</p>
-      {hint ? <p className="mt-0.5 text-[12px] text-slate-500 dark:text-slate-400">{hint}</p> : null}
+    <div className="bg-noc-surface px-4 py-3.5">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[11px] font-medium tracking-[0.14em] text-noc-faint uppercase">{label}</p>
+        <span className="inline-flex h-8 w-8 items-center justify-center rounded-md bg-noc-raised text-noc-faint">{icon}</span>
+      </div>
+      <p className="mt-2 flex items-center gap-2 text-3xl font-semibold tabular-nums tracking-tight text-noc-text">
+        <span className={`h-1.5 w-1.5 rounded-full ${dot}`} aria-hidden />
+        {value}
+      </p>
+      {hint ? <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">{hint}</p> : null}
     </div>
   )
 }
@@ -560,11 +683,13 @@ function StatusPill({ value }: { value: string }) {
 function GeneralReportTable({
   columns,
   rows,
+  cerradoPor,
   onVerDetalle,
   onVerDetalleEvento,
 }: {
   columns: GeneralReportColumn[]
   rows: GeneralReportRow[]
+  cerradoPor: string
   onVerDetalle: (row: GeneralReportRow) => void
   onVerDetalleEvento: (row: GeneralReportRow) => void
 }) {
@@ -622,6 +747,30 @@ function GeneralReportTable({
                   )
                 }
 
+                if (col.key === 'noc_cierre') {
+                  const match =
+                    cerradoPor !== '' && value.toLocaleLowerCase('es-PE') === cerradoPor.toLocaleLowerCase('es-PE')
+                  return (
+                    <td key={`${row.incident_id}-${col.key}`} className={td}>
+                      {value === '—' ? (
+                        '—'
+                      ) : (
+                        <span
+                          className={[
+                            'inline-flex items-center gap-1.5 rounded-full px-2 py-0.5 text-[11px] font-semibold',
+                            match
+                              ? 'bg-[#1576E0] text-white'
+                              : 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-200',
+                          ].join(' ')}
+                        >
+                          <UserRound className="h-3 w-3 shrink-0" aria-hidden />
+                          {value}
+                        </span>
+                      )}
+                    </td>
+                  )
+                }
+
                 if (col.key === 'causa') {
                   return (
                     <td
@@ -659,7 +808,7 @@ function GeneralReportTable({
                 <div className="flex min-w-[10.5rem] flex-col gap-1">
                   <button
                     type="button"
-                    className="inline-flex items-center justify-center gap-1.5 rounded-lg border border-sky-200 bg-sky-50 px-2.5 py-1.5 text-[11px] font-semibold text-sky-800 transition hover:bg-sky-100 dark:border-sky-800 dark:bg-sky-950/50 dark:text-sky-200 dark:hover:bg-sky-950"
+                    className="inline-flex items-center justify-center gap-1.5 rounded-md border border-noc-border bg-noc-raised px-2.5 py-1.5 text-[11px] font-medium text-noc-text transition hover:border-noc-copper"
                     onClick={() => onVerDetalle(row)}
                   >
                     <MessageSquareText className="h-3.5 w-3.5 shrink-0" aria-hidden />
@@ -763,10 +912,10 @@ function DetailSidePanel({ panel, onClose }: { panel: DetailPanel; onClose: () =
 
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-5">
           {kind === 'detalle' && entries.length > 0 ? (
-            <ol className="relative space-y-0 border-l-2 border-sky-200 pl-5 dark:border-sky-900">
+            <ol className="relative space-y-0 border-l border-noc-border pl-5">
               {entries.map((entry, i) => (
                 <li key={`${entry.at ?? ''}-${i}`} className="relative pb-5 last:pb-0">
-                  <span className="absolute -left-[1.4rem] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-sky-500 dark:border-slate-950" />
+                  <span className="absolute -left-[1.4rem] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-noc-surface bg-noc-copper" />
                   {entry.at ? (
                     <p className="mb-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                       <Clock3 className="h-3 w-3" aria-hidden />

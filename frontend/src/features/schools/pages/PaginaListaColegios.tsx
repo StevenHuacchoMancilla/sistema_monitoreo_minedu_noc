@@ -335,7 +335,7 @@ export function PaginaListaColegios() {
         ) : null}
 
         {!list.isLoading && rows.length > 0 && meta ? (
-          <section className="min-w-0 overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <section className="min-w-0 overflow-hidden rounded-md border border-noc-border bg-noc-surface">
             <div className="flex flex-wrap items-center justify-between gap-2 border-b border-slate-100 px-4 py-3 sm:px-5 sm:py-4 dark:border-slate-800">
               <div className="min-w-0">
                 <h2 className="text-base font-semibold text-slate-900 dark:text-slate-50">Locales educativos</h2>

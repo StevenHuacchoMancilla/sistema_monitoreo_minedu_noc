@@ -12,7 +12,7 @@ export function KpisPrtg({ data }: { data: PrtgDashboard }) {
         muestra ~{inventory?.sensors_total ?? '—'} sensores porque cada colegio suele tener Ping + LAN COLEGIO
         ({inventory?.sensors_ping ?? '—'} Ping · {inventory?.sensors_lan ?? '—'} LAN).
       </p>
-      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+      <div className="noc-card grid grid-cols-2 gap-px overflow-hidden rounded-xl border border-noc-border sm:grid-cols-3 xl:grid-cols-5 [&_article]:rounded-none [&_article]:border-0 [&_article]:bg-transparent [&_article]:shadow-none">
         <TarjetaKpi accent="prtg" label="Total locales (BD)" value={kpis.total_schools} />
         <TarjetaKpi accent="prtg" label="CID válido" value={kpis.valid_cid} />
         <TarjetaKpi

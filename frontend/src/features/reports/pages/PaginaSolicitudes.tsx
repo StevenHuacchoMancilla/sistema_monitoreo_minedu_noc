@@ -54,7 +54,7 @@ function SchoolCard({ school, windowDays }: { school: SolicitudColegio; windowDa
   const tone = down ? 'danger' : school.estado === 'OPERATIVO' ? 'success' : 'neutral'
 
   return (
-    <article className="min-w-0 rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <article className="min-w-0 rounded-md border border-noc-border bg-noc-surface">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-3 sm:px-5 dark:border-slate-800">
         <div className="min-w-0">
           <div className="flex flex-wrap items-center gap-2">

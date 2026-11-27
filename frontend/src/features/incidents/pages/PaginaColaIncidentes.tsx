@@ -19,7 +19,6 @@ import {
   Ticket,
   Trash2,
   Undo2,
-  Zap,
 } from 'lucide-react'
 import { descargarReporteServicioPng } from '../lib/descargarReporteServicioPng'
 import { DisenoApp } from '../../../layouts/DisenoApp'
@@ -371,31 +370,17 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   }`
 
   return (
-    <DisenoApp>
+    <DisenoApp title={pageTitle}>
       {isGraves ? (
         <div className="mb-5 space-y-4">
-          <section className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div
-              className={`pointer-events-none absolute inset-0 ${
-                showingClosedGraves
-                  ? 'bg-[radial-gradient(ellipse_at_top_right,_rgba(16,185,129,0.10),_transparent_55%),linear-gradient(180deg,_rgba(248,250,252,0.95),_transparent_42%)] dark:bg-[radial-gradient(ellipse_at_top_right,_rgba(16,185,129,0.14),_transparent_55%),linear-gradient(180deg,_rgba(15,23,42,0.55),_transparent_45%)]'
-                  : 'bg-[radial-gradient(ellipse_at_top_right,_rgba(239,68,68,0.10),_transparent_55%),linear-gradient(180deg,_rgba(248,250,252,0.95),_transparent_42%)] dark:bg-[radial-gradient(ellipse_at_top_right,_rgba(239,68,68,0.14),_transparent_55%),linear-gradient(180deg,_rgba(15,23,42,0.55),_transparent_45%)]'
-              }`}
-              aria-hidden
-            />
-            <div className="relative flex flex-col gap-4 p-5 md:flex-row md:items-start md:justify-between md:p-6">
+          <section className="rounded-md border border-noc-border bg-noc-surface">
+            <div className="flex flex-col gap-4 p-5 md:flex-row md:items-start md:justify-between md:p-6">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
                   Operación · cola grave
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
-                  <span
-                    className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${
-                      showingClosedGraves
-                        ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/50 dark:text-emerald-300'
-                        : 'bg-rose-50 text-rose-700 dark:bg-rose-950/50 dark:text-rose-300'
-                    }`}
-                  >
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-noc-raised text-noc-faint">
                     {showingClosedGraves ? (
                       <CircleCheck className="h-5 w-5" aria-hidden />
                     ) : (
@@ -423,7 +408,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             </div>
           </section>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="noc-card grid overflow-hidden rounded-xl border border-noc-border sm:grid-cols-2 xl:grid-cols-4">
             <GravesStatCard
               label="En esta vista"
               value={allRows.length}
@@ -447,10 +432,10 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                 setGravesTab('open')
                 setSearch('')
               }}
-              className={`rounded-xl border px-4 py-3.5 text-left transition duration-150 ${
+              className={`rounded-md border px-4 py-3 text-left transition duration-150 ${
                 gravesTab === 'open'
-                  ? 'border-slate-900 bg-slate-900 text-white shadow-md shadow-slate-900/15 dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900 dark:shadow-none'
-                  : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600'
+                  ? 'border-noc-copper bg-noc-interactive text-noc-text'
+                  : 'border-noc-border bg-noc-surface text-noc-muted hover:bg-noc-raised'
               }`}
             >
               <span className={`block text-[12px] font-semibold ${gravesTab === 'open' ? 'opacity-90' : 'text-slate-600 dark:text-slate-300'}`}>
@@ -466,10 +451,10 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                 setGravesTab('closed')
                 setSearch('')
               }}
-              className={`rounded-xl border px-4 py-3.5 text-left transition duration-150 ${
+              className={`rounded-md border px-4 py-3 text-left transition duration-150 ${
                 gravesTab === 'closed'
-                  ? 'border-slate-900 bg-slate-900 text-white shadow-md shadow-slate-900/15 dark:border-slate-100 dark:bg-slate-100 dark:text-slate-900 dark:shadow-none'
-                  : 'border-slate-200/90 bg-white hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:hover:border-slate-600'
+                  ? 'border-noc-copper bg-noc-interactive text-noc-text'
+                  : 'border-noc-border bg-noc-surface text-noc-muted hover:bg-noc-raised'
               }`}
             >
               <span className={`block text-[12px] font-semibold ${gravesTab === 'closed' ? 'opacity-90' : 'text-slate-600 dark:text-slate-300'}`}>
@@ -481,7 +466,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             </button>
           </div>
 
-          <section className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm md:p-5 dark:border-slate-800 dark:bg-slate-900">
+          <section className="rounded-md border border-noc-border bg-noc-surface p-3 md:p-4">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
               <div>
                 <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
@@ -506,18 +491,14 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
         </div>
       ) : isPendienteCierre ? (
         <div className="mb-5 space-y-4">
-          <section className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(245,158,11,0.12),_transparent_55%),linear-gradient(180deg,_rgba(248,250,252,0.95),_transparent_42%)] dark:bg-[radial-gradient(ellipse_at_top_right,_rgba(245,158,11,0.16),_transparent_55%),linear-gradient(180deg,_rgba(15,23,42,0.55),_transparent_45%)]"
-              aria-hidden
-            />
-            <div className="relative flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-start md:justify-between md:p-6">
+          <section className="rounded-md border border-noc-border bg-noc-surface">
+            <div className="flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-start md:justify-between md:p-6">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
                   Operación · recuperación
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-200">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-noc-raised text-noc-faint">
                     <Hourglass className="h-5 w-5" aria-hidden />
                   </span>
                   <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl dark:text-slate-50">
@@ -543,7 +524,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             </div>
           </section>
 
-          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+          <div className="noc-card grid overflow-hidden rounded-xl border border-noc-border sm:grid-cols-2 xl:grid-cols-4">
             <GravesStatCard label="En esta cola" value={allRows.length} hint="Pendientes de cierre" tone="amber" />
             <GravesStatCard
               label="Gestión lista"
@@ -560,7 +541,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
             <GravesStatCard label="Panel solar" value={energyStats.panel} hint="Colegios con panel" tone="amber" />
           </div>
 
-          <section className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm md:p-5 dark:border-slate-800 dark:bg-slate-900">
+          <section className="rounded-md border border-noc-border bg-noc-surface p-3 md:p-4">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
               <div>
                 <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
@@ -1131,7 +1112,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
         )
 
         return isPolished ? (
-          <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <section className="overflow-hidden rounded-md border border-noc-border bg-noc-surface">
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5 dark:border-slate-800">
               <div className="min-w-0">
                 <h2 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">
@@ -1446,24 +1427,24 @@ function GravesStatCard({
   hint: string
   tone?: 'danger' | 'success' | 'emerald' | 'amber' | 'neutral'
 }) {
-  const tones: Record<typeof tone, string> = {
-    danger: 'from-rose-50 to-white text-rose-800 dark:from-rose-950/40 dark:to-slate-900 dark:text-rose-200',
-    success: 'from-emerald-50 to-white text-emerald-800 dark:from-emerald-950/40 dark:to-slate-900 dark:text-emerald-200',
-    emerald: 'from-emerald-50/80 to-white text-emerald-800 dark:from-emerald-950/30 dark:to-slate-900 dark:text-emerald-200',
-    amber: 'from-amber-50 to-white text-amber-900 dark:from-amber-950/40 dark:to-slate-900 dark:text-amber-200',
-    neutral: 'from-slate-50 to-white text-slate-800 dark:from-slate-800/60 dark:to-slate-900 dark:text-slate-100',
+  const dot: Record<typeof tone, string> = {
+    danger: 'bg-noc-danger',
+    success: 'bg-noc-success',
+    emerald: 'bg-noc-success',
+    amber: 'bg-noc-warning',
+    neutral: 'bg-noc-faint',
   }
 
   return (
-    <div className={`rounded-2xl border border-slate-200/90 bg-gradient-to-br p-4 shadow-sm dark:border-slate-800 ${tones[tone]}`}>
-      <div className="flex items-start justify-between gap-2">
-        <p className="text-[11px] font-semibold tracking-[0.08em] text-slate-500 uppercase dark:text-slate-400">
+    <div className="bg-noc-surface p-4">
+      <div className="flex items-center gap-2">
+        <span className={`h-1.5 w-1.5 rounded-full ${dot[tone]}`} aria-hidden />
+        <p className="text-[11px] font-medium tracking-[0.12em] text-noc-faint uppercase">
           {label}
         </p>
-        {tone === 'amber' || tone === 'emerald' ? <Zap className="h-3.5 w-3.5 opacity-60" aria-hidden /> : null}
       </div>
-      <p className="mt-2 text-2xl font-bold tracking-tight tabular-nums">{value}</p>
-      <p className="mt-1 text-[12px] text-slate-500 dark:text-slate-400">{hint}</p>
+      <p className="mt-2 text-2xl font-semibold tracking-tight text-noc-text tabular-nums">{value}</p>
+      <p className="mt-1 text-[12px] text-noc-faint">{hint}</p>
     </div>
   )
 }

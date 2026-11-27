@@ -533,24 +533,21 @@ export function PaginaCaidasActivas({
   return (
     <DisenoApp
       bare
+      title={title}
       syncing={syncing}
       onRefresh={refresh}
       onSyncPrtg={() => prtg.mutate()}
     >
       {isManaging ? (
         <div className="mb-5 space-y-4">
-          <section className="relative overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
-            <div
-              className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,_rgba(59,130,246,0.10),_transparent_55%),linear-gradient(180deg,_rgba(248,250,252,0.95),_transparent_42%)] dark:bg-[radial-gradient(ellipse_at_top_right,_rgba(59,130,246,0.14),_transparent_55%),linear-gradient(180deg,_rgba(15,23,42,0.55),_transparent_45%)]"
-              aria-hidden
-            />
-            <div className="relative flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-start md:justify-between md:p-6">
+          <section className="rounded-md border border-noc-border bg-noc-surface">
+            <div className="flex flex-col gap-4 p-4 sm:p-5 md:flex-row md:items-start md:justify-between md:p-6">
               <div className="min-w-0">
                 <p className="text-[11px] font-semibold tracking-[0.14em] text-slate-500 uppercase">
                   Operación · seguimiento
                 </p>
                 <div className="mt-1.5 flex flex-wrap items-center gap-2.5">
-                  <span className="inline-flex h-10 w-10 items-center justify-center rounded-xl bg-sky-50 text-sky-700 dark:bg-sky-950/50 dark:text-sky-300">
+                  <span className="inline-flex h-9 w-9 items-center justify-center rounded-md bg-noc-raised text-noc-faint">
                     <Activity className="h-5 w-5" aria-hidden />
                   </span>
                   <h1 className="text-xl font-bold tracking-tight text-slate-950 sm:text-2xl dark:text-slate-50">
@@ -587,7 +584,7 @@ export function PaginaCaidasActivas({
             <TarjetaMetrica label="Caídos PRTG" value={kpis.down} icon={<TriangleAlert />} tone="danger" />
           </GrillaMetricas>
 
-          <section className="rounded-2xl border border-slate-200/90 bg-white p-4 shadow-sm md:p-5 dark:border-slate-800 dark:bg-slate-900">
+          <section className="rounded-md border border-noc-border bg-noc-surface p-3 md:p-4">
             <div className="mb-3 flex flex-wrap items-end justify-between gap-2">
               <div>
                 <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
@@ -949,7 +946,7 @@ export function PaginaCaidasActivas({
         )
 
         return isManaging ? (
-          <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+          <section className="overflow-hidden rounded-md border border-noc-border bg-noc-surface">
             <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-4 py-4 sm:px-5 dark:border-slate-800">
               <div className="min-w-0">
                 <h2 className="text-base font-semibold tracking-tight text-slate-950 dark:text-slate-50">

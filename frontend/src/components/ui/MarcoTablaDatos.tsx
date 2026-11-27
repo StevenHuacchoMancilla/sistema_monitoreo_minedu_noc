@@ -14,7 +14,7 @@ export function DataTableContainer({
 }) {
   return (
     <div
-      className={`min-w-0 w-full overflow-hidden rounded-xl border border-slate-200 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900 ${className}`}
+      className={`min-w-0 w-full overflow-hidden rounded-xl border border-noc-border bg-noc-surface shadow-[inset_0_1px_0_rgb(169_212_255/0.05)] ${className}`}
     >
       <div className="w-full max-w-full overflow-x-auto overscroll-x-contain [-webkit-overflow-scrolling:touch]">
         {children}
@@ -29,23 +29,25 @@ export function MarcoTablaDatos(props: { children: ReactNode; className?: string
 }
 
 export const tableClassName =
-  'w-full min-w-0 border-collapse text-left text-[13px] text-slate-800 dark:text-slate-200'
+  'w-full min-w-0 border-collapse text-left text-[13px] text-noc-text'
 
 export const theadClassName =
-  'sticky top-0 z-10 border-b border-slate-200 bg-slate-50/95 backdrop-blur dark:border-slate-800 dark:bg-slate-900/90'
+  'sticky top-0 z-10 border-b border-noc-line bg-noc-surface-2'
 
 export const thClassName =
-  'px-2.5 py-2 text-left text-[10.5px] font-semibold tracking-wide whitespace-nowrap text-slate-500 uppercase dark:text-slate-400'
+  'px-2.5 py-2 text-left text-[10.5px] font-medium tracking-[0.08em] whitespace-nowrap text-noc-faint uppercase'
 
 export const tdClassName =
-  'min-w-0 max-w-0 overflow-hidden px-2.5 py-2 align-middle text-[13px] leading-snug text-slate-700 dark:text-slate-300'
+  'min-w-0 max-w-0 overflow-hidden px-2.5 py-2 align-middle text-[13px] leading-snug text-noc-muted'
 
 /** Celdas de caída / recuperación: fecha y hora completas, sin ellipsis. */
 export const tdDateClassName =
-  'whitespace-nowrap px-2.5 py-2 align-middle text-[13px] leading-snug text-slate-700 dark:text-slate-300'
+  'whitespace-nowrap px-2.5 py-2 align-middle font-mono text-[12px] leading-snug text-noc-muted tabular-nums'
 
 export const trClassName =
-  'border-b border-slate-100 bg-white last:border-0 hover:bg-slate-50/80 dark:border-slate-800 dark:bg-slate-900 dark:hover:bg-slate-800/60'
+  'border-b border-noc-line bg-transparent transition-colors last:border-0 hover:bg-noc-raised'
+
+export const idClassName = 'font-mono text-[12px] tracking-tight text-noc-text tabular-nums'
 
 export function Truncate({
   children,

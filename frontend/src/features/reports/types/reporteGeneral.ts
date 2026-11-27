@@ -63,6 +63,8 @@ export type GeneralReportResponse = {
     to: string | null
   }
   columns: GeneralReportColumn[]
+  /** Operadores del sistema y quienes ya cerraron un ticket. */
+  closers?: string[]
 }
 
 export type GeneralReportPeriod = 'today' | 'yesterday' | 'day' | 'range' | 'all'

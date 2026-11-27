@@ -11,9 +11,11 @@ use App\Enums\ListaLleeEstado;
 use App\Enums\ManagementClassification;
 use App\Enums\MineduReason;
 use App\Enums\TrackingStatus;
+use App\Enums\UserRole;
 use App\Models\Incident;
 use App\Models\ServiceTicket;
 use App\Models\TrackingRecord;
+use App\Models\User;
 use App\Support\OperationalTime;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Support\Carbon;
@@ -86,6 +88,7 @@ class GeneralReportService
                 'to' => $to?->copy()->timezone(OperationalTime::tz())->toDateString(),
             ],
             'columns' => $this->columns(),
+            'closers' => $this->closerOptions(),
         ];
     }
 
@@ -186,6 +189,40 @@ class GeneralReportService
             ['key' => 'zona', 'label' => 'ZONA'],
             ['key' => 'tecnologia', 'label' => 'TECNOLOGIA'],
         ];
+    }
+
+    /**
+     * Operadores que pueden cerrar (usuarios NOC/admin) más quien ya cerró algún ticket.
+     *
+     * @return list<string>
+     */
+    private function closerOptions(): array
+    {
+        $fromUsers = User::query()
+            ->where(function (Builder $q) {
+                $q->where(function (Builder $inner) {
+                    $inner->where('active', true)
+                        ->whereIn('role', [UserRole::Admin->value, UserRole::NocOperator->value]);
+                })->orWhereRaw("LOWER(COALESCE(name, '')) LIKE '%steven%'");
+            })
+            ->orderBy('name')
+            ->pluck('name');
+
+        $fromTickets = ServiceTicket::query()
+            ->whereNotNull('closed_by_name')
+            ->where('closed_by_name', '!=', '')
+            ->distinct()
+            ->orderBy('closed_by_name')
+            ->pluck('closed_by_name');
+
+        return $fromUsers
+            ->merge($fromTickets)
+            ->map(fn ($name) => trim((string) $name))
+            ->filter(fn ($name) => $name !== '')
+            ->unique(fn ($name) => mb_strtolower($name))
+            ->sort(fn ($a, $b) => strcasecmp($a, $b))
+            ->values()
+            ->all();
     }
 
     /**
@@ -335,6 +372,13 @@ class GeneralReportService
             $tech = trim((string) $filters['tecnologia']);
             $query->whereHas('networkAssignment', function (Builder $q) use ($tech) {
                 $q->whereRaw('UPPER(TRIM(COALESCE(tecnologia_acceso, \'\'))) = ?', [mb_strtoupper($tech)]);
+            });
+        }
+
+        if (! empty($filters['cerrado_por'])) {
+            $closer = mb_strtolower(trim((string) $filters['cerrado_por']));
+            $query->whereHas('serviceTicket', function (Builder $t) use ($closer) {
+                $t->whereRaw('LOWER(TRIM(COALESCE(closed_by_name, \'\'))) = ?', [$closer]);
             });
         }
 

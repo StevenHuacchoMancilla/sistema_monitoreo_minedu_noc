@@ -177,7 +177,7 @@ export function MuelleToastsOpsEnVivo() {
                 <li
                   key={row.id}
                   className={`flex items-start gap-2 px-3.5 py-2.5 ${
-                    down ? 'bg-red-50/40 dark:bg-red-950/20' : 'bg-emerald-50/40 dark:bg-emerald-950/20'
+                    'bg-transparent'
                   }`}
                 >
                   <span
@@ -254,7 +254,7 @@ export function MuelleToastsOpsEnVivo() {
               type="button"
               disabled={exporting}
               onClick={() => void exportImage()}
-              className="inline-flex items-center gap-1 rounded-lg bg-emerald-600 px-2 py-1 text-[12px] font-semibold text-white shadow-sm hover:bg-emerald-500 disabled:opacity-60"
+              className="inline-flex items-center gap-1 rounded-md border border-noc-border px-2 py-1 text-[12px] font-medium text-noc-text hover:border-noc-copper disabled:opacity-60"
             >
               <ImageDown className="h-3.5 w-3.5" aria-hidden />
               {exporting ? 'Exportando…' : 'Exportar imagen'}

@@ -2,7 +2,6 @@
 
 namespace App\Domain\Ticketera\Services;
 
-use App\Domain\Reports\Services\OperationalReportService;
 use App\Models\Incident;
 use App\Models\ServiceTicket;
 use App\Support\OperationalTime;
@@ -15,7 +14,6 @@ class LocalTicketeraService
 {
     public function __construct(
         private readonly ServiceTicketService $tickets,
-        private readonly OperationalReportService $operational,
     ) {}
 
     /**
@@ -24,10 +22,11 @@ class LocalTicketeraService
     public function dashboard(): array
     {
         $now = OperationalTime::now();
+        // El listado no arrastra el hilo de gestiones. Ese detalle lo sirve el módulo
+        // de incidencias al abrir el panel. Aquí basta el texto ya guardado en el caso.
         $rows = ServiceTicket::query()
             ->with([
                 'incident:id,lista_detalle,detail_text,root_cause_code,cause',
-                'incident.managements' => fn ($q) => $q->orderBy('id'),
             ])
             ->orderByDesc('opened_at')
             ->orderByDesc('id')
@@ -115,11 +114,6 @@ class LocalTicketeraService
     {
         $incident = $ticket->incident;
         if ($incident instanceof Incident) {
-            // Preferir gestiones: cada comentario con fecha/hora (como Seguimiento).
-            $fromMgmt = $this->operational->operatorDetailOnly($incident);
-            if (is_string($fromMgmt) && trim($fromMgmt) !== '') {
-                return trim($fromMgmt);
-            }
             $lista = trim((string) ($incident->lista_detalle ?? ''));
             if ($lista !== '') {
                 return $lista;

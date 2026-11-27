@@ -27,12 +27,12 @@ import type { TicketeraRow, TicketeraStatus } from '../types/ticketera'
 const num = (value: number) => value.toLocaleString('es-PE')
 
 const CARDS = [
-  { key: 'total', label: 'Incidencias SLA', className: 'from-[#4161db] to-[#5c7bf4]' },
-  { key: 'caida', label: 'Caída de Enlace', className: 'from-[#435fd7] to-[#5477ef]' },
-  { key: 'queja', label: 'Queja', className: 'from-[#0e8796] to-[#18b7bf]' },
-  { key: 'open', label: 'Abiertos / en curso', className: 'from-[#ba721a] to-[#eba133]' },
-  { key: 'closed', label: 'Cerrados', className: 'from-[#0c8878] to-[#1db79b]' },
-  { key: 'exceeded', label: 'Tramos excedidos', className: 'from-[#a04272] to-[#d66098]' },
+  { key: 'total', label: 'Incidencias SLA', value: 'text-blue-700 dark:text-blue-300', bar: 'bg-blue-500' },
+  { key: 'caida', label: 'Caída de Enlace', value: 'text-indigo-700 dark:text-indigo-300', bar: 'bg-indigo-500' },
+  { key: 'queja', label: 'Queja', value: 'text-cyan-700 dark:text-cyan-300', bar: 'bg-cyan-500' },
+  { key: 'open', label: 'Abiertos / en curso', value: 'text-amber-700 dark:text-amber-300', bar: 'bg-amber-500' },
+  { key: 'closed', label: 'Cerrados', value: 'text-emerald-700 dark:text-emerald-300', bar: 'bg-emerald-500' },
+  { key: 'exceeded', label: 'Tramos excedidos', value: 'text-rose-700 dark:text-rose-300', bar: 'bg-rose-500' },
 ] as const
 
 function downloadCsv(filename: string, rows: string[][]) {
@@ -275,10 +275,10 @@ export function PanelSla({
   let previous = ''
   return (
     <div className="space-y-4">
-      <section className="rounded-2xl border border-slate-200 border-t-[3px] border-t-indigo-400 bg-white p-5 dark:border-slate-800 dark:bg-slate-900">
+      <section className="rounded-2xl border border-slate-200/80 bg-white p-5 shadow-[0_10px_30px_-22px_rgba(15,23,42,0.7)] dark:border-slate-800 dark:bg-slate-900">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div className="flex items-center gap-4">
-            <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-gradient-to-br from-[#4869eb] to-[#8d5ee7] text-sm font-extrabold text-white">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-indigo-500/10 text-[11px] font-bold tracking-wide text-indigo-600 dark:bg-indigo-400/15 dark:text-indigo-300">
               NOC
             </div>
             <div>
@@ -330,9 +330,10 @@ export function PanelSla({
 
         <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-6">
           {CARDS.map((card) => (
-            <article key={card.key} className={`min-h-[104px] rounded-2xl bg-gradient-to-br ${card.className} px-4 py-3 text-white`}>
-              <span className="block text-xs font-semibold text-white/90">{card.label}</span>
-              <strong className="mt-2 block text-3xl tabular-nums">{num(counts[card.key])}</strong>
+            <article key={card.key} className="relative min-h-[104px] overflow-hidden rounded-2xl border border-slate-200/80 bg-slate-50/70 px-4 py-3 dark:border-slate-800 dark:bg-slate-950/50">
+              <span className={`absolute inset-x-0 top-0 h-0.5 ${card.bar}`} aria-hidden />
+              <span className="block text-[11px] font-semibold tracking-[0.12em] text-slate-500 uppercase">{card.label}</span>
+              <strong className={`mt-2 block text-3xl font-semibold tabular-nums ${card.value}`}>{num(counts[card.key])}</strong>
             </article>
           ))}
         </div>

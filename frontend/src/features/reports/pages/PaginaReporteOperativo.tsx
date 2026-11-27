@@ -686,10 +686,10 @@ function ListaDetallePanel({
           ) : null}
 
           {entries.length > 0 ? (
-            <ol className="relative space-y-0 border-l-2 border-sky-200 pl-5 dark:border-sky-900">
+            <ol className="relative space-y-0 border-l border-noc-border pl-5">
               {entries.map((entry, i) => (
                 <li key={`${entry.at ?? ''}-${i}`} className="relative pb-4 last:pb-0">
-                  <span className="absolute -left-[1.4rem] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-white bg-sky-500 dark:border-slate-950" />
+                  <span className="absolute -left-[1.4rem] top-1.5 h-2.5 w-2.5 rounded-full border-2 border-noc-surface bg-noc-copper" />
                   {entry.at ? (
                     <p className="mb-1 inline-flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-slate-500">
                       <Clock3 className="h-3 w-3" aria-hidden />

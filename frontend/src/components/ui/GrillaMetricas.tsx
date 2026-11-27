@@ -1,8 +1,7 @@
 import type { ReactNode } from 'react'
 
 /**
- * Grilla responsive para TarjetaMetrica / KPIs.
- * Evita aplastar iconos: celdas con mínimo usable y auto-fit.
+ * Riel de indicadores: una sola superficie, separada por líneas.
  */
 export function GrillaMetricas({
   children,
@@ -11,12 +10,17 @@ export function GrillaMetricas({
 }: {
   children: ReactNode
   className?: string
-  /** Más columnas en pantallas anchas (p. ej. 5–6 KPIs). */
   dense?: boolean
 }) {
   const cols = dense
-    ? 'grid-cols-1 min-[420px]:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 min-[1600px]:grid-cols-6'
-    : 'grid-cols-1 min-[420px]:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+    ? 'grid-cols-2 md:grid-cols-3 xl:grid-cols-5'
+    : 'grid-cols-2 lg:grid-cols-4'
 
-  return <div className={`mb-5 grid min-w-0 gap-3 ${cols} ${className}`}>{children}</div>
+  return (
+    <div
+      className={`noc-card mb-4 grid min-w-0 overflow-hidden rounded-xl border border-noc-border ${cols} [&>article]:border-b [&>article]:border-noc-line [&>article:nth-child(odd)]:border-r md:[&>article]:border-r ${className}`}
+    >
+      {children}
+    </div>
+  )
 }

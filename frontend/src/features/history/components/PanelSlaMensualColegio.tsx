@@ -105,7 +105,7 @@ export function PanelSlaMensualColegio({
   }, [query.data])
 
   return (
-    <section className="overflow-hidden rounded-2xl border border-slate-200/90 bg-white shadow-sm dark:border-slate-800 dark:bg-slate-900">
+    <section className="overflow-hidden rounded-md border border-noc-border bg-noc-surface">
       <div className="flex flex-wrap items-start justify-between gap-3 border-b border-slate-100 px-5 py-3 dark:border-slate-800">
         <div>
           <h2 className="inline-flex items-center gap-2 text-sm font-semibold text-slate-900 dark:text-slate-50">
