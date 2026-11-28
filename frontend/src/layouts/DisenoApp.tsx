@@ -6,7 +6,6 @@ import { BotonIcono } from '../components/ui/BotonIcono'
 import { CampanaNotificaciones } from '../features/notifications/components/CampanaNotificaciones'
 import { MuelleToastsOpsEnVivo } from '../features/restorations/components/MuelleToastsOpsEnVivo'
 import { MenuUsuario } from '../features/auth/components/MenuUsuario'
-import { AlternarTema } from '../features/theme/AlternarTema'
 
 const STORAGE_KEY = 'noc.sidebar.collapsed'
 
@@ -96,9 +95,9 @@ export function DisenoApp({
 
   return (
     <SidebarContext.Provider value={ctx}>
-      <div className="min-h-screen overflow-x-hidden bg-noc-bg text-noc-text">
-        <div className="flex min-h-screen min-w-0 w-full">
-          <div className={`hidden shrink-0 transition-[width] duration-200 ease-out md:block ${collapsed ? 'w-[4.25rem]' : 'w-60'}`}>
+      <div className="flex h-dvh overflow-hidden bg-noc-bg text-noc-text">
+        <div className="flex h-full min-w-0 w-full">
+          <div className={`hidden h-full shrink-0 transition-[width] duration-200 ease-out md:block ${collapsed ? 'w-[4.25rem]' : 'w-60'}`}>
             <BarraLateral />
           </div>
 
@@ -116,8 +115,8 @@ export function DisenoApp({
             </div>
           ) : null}
 
-          <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-            <div className="flex h-16 shrink-0 items-center gap-3 border-b border-noc-border-2 bg-noc-nav px-3 sm:px-4 md:px-5">
+          <div className="flex h-full min-w-0 flex-1 flex-col overflow-hidden">
+            <div className="z-20 flex h-16 shrink-0 items-center gap-3 border-b border-noc-border-2 bg-noc-nav px-3 sm:px-4 md:px-5">
               <BotonIcono
                 label={collapsed ? 'Expandir menú' : 'Colapsar menú'}
                 onClick={() => {
@@ -144,7 +143,6 @@ export function DisenoApp({
               </div>
 
               <div className="flex shrink-0 items-center gap-2">
-                <AlternarTema />
                 <CampanaNotificaciones />
                 {healthSlot}
                 {onRefresh ? (

@@ -370,7 +370,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
   }`
 
   return (
-    <DisenoApp title={pageTitle}>
+    <DisenoApp bare title={pageTitle}>
       {isGraves ? (
         <div className="mb-5 space-y-4">
           <section className="rounded-md border border-noc-border bg-noc-surface">
@@ -850,9 +850,7 @@ export function PaginaColaIncidentes({ kind }: { kind: QueueKind }) {
                     <tr
                       key={row.incident_id}
                       className={
-                        isPolished
-                          ? 'group transition-colors hover:bg-blue-50/40 dark:hover:bg-slate-800/50'
-                          : `${trClassName} group`
+                        isPolished ? 'noc-row group' : `${trClassName} group`
                       }
                     >
                       {canSelectMany ? (

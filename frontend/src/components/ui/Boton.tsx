@@ -3,7 +3,7 @@ import { Loader2 } from 'lucide-react'
 
 const variants = {
   primary:
-    'bg-[#1576E0] text-white hover:bg-noc-copper',
+    'bg-noc-copper-deep text-white hover:bg-noc-copper',
   secondary:
     'border border-noc-border bg-transparent text-noc-text hover:bg-noc-interactive',
   ghost:
@@ -36,7 +36,7 @@ export function Boton({
   return (
     <button
       ref={ref}
-      className={`inline-flex items-center justify-center font-medium tracking-tight transition duration-150 disabled:pointer-events-none disabled:text-noc-disabled disabled:opacity-45 ${variants[variant]} ${sizes[size]} ${className}`}
+      className={`inline-flex items-center justify-center font-medium tracking-tight transition duration-150 disabled:pointer-events-none disabled:opacity-45 ${variants[variant]} ${sizes[size]} ${className}`}
       disabled={disabled || loading}
       {...props}
     >

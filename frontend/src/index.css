@@ -84,7 +84,7 @@ body {
 }
 
 ::selection {
-  background: rgb(41 151 255 / 0.32);
+  background: color-mix(in srgb, var(--color-noc-copper) 35%, transparent);
   color: inherit;
 }
 
@@ -95,14 +95,108 @@ body {
 }
 
 html.dark * {
-  scrollbar-color: #293a54 transparent;
+  scrollbar-color: var(--color-noc-border) transparent;
 }
 
-/* Tarjeta: misma familia azul, con un velo superior que da profundidad. */
+/* Temas. Medianoche es el valor de html.dark. El resto lo sustituye. */
+html[data-theme='oceano'] {
+  --color-noc-bg: #061018;
+  --color-noc-nav: #07131e;
+  --color-noc-surface: #0c1c2c;
+  --color-noc-surface-2: #091724;
+  --color-noc-raised: #123049;
+  --color-noc-interactive: #184061;
+  --color-noc-border: #24506f;
+  --color-noc-border-2: #16364c;
+  --color-noc-line: #16364c;
+  --color-noc-text: #e7f4ff;
+  --color-noc-muted: #9ec3d8;
+  --color-noc-faint: #6e97b0;
+  --color-noc-disabled: #4d7388;
+  --color-noc-copper: #38bdf8;
+  --color-noc-copper-2: #7dd3fc;
+  --color-noc-copper-deep: #0369a1;
+  --color-noc-info: #7dd3fc;
+  --color-noc-cyan: #7dd3fc;
+}
+
+html[data-theme='grafito'] {
+  --color-noc-bg: #101114;
+  --color-noc-nav: #16181c;
+  --color-noc-surface: #1c1f24;
+  --color-noc-surface-2: #14161a;
+  --color-noc-raised: #262a31;
+  --color-noc-interactive: #31363f;
+  --color-noc-border: #3c424c;
+  --color-noc-border-2: #2a2e36;
+  --color-noc-line: #2a2e36;
+  --color-noc-text: #f2f4f7;
+  --color-noc-muted: #b7bec8;
+  --color-noc-faint: #8b939f;
+  --color-noc-disabled: #646c78;
+  --color-noc-copper: #9bb6d6;
+  --color-noc-copper-2: #c5d7ea;
+  --color-noc-copper-deep: #4c6f96;
+  --color-noc-info: #c5d7ea;
+  --color-noc-cyan: #c5d7ea;
+}
+
+html[data-theme='pino'] {
+  --color-noc-bg: #0b100e;
+  --color-noc-nav: #101612;
+  --color-noc-surface: #16201b;
+  --color-noc-surface-2: #121a16;
+  --color-noc-raised: #1e2c25;
+  --color-noc-interactive: #274033;
+  --color-noc-border: #345244;
+  --color-noc-border-2: #24362c;
+  --color-noc-line: #24362c;
+  --color-noc-text: #eef6f1;
+  --color-noc-muted: #b7cfc2;
+  --color-noc-faint: #86a394;
+  --color-noc-disabled: #5e7568;
+  --color-noc-copper: #3ddc97;
+  --color-noc-copper-2: #8af0c0;
+  --color-noc-copper-deep: #1f8a4c;
+  --color-noc-info: #8af0c0;
+  --color-noc-cyan: #8af0c0;
+  --color-noc-success: #8af0c0;
+}
+
+html[data-theme='contraste'] {
+  --color-noc-bg: #000000;
+  --color-noc-nav: #050505;
+  --color-noc-surface: #0c0c0c;
+  --color-noc-surface-2: #080808;
+  --color-noc-raised: #1a1a1a;
+  --color-noc-interactive: #242424;
+  --color-noc-border: #4a4a4a;
+  --color-noc-border-2: #2e2e2e;
+  --color-noc-line: #2e2e2e;
+  --color-noc-text: #ffffff;
+  --color-noc-muted: #d0d0d0;
+  --color-noc-faint: #a3a3a3;
+  --color-noc-disabled: #737373;
+  --color-noc-copper: #4da3ff;
+  --color-noc-copper-2: #9dccff;
+  --color-noc-copper-deep: #0b6bcb;
+  --color-noc-info: #9dccff;
+  --color-noc-cyan: #9dccff;
+  --color-noc-danger: #ff8a80;
+  --color-noc-warning: #ffd180;
+  --color-noc-success: #69f0ae;
+}
+
+/* Tarjeta: misma familia, con un velo del acento del tema. */
 .noc-card {
   background-color: var(--color-noc-surface);
-  background-image: linear-gradient(165deg, rgb(41 151 255 / 0.13), rgb(41 151 255 / 0) 46%);
-  box-shadow: inset 0 1px 0 rgb(169 212 255 / 0.08), 0 18px 36px -28px rgb(8 14 27 / 0.9);
+  background-image: linear-gradient(165deg, color-mix(in srgb, var(--color-noc-copper) 16%, transparent), transparent 46%);
+  box-shadow: inset 0 1px 0 color-mix(in srgb, var(--color-noc-text) 8%, transparent), 0 18px 36px -28px rgb(0 0 0 / 0.85);
+}
+
+.noc-row:hover,
+.noc-row:hover > td {
+  background-color: color-mix(in srgb, var(--color-noc-copper) 22%, var(--color-noc-interactive));
 }
 
 :focus-visible {

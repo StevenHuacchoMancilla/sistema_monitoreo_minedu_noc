@@ -8,7 +8,7 @@ import { FormField } from '../../../components/ui/ControlesFormulario'
 import { useAuth } from '../context/ContextoAuth'
 import { ApiError, apiGet, apiPatch, apiPut } from '../../../api/clienteHttp'
 import { formatDateTime } from '../../../lib/fechaHora'
-import { AlternarTema } from '../../theme/AlternarTema'
+import { SelectorTemas } from '../../theme/SelectorTemas'
 
 type ProfileData = {
   id: number
@@ -221,14 +221,9 @@ export function PaginaPerfil() {
             </form>
           </SectionCard>
 
-          <SectionCard title="Preferencias">
-            <div className="flex items-center justify-between gap-3">
-              <div>
-                <p className="text-sm font-medium text-slate-800 dark:text-slate-100">Tema</p>
-                <p className="text-xs text-slate-500">Light / Dark — se guarda en este dispositivo.</p>
-              </div>
-              <AlternarTema />
-            </div>
+          <SectionCard title="Temas">
+            <p className="mb-2 text-xs text-noc-faint">Se guarda en este dispositivo y cambia toda la interfaz.</p>
+            <SelectorTemas />
           </SectionCard>
         </div>
       </div>

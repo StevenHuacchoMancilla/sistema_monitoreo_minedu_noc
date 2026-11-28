@@ -45,7 +45,7 @@ export const tdDateClassName =
   'whitespace-nowrap px-2.5 py-2 align-middle font-mono text-[12px] leading-snug text-noc-muted tabular-nums'
 
 export const trClassName =
-  'border-b border-noc-line bg-transparent transition-colors last:border-0 hover:bg-noc-raised'
+  'noc-row border-b border-noc-line bg-transparent transition-colors last:border-0'
 
 export const idClassName = 'font-mono text-[12px] tracking-tight text-noc-text tabular-nums'
 

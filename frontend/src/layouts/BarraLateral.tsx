@@ -158,7 +158,7 @@ export function BarraLateral({
   }
 
   return (
-    <aside className="flex h-full min-h-screen flex-col border-r border-noc-border-2 bg-noc-nav text-noc-muted">
+    <aside className="flex h-full flex-col border-r border-noc-border-2 bg-noc-nav text-noc-muted">
       <div className={`flex h-16 items-center gap-3 border-b border-noc-border-2 ${isCollapsed ? 'justify-center px-2' : 'px-4'}`}>
         <MarcaNoc />
         {!isCollapsed ? (

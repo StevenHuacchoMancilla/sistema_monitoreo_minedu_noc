@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react'
 import { ChevronDown, KeyRound, LogOut, UserRound } from 'lucide-react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/ContextoAuth'
-import { AlternarTema } from '../../theme/AlternarTema'
+import { SelectorTemas } from '../../theme/SelectorTemas'
 
 function initials(name: string): string {
   const parts = name.trim().split(/\s+/).filter(Boolean)
@@ -63,7 +63,7 @@ export function MenuUsuario() {
       {open ? (
         <div
           role="menu"
-          className="absolute right-0 z-50 mt-1.5 w-56 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 shadow-lg dark:border-slate-700 dark:bg-slate-900"
+          className="absolute right-0 z-50 mt-1.5 w-64 overflow-hidden rounded-xl border border-noc-border bg-noc-surface py-1 shadow-lg"
         >
           <div className="border-b border-slate-100 px-3 py-2 dark:border-slate-800">
             <p className="truncate text-sm font-semibold text-slate-900 dark:text-slate-100">{user.name}</p>
@@ -87,11 +87,9 @@ export function MenuUsuario() {
             <KeyRound className="h-4 w-4 text-slate-400" aria-hidden />
             Cambiar contraseña
           </button>
-          <div className="flex items-center justify-between gap-2 px-3 py-2 text-sm text-slate-700 dark:text-slate-200">
-            <span>Tema</span>
-            <AlternarTema />
-          </div>
-          <div className="my-1 border-t border-slate-100 dark:border-slate-800" />
+          <div className="my-1 border-t border-noc-line" />
+          <SelectorTemas />
+          <div className="my-1 border-t border-noc-line" />
           <button
             type="button"
             role="menuitem"
